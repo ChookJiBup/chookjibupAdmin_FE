@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# julcut_FE
 
-## Getting Started
+AI 기반 축제 대기열 배치 설계 및 대기시간 안내 플랫폼 — 관리자/운영자/스태프용 프론트엔드.
 
-First, run the development server:
+## 스택
+
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Zustand · TanStack Query · Axios · ESLint/Prettier
+
+## 시작하기
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 에서 확인.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 폴더 구조
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/app/
+├── login, signup           # 관리자·운영자 공용 인증 (공무원 이메일)
+├── console/                 # 관리자·운영자 데스크탑 화면
+│   ├── festivals/            # 축제 리스트 조회, 축제 등록
+│   │   └── [festivalId]/      # 기본정보, 부스맵, 대시보드(혼잡도·AI 제안),
+│   │                           # 운영자 관리, 스태프 관리, 운영결과리포트
+│   └── mypage/
+└── staff/                   # 스태프 모바일 화면
+    ├── login/                 # 관리자·운영자가 발급한 계정으로 로그인
+    └── dashboard/              # 실시간 혼잡도, 부스 줄끝라인 수정
+```
 
-## Learn More
+방문자용 화면은 스펙 확정 전까지 제외.
 
-To learn more about Next.js, take a look at the following resources:
+## 스크립트
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| 명령어                | 설명            |
+| ---------------------- | --------------- |
+| `pnpm dev`             | 개발 서버 실행  |
+| `pnpm build`           | 프로덕션 빌드   |
+| `pnpm lint`            | ESLint 검사     |
+| `pnpm typecheck`       | 타입 체크       |
+| `pnpm format`          | Prettier 포맷팅 |
