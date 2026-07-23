@@ -1,4 +1,4 @@
-# julcut_FE
+# chookjibupAdmin_FE
 
 AI 기반 축제 대기열 배치 설계 및 대기시간 안내 플랫폼 — 관리자/운영자/스태프용 프론트엔드.
 

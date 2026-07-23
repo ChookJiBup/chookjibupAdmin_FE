@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "julcut",
+  title: "축지법",
   description: "AI 기반 축제 대기열 배치 설계 및 대기시간 안내 플랫폼",
 };
 
