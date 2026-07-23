@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AdminSummary } from "@/features/auth/admin/types";
@@ -13,7 +13,12 @@ interface AdminSession {
 
 interface AdminAuthState {
   session: AdminSession | null;
-  setSession: (accessToken: string, tokenType: string, expiresIn: number, admin: AdminSummary) => void;
+  setSession: (
+    accessToken: string,
+    tokenType: string,
+    expiresIn: number,
+    admin: AdminSummary,
+  ) => void;
   clearSession: () => void;
   isSessionValid: () => boolean;
 }
@@ -47,15 +52,10 @@ export const useAdminAuthStore = create<AdminAuthState>()(
  * 순간적으로 미인증 상태로 보여 로그인 화면으로 잘못 리다이렉트될 수 있다.
  */
 export function useAdminAuthHasHydrated(): boolean {
-  // zustand persist는 브라우저에서만 storage를 붙인다 (SSR에서는 `.persist` 자체가 없다).
-  // 그래서 초기값은 useState 초기화식이 아니라 useEffect 안에서만 읽어야 한다.
-  const [hasHydrated, setHasHydrated] = useState(false);
-
-  useEffect(() => {
-    setHasHydrated(useAdminAuthStore.persist.hasHydrated());
-    const unsubscribe = useAdminAuthStore.persist.onFinishHydration(() => setHasHydrated(true));
-    return unsubscribe;
-  }, []);
-
-  return hasHydrated;
+  return useSyncExternalStore(
+    (onStoreChange) => useAdminAuthStore.persist.onFinishHydration(onStoreChange),
+    () => useAdminAuthStore.persist.hasHydrated(),
+    // 서버에서는 storage가 없어 항상 hydrate되지 않은 상태로 취급한다.
+    () => false,
+  );
 }

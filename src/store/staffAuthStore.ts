@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -43,13 +43,9 @@ export const useStaffAuthStore = create<StaffAuthState>()(
 
 /** @see useAdminAuthHasHydrated */
 export function useStaffAuthHasHydrated(): boolean {
-  const [hasHydrated, setHasHydrated] = useState(false);
-
-  useEffect(() => {
-    setHasHydrated(useStaffAuthStore.persist.hasHydrated());
-    const unsubscribe = useStaffAuthStore.persist.onFinishHydration(() => setHasHydrated(true));
-    return unsubscribe;
-  }, []);
-
-  return hasHydrated;
+  return useSyncExternalStore(
+    (onStoreChange) => useStaffAuthStore.persist.onFinishHydration(onStoreChange),
+    () => useStaffAuthStore.persist.hasHydrated(),
+    () => false,
+  );
 }
