@@ -26,3 +26,33 @@ export interface AdminLoginResponse {
   expiresIn: number;
   admin: AdminSummary;
 }
+
+export type AdminStatus = "ACTIVE" | "SUSPENDED" | "DELETED";
+
+export interface AdminEmailVerificationRequest {
+  email: string;
+}
+
+export interface AdminEmailVerificationConfirmRequest {
+  email: string;
+  /** 6자리 숫자 코드 */
+  code: string;
+}
+
+export interface AdminSignupRequest {
+  email: string;
+  name: string;
+  organization: string;
+  password: string;
+  passwordConfirm: string;
+}
+
+export interface AdminSignupResponse {
+  adminId: string;
+  festivalId: string | null;
+  email: string;
+  name: string;
+  organization: string;
+  role: AdminRole | null;
+  status: AdminStatus;
+}
