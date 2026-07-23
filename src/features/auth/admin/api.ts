@@ -36,3 +36,7 @@ export async function signupAdmin(request: AdminSignupRequest): Promise<AdminSig
   );
   return data.data;
 }
+
+export async function withdrawAdmin(): Promise<void> {
+  await adminApiClient.patch<ApiResponse<void>>("/admin/me/withdrawal");
+}
