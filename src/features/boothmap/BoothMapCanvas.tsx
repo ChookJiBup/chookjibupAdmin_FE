@@ -33,7 +33,13 @@ export default function BoothMapCanvas({ objects }: { objects: BoothMapObject[] 
               strokeWidth={1}
               draggable
             />
-            <Text x={object.x + 4} y={object.y + 4} text={object.label} fontSize={11} listening={false} />
+            <Text
+              x={object.x + 4}
+              y={object.y + 4}
+              text={object.label}
+              fontSize={11}
+              listening={false}
+            />
           </Fragment>
         ))}
       </Layer>

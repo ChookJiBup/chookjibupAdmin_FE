@@ -75,10 +75,18 @@ export function BoothMapUploadPanel() {
             className="max-h-64 max-w-lg rounded-lg border object-contain"
           />
           <div className="flex gap-2">
-            <button type="button" onClick={handleUpload} className="body-regular-bold rounded-lg border px-4 py-2">
+            <button
+              type="button"
+              onClick={handleUpload}
+              className="body-regular-bold rounded-lg border px-4 py-2"
+            >
               업로드
             </button>
-            <button type="button" onClick={reset} className="body-regular rounded-lg border px-4 py-2">
+            <button
+              type="button"
+              onClick={reset}
+              className="body-regular rounded-lg border px-4 py-2"
+            >
               다시 선택
             </button>
           </div>
@@ -99,7 +107,11 @@ export function BoothMapUploadPanel() {
       {state.status === "error" && (
         <div className="flex flex-col gap-2">
           <p className="body-small text-error">{state.message}</p>
-          <button type="button" onClick={reset} className="body-regular w-fit rounded-lg border px-4 py-2">
+          <button
+            type="button"
+            onClick={reset}
+            className="body-regular w-fit rounded-lg border px-4 py-2"
+          >
             다시 시도
           </button>
         </div>
@@ -108,16 +120,25 @@ export function BoothMapUploadPanel() {
       {state.status === "done" && (
         <div className="flex flex-col gap-3">
           <p className="body-regular text-gray-500">
-            자동 배치 결과입니다. 아래에서 위치를 확인하고 수정할 수 있습니다. (드래그 이동/저장은 아직 미구현)
+            자동 배치 결과입니다. 아래에서 위치를 확인하고 수정할 수 있습니다. (드래그 이동/저장은
+            아직 미구현)
           </p>
           <div className="w-fit rounded-lg border">
             <BoothMapCanvas objects={state.objects} />
           </div>
           <div className="flex gap-2">
-            <button type="button" disabled className="body-regular-bold rounded-lg border px-4 py-2 opacity-50">
+            <button
+              type="button"
+              disabled
+              className="body-regular-bold rounded-lg border px-4 py-2 opacity-50"
+            >
               저장 (미구현)
             </button>
-            <button type="button" onClick={reset} className="body-regular rounded-lg border px-4 py-2">
+            <button
+              type="button"
+              onClick={reset}
+              className="body-regular rounded-lg border px-4 py-2"
+            >
               다시 업로드
             </button>
           </div>
