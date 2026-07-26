@@ -3,6 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AdminLogoutButton } from "@/components/auth/AdminLogoutButton";
 import { withdrawAdmin } from "@/features/auth/admin/api";
 import type { AdminRole } from "@/features/auth/admin/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
@@ -29,9 +30,12 @@ export default function MyPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-lg font-semibold">마이페이지 (관리자)</h1>
-        <p className="body-small text-gray-500">회원 정보 조회/수정, 회원 탈퇴</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">마이페이지 (관리자)</h1>
+          <p className="body-small text-gray-500">회원 정보 조회/수정, 회원 탈퇴</p>
+        </div>
+        <AdminLogoutButton />
       </div>
 
       <section className="flex flex-col gap-3">
