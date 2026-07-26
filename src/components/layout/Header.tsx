@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
  */
 export type HeaderVariant = "default" | "signup" | "login";
 
-interface HeaderProps {
+export interface HeaderProps {
   variant?: HeaderVariant;
   /** 로고가 링크할 경로. */
   href?: string;
