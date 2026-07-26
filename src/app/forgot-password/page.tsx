@@ -1,12 +1,12 @@
 import { Header } from "@/components/layout/Header";
-import { LoginForm } from "@/features/auth/admin/LoginForm";
+import { ForgotPasswordForm } from "@/features/auth/admin/ForgotPasswordForm";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <>
       <Header variant="default" />
       <main className="bg-dimmed flex flex-1 items-center justify-center p-8">
-        <LoginForm />
+        <ForgotPasswordForm />
       </main>
     </>
   );

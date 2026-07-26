@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { createFieldStaff, deleteFieldStaff, getFieldStaffList } from "./api";
 import type { CreateFieldStaffResult, FieldStaffStatus } from "./types";
@@ -19,50 +20,39 @@ function formatDate(value: string) {
 }
 
 function DeleteButton({ festivalId, staffId }: { festivalId: string; staffId: string }) {
-  const [armed, setArmed] = useState(false);
+  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteFieldStaff(festivalId, staffId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
+      setOpen(false);
     },
   });
 
-  if (deleteMutation.isError) {
-    return <p className="body-small text-error">{getApiErrorMessage(deleteMutation.error)}</p>;
-  }
-
-  if (!armed) {
-    return (
+  return (
+    <>
       <button
         type="button"
-        onClick={() => setArmed(true)}
+        onClick={() => setOpen(true)}
         className="body-small rounded-lg border px-3 py-1.5"
       >
         삭제
       </button>
-    );
-  }
 
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => deleteMutation.mutate()}
-        disabled={deleteMutation.isPending}
-        className="body-small rounded-lg border border-error px-3 py-1.5 text-error disabled:opacity-50"
-      >
-        {deleteMutation.isPending ? "삭제 중..." : "정말 삭제"}
-      </button>
-      <button
-        type="button"
-        onClick={() => setArmed(false)}
-        className="body-small rounded-lg border px-3 py-1.5"
-      >
-        취소
-      </button>
-    </div>
+      {deleteMutation.isError && (
+        <p className="body-small text-error">{getApiErrorMessage(deleteMutation.error)}</p>
+      )}
+
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        description="삭제한 스태프 계정은 복구할 수 없습니다."
+        confirmPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
+      />
+    </>
   );
 }
 
@@ -94,14 +84,14 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
       <section className="flex flex-col gap-3">
         <h2 className="body-regular-bold">현장 스태프 목록</h2>
 
-        {staffListQuery.isLoading && <p className="body-regular text-gray-500">불러오는 중...</p>}
+        {staffListQuery.isLoading && <p className="body-regular text-zinc-500">불러오는 중...</p>}
 
         {staffListQuery.isError && (
           <p className="body-small text-error">{getApiErrorMessage(staffListQuery.error)}</p>
         )}
 
         {staffListQuery.data && staffListQuery.data.length === 0 && (
-          <p className="body-regular text-gray-500">등록된 스태프가 없습니다.</p>
+          <p className="body-regular text-zinc-500">등록된 스태프가 없습니다.</p>
         )}
 
         {staffListQuery.data && staffListQuery.data.length > 0 && (
@@ -116,9 +106,9 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
                   className="flex-1"
                 >
                   <p className="body-regular-bold hover:underline">
-                    {staff.name} <span className="body-small text-gray-500">({staff.loginId})</span>
+                    {staff.name} <span className="body-small text-zinc-500">({staff.loginId})</span>
                   </p>
-                  <p className="body-small text-gray-500">
+                  <p className="body-small text-zinc-500">
                     {staff.phoneNumber} · {formatDate(staff.validFrom)} ~{" "}
                     {formatDate(staff.validUntil)} · {STATUS_LABEL[staff.status]}
                   </p>
@@ -141,7 +131,7 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
             <p className="body-regular">
               임시 비밀번호: <span className="font-mono">{created.temporaryPassword}</span>
             </p>
-            <p className="body-small text-gray-500">
+            <p className="body-small text-zinc-500">
               임시 비밀번호는 지금만 확인할 수 있습니다. 스태프에게 바로 전달해주세요.
             </p>
           </div>

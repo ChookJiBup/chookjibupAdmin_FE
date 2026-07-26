@@ -15,7 +15,7 @@ export interface NavItem {
   href: string;
 }
 
-interface NavProps {
+export interface NavProps {
   /** 명시적인 nav 아이템 목록. 기본값은 아래 5개 콘솔 섹션. */
   items?: NavItem[];
   /**

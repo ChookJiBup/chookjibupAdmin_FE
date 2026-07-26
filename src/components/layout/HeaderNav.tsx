@@ -6,7 +6,7 @@ import { Nav, type NavItem } from "./Nav";
  * 인증된 콘솔 화면에서 항상 같이 쓰이므로, 호출부에서 `Header`와 `Nav`를
  * 따로 쌓지 않도록 하나의 단위로 묶어서 제공한다.
  */
-interface HeaderNavProps {
+export interface HeaderNavProps {
   userName?: string;
   navItems?: NavItem[];
   festivalId?: string;

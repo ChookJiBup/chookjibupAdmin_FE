@@ -35,8 +35,8 @@ export default function NewFestivalPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">축제 등록 (관리자)</h1>
-      <p className="body-small text-gray-500">
+      <h1 className="heading-small">축제 등록 (관리자)</h1>
+      <p className="body-small text-zinc-500">
         축제를 생성한 사용자는 해당 축제의 [총괄관리자] 권한을 갖는다.
       </p>
 
@@ -83,7 +83,7 @@ export default function NewFestivalPage() {
         />
 
         <div className="flex gap-2">
-          <label className="body-small flex flex-1 flex-col gap-1 text-gray-500">
+          <label className="body-small flex flex-1 flex-col gap-1 text-zinc-500">
             시작일
             <input
               type="date"
@@ -93,7 +93,7 @@ export default function NewFestivalPage() {
               className="body-regular rounded-lg border px-3 py-2"
             />
           </label>
-          <label className="body-small flex flex-1 flex-col gap-1 text-gray-500">
+          <label className="body-small flex flex-1 flex-col gap-1 text-zinc-500">
             종료일
             <input
               type="date"
@@ -106,7 +106,7 @@ export default function NewFestivalPage() {
         </div>
 
         <div className="flex gap-2">
-          <label className="body-small flex flex-1 flex-col gap-1 text-gray-500">
+          <label className="body-small flex flex-1 flex-col gap-1 text-zinc-500">
             운영 시작 시간
             <input
               type="time"
@@ -117,7 +117,7 @@ export default function NewFestivalPage() {
               className="body-regular rounded-lg border px-3 py-2"
             />
           </label>
-          <label className="body-small flex flex-1 flex-col gap-1 text-gray-500">
+          <label className="body-small flex flex-1 flex-col gap-1 text-zinc-500">
             운영 종료 시간
             <input
               type="time"

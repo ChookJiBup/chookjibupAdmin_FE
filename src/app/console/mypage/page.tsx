@@ -32,8 +32,8 @@ export default function MyPage() {
     <div className="flex flex-col gap-8">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-lg font-semibold">마이페이지 (관리자)</h1>
-          <p className="body-small text-gray-500">회원 정보 조회/수정, 회원 탈퇴</p>
+          <h1 className="heading-small">마이페이지 (관리자)</h1>
+          <p className="body-small text-zinc-500">회원 정보 조회/수정, 회원 탈퇴</p>
         </div>
         <AdminLogoutButton />
       </div>
@@ -43,33 +43,33 @@ export default function MyPage() {
         {admin && (
           <dl className="flex flex-col gap-1">
             <div className="flex gap-2">
-              <dt className="body-small w-20 text-gray-500">이메일</dt>
+              <dt className="body-small w-20 text-zinc-500">이메일</dt>
               <dd className="body-regular">{admin.email}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="body-small w-20 text-gray-500">이름</dt>
+              <dt className="body-small w-20 text-zinc-500">이름</dt>
               <dd className="body-regular">{admin.name}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="body-small w-20 text-gray-500">소속</dt>
+              <dt className="body-small w-20 text-zinc-500">소속</dt>
               <dd className="body-regular">{admin.organization}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="body-small w-20 text-gray-500">역할</dt>
+              <dt className="body-small w-20 text-zinc-500">역할</dt>
               <dd className="body-regular">
                 {admin.role ? ROLE_LABEL[admin.role] : "연결된 축제 없음"}
               </dd>
             </div>
           </dl>
         )}
-        <p className="body-small text-gray-400">
+        <p className="body-small text-zinc-400">
           이메일/조직/비밀번호 변경은 아직 백엔드 API가 준비되지 않아 제공되지 않습니다.
         </p>
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="body-regular-bold text-error">회원 탈퇴</h2>
-        <p className="body-small text-gray-500">
+        <p className="body-small text-zinc-500">
           탈퇴하면 계정이 비활성화되어 더 이상 로그인할 수 없습니다. 총괄관리자로 연결된 축제가
           있으면 탈퇴가 제한될 수 있습니다.
         </p>
