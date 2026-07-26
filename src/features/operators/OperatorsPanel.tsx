@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { getSubAdmins, searchSubAdminCandidates } from "./api";
@@ -49,12 +50,15 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                 key={subAdmin.adminId}
                 className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3"
               >
-                <div>
-                  <p className="body-regular-bold">{subAdmin.name}</p>
+                <Link
+                  href={`/console/festivals/${festivalId}/operators/${subAdmin.adminId}`}
+                  className="flex-1"
+                >
+                  <p className="body-regular-bold hover:underline">{subAdmin.name}</p>
                   <p className="body-small text-gray-500">
                     {subAdmin.email} · {subAdmin.organization} · {STATUS_LABEL[subAdmin.status]}
                   </p>
-                </div>
+                </Link>
                 <button
                   type="button"
                   disabled

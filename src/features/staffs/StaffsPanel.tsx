@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { createFieldStaff, deleteFieldStaff, getFieldStaffList } from "./api";
@@ -110,15 +111,18 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
                 key={staff.staffId}
                 className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3"
               >
-                <div>
-                  <p className="body-regular-bold">
+                <Link
+                  href={`/console/festivals/${festivalId}/staffs/${staff.staffId}`}
+                  className="flex-1"
+                >
+                  <p className="body-regular-bold hover:underline">
                     {staff.name} <span className="body-small text-gray-500">({staff.loginId})</span>
                   </p>
                   <p className="body-small text-gray-500">
                     {staff.phoneNumber} · {formatDate(staff.validFrom)} ~{" "}
                     {formatDate(staff.validUntil)} · {STATUS_LABEL[staff.status]}
                   </p>
-                </div>
+                </Link>
                 <DeleteButton festivalId={festivalId} staffId={staff.staffId} />
               </li>
             ))}
