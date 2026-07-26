@@ -3,11 +3,9 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 /**
- * Figma "Icon Button" 컴포넌트 세트 (fileKey MEetGISeArvFjxh6eY4qB9, node 104:25165).
- * 문서화된 variant: variant(Figma의 "type") = default | ghost, size = default | lg | sm.
+ * variant = default | ghost, size = default | lg | sm.
  * `default`는 원형 배경을 채워서 렌더링(흰색, hover 시 zinc-100);
- * `ghost`는 배경 없이 아이콘만 렌더링 — Figma에는 `ghost`의 `default` 상태만
- * 문서화되어 있고 hover 스타일이 없어서 별도로 적용하지 않았다.
+ * `ghost`는 배경 없이 아이콘만 렌더링(hover 스타일 없음).
  */
 type IconButtonVariant = "default" | "ghost";
 type IconButtonSize = "default" | "lg" | "sm";

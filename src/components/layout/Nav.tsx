@@ -4,14 +4,11 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
 /**
- * Figma "Navigation" 프레임, "login Header Spacing" variant의 일부
- * (fileKey MEetGISeArvFjxh6eY4qB9, node 107:28388). Row: Height Hug 45px
- * (size/2=8px 수직 패딩 + 29px 높이 버튼들), 40px 수평 패딩,
- * 1px zinc-100 border, 5개 nav 아이템.
+ * 콘솔 상단 네비게이션. 5개 nav 아이템을 가로로 나열한다.
  *
- * 각 아이템은 `Button`의 "ghost" + size="sm" 토큰(Hug 81px, padding size/1
- * size/4, corner rounded-md, 선택 시 semibold)을 그대로 재사용하되,
- * `<a>` 안에 `<button>`을 중첩하는 대신 `Link`에 직접 적용한다.
+ * 각 아이템은 `Button`의 "ghost" + size="sm" 스타일(선택 시 semibold)을
+ * 그대로 재사용하되, `<a>` 안에 `<button>`을 중첩하는 대신 `Link`에
+ * 직접 적용한다.
  */
 export interface NavItem {
   label: string;

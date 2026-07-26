@@ -3,18 +3,16 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 /**
- * Figma "Header Component" 페이지(fileKey MEetGISeArvFjxh6eY4qB9, node 107:28388)에
- * 문서화된 Header variant는 3가지:
+ * Header variant는 3가지:
  * - "default": 공개 페이지용 헤더, 회원가입 CTA.
  * - "signup": 공개 페이지용 헤더, 로그인 CTA.
  * - "login": 인증된 콘솔 헤더 — CTA 없이 유저 메뉴 버튼
  *   (사람 아이콘 + "{userName} 님")을 보여주며, 아래에 <Nav />와 함께 쓰인다.
  *
- * 세 variant 모두 우측 CTA/유저 버튼은 이 프로젝트의 `Button` 컴포넌트를
- * 그대로 사용한다(default/signup은 outline, login은 ghost) — Figma 간격이
- * `Button`의 size="default"와 정확히 일치한다.
+ * 세 variant 모두 우측 CTA/유저 버튼은 이 프로젝트의 `Button` 컴포넌트와
+ * 동일한 스타일을 사용한다(default/signup은 outline, login은 ghost).
  * 로고는 87x48 고정 크기의 zinc-200 placeholder box이며(아직 실제 로고
- * 에셋이 파일에 없음), 그 박스 안에 워드마크 텍스트로 렌더링한다.
+ * 에셋이 없음), 그 박스 안에 워드마크 텍스트로 렌더링한다.
  */
 export type HeaderVariant = "default" | "signup" | "login";
 
