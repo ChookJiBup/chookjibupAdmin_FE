@@ -13,6 +13,13 @@ export async function getFieldStaffList(
   return data.data;
 }
 
+export async function getFieldStaff(festivalId: string, staffId: string): Promise<FieldStaff> {
+  const { data } = await adminApiClient.get<ApiResponse<FieldStaff>>(
+    `/festivals/${festivalId}/field-staff/${staffId}`,
+  );
+  return data.data;
+}
+
 export async function createFieldStaff(
   festivalId: string,
   request: CreateFieldStaffRequest,

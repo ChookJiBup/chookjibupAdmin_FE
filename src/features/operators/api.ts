@@ -10,6 +10,13 @@ export async function getSubAdmins(festivalId: string, keyword?: string): Promis
   return data.data;
 }
 
+export async function getSubAdmin(festivalId: string, adminId: string): Promise<SubAdmin> {
+  const { data } = await adminApiClient.get<ApiResponse<SubAdmin>>(
+    `/festivals/${festivalId}/sub-admins/${adminId}`,
+  );
+  return data.data;
+}
+
 export async function searchSubAdminCandidates(
   festivalId: string,
   keyword: string,
