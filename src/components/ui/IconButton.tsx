@@ -1,0 +1,66 @@
+"use client";
+
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
+
+/**
+ * Figma "Icon Button" 컴포넌트 세트 (fileKey MEetGISeArvFjxh6eY4qB9, node 104:25165).
+ * 문서화된 variant: variant(Figma의 "type") = default | ghost, size = default | lg | sm.
+ * `default`는 원형 배경을 채워서 렌더링(흰색, hover 시 zinc-100);
+ * `ghost`는 배경 없이 아이콘만 렌더링 — Figma에는 `ghost`의 `default` 상태만
+ * 문서화되어 있고 hover 스타일이 없어서 별도로 적용하지 않았다.
+ */
+type IconButtonVariant = "default" | "ghost";
+type IconButtonSize = "default" | "lg" | "sm";
+
+const sizeClasses: Record<IconButtonSize, string> = {
+  default: "size-8", // 32px
+  lg: "size-9", // 36px
+  sm: "size-7", // 28px
+};
+
+const iconSizeClasses: Record<IconButtonSize, string> = {
+  default: "size-4", // 16px
+  lg: "size-5", // 20px
+  sm: "size-3", // 12px
+};
+
+const variantClasses: Record<IconButtonVariant, string> = {
+  default: "bg-white hover:bg-zinc-100",
+  ghost: "bg-transparent",
+};
+
+type IconButtonProps = Omit<
+  ComponentPropsWithoutRef<"button">,
+  "children" | "aria-label"
+> & {
+  /** 버튼 내부에 렌더링할 아이콘. `size` variant에 맞게 크기가 조정된다. */
+  icon: ReactNode;
+  variant?: IconButtonVariant;
+  size?: IconButtonSize;
+  /** 필수 — 아이콘만 있는 버튼이라 보이는 텍스트 라벨이 없다. */
+  "aria-label": string;
+};
+
+export function IconButton({
+  icon,
+  variant = "default",
+  size = "default",
+  className,
+  "aria-label": ariaLabel,
+  ...rest
+}: IconButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full p-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 disabled:pointer-events-none disabled:opacity-50 ${sizeClasses[size]} ${variantClasses[variant]} ${className ?? ""}`}
+      {...rest}
+    >
+      <span
+        className={`inline-flex items-center justify-center ${iconSizeClasses[size]}`}
+      >
+        {icon}
+      </span>
+    </button>
+  );
+}

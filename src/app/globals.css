@@ -24,6 +24,7 @@
   --color-zinc-900: #18181b;
   --color-zinc-950: #09090b;
   --color-red-500: #fb2c36;
+  --color-red-600: #e7000b;
 
   --color-primary: var(--color-zinc-900);
   --color-secondary: var(--color-zinc-700);
