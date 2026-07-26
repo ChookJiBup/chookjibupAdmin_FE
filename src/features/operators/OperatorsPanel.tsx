@@ -33,14 +33,14 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
       <section className="flex flex-col gap-3">
         <h2 className="body-regular-bold">등록된 운영자</h2>
 
-        {subAdminsQuery.isLoading && <p className="body-regular text-gray-500">불러오는 중...</p>}
+        {subAdminsQuery.isLoading && <p className="body-regular text-zinc-500">불러오는 중...</p>}
 
         {subAdminsQuery.isError && (
           <p className="body-small text-error">{getApiErrorMessage(subAdminsQuery.error)}</p>
         )}
 
         {subAdminsQuery.data && subAdminsQuery.data.length === 0 && (
-          <p className="body-regular text-gray-500">등록된 운영자가 없습니다.</p>
+          <p className="body-regular text-zinc-500">등록된 운영자가 없습니다.</p>
         )}
 
         {subAdminsQuery.data && subAdminsQuery.data.length > 0 && (
@@ -55,7 +55,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                   className="flex-1"
                 >
                   <p className="body-regular-bold hover:underline">{subAdmin.name}</p>
-                  <p className="body-small text-gray-500">
+                  <p className="body-small text-zinc-500">
                     {subAdmin.email} · {subAdmin.organization} · {STATUS_LABEL[subAdmin.status]}
                   </p>
                 </Link>
@@ -74,7 +74,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
 
       <section className="flex flex-col gap-3">
         <h2 className="body-regular-bold">운영자 추가</h2>
-        <p className="body-small text-gray-400">
+        <p className="body-small text-zinc-400">
           이미 회원가입한 관리자 계정을 이메일/이름으로 검색해 초대합니다. (초대 실행은 아직 미구현)
         </p>
 
@@ -97,14 +97,14 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
           </button>
         </form>
 
-        {candidatesQuery.isLoading && <p className="body-regular text-gray-500">검색 중...</p>}
+        {candidatesQuery.isLoading && <p className="body-regular text-zinc-500">검색 중...</p>}
 
         {candidatesQuery.isError && (
           <p className="body-small text-error">{getApiErrorMessage(candidatesQuery.error)}</p>
         )}
 
         {candidatesQuery.data && candidatesQuery.data.length === 0 && (
-          <p className="body-regular text-gray-500">검색 결과가 없습니다.</p>
+          <p className="body-regular text-zinc-500">검색 결과가 없습니다.</p>
         )}
 
         {candidatesQuery.data && candidatesQuery.data.length > 0 && (
@@ -116,7 +116,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
               >
                 <div>
                   <p className="body-regular-bold">{candidate.name}</p>
-                  <p className="body-small text-gray-500">
+                  <p className="body-small text-zinc-500">
                     {candidate.email} · {candidate.organization}
                   </p>
                 </div>

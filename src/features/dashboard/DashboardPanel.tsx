@@ -13,7 +13,7 @@ const OPERATING_STATUS_LABEL: Record<string, string> = {
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border px-4 py-3">
-      <p className="body-small text-gray-500">{label}</p>
+      <p className="body-small text-zinc-500">{label}</p>
       <p className="heading-small">{value}</p>
     </div>
   );
@@ -28,7 +28,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   });
 
   if (dashboardQuery.isLoading) {
-    return <p className="body-regular text-gray-500">불러오는 중...</p>;
+    return <p className="body-regular text-zinc-500">불러오는 중...</p>;
   }
 
   if (dashboardQuery.isError) {
@@ -49,10 +49,10 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         <StatCard label="활성 대기열 수" value={dashboard.activeQueueCount.toLocaleString()} />
         <StatCard label="평균 대기 시간" value={`${dashboard.averageWaitMinutes}분`} />
       </div>
-      <p className="body-small text-gray-400">
+      <p className="body-small text-zinc-400">
         마지막 갱신: {new Date(dashboard.updatedAt).toLocaleString("ko-KR")}
       </p>
-      <p className="body-small text-gray-400">
+      <p className="body-small text-zinc-400">
         축제 운영 AI 제안은 백엔드 API가 아직 없어 이번 화면에 포함하지 않았습니다.
       </p>
     </div>

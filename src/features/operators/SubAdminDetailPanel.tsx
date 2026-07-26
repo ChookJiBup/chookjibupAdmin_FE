@@ -24,7 +24,7 @@ export function SubAdminDetailPanel({
   });
 
   if (subAdminQuery.isLoading) {
-    return <p className="body-regular text-gray-500">불러오는 중...</p>;
+    return <p className="body-regular text-zinc-500">불러오는 중...</p>;
   }
 
   if (subAdminQuery.isError) {
@@ -37,19 +37,19 @@ export function SubAdminDetailPanel({
   return (
     <dl className="flex flex-col gap-2 rounded-lg border px-4 py-3">
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">이름</dt>
+        <dt className="body-small w-24 text-zinc-500">이름</dt>
         <dd className="body-regular">{subAdmin.name}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">이메일</dt>
+        <dt className="body-small w-24 text-zinc-500">이메일</dt>
         <dd className="body-regular">{subAdmin.email}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">소속</dt>
+        <dt className="body-small w-24 text-zinc-500">소속</dt>
         <dd className="body-regular">{subAdmin.organization}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">상태</dt>
+        <dt className="body-small w-24 text-zinc-500">상태</dt>
         <dd className="body-regular">{STATUS_LABEL[subAdmin.status]}</dd>
       </div>
     </dl>

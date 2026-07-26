@@ -12,7 +12,7 @@ const CONGESTION_LABEL: Record<CongestionLevel, string> = {
 };
 
 const CONGESTION_COLOR: Record<CongestionLevel, string> = {
-  LOW: "text-gray-500",
+  LOW: "text-zinc-500",
   MEDIUM: "text-zinc-700",
   HIGH: "text-error",
 };
@@ -48,7 +48,7 @@ function BoothRow({
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <label className="body-small flex flex-1 items-center gap-2 text-gray-500">
+        <label className="body-small flex flex-1 items-center gap-2 text-zinc-500">
           줄 끝 위치 (부스 앞 m)
           <input
             type="number"
@@ -76,7 +76,7 @@ export function StaffDashboardPanel() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="body-small text-gray-400">
+      <p className="body-small text-zinc-400">
         아직 목업 데이터입니다. 백엔드 혼잡도/줄끝라인 API가 준비되면 실제 데이터로 교체합니다.
       </p>
       <ul className="flex flex-col gap-2">

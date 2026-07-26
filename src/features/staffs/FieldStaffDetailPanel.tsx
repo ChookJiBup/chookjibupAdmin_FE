@@ -29,7 +29,7 @@ export function FieldStaffDetailPanel({
   });
 
   if (staffQuery.isLoading) {
-    return <p className="body-regular text-gray-500">불러오는 중...</p>;
+    return <p className="body-regular text-zinc-500">불러오는 중...</p>;
   }
 
   if (staffQuery.isError) {
@@ -42,25 +42,25 @@ export function FieldStaffDetailPanel({
   return (
     <dl className="flex flex-col gap-2 rounded-lg border px-4 py-3">
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">이름</dt>
+        <dt className="body-small w-24 text-zinc-500">이름</dt>
         <dd className="body-regular">{staff.name}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">로그인 ID</dt>
+        <dt className="body-small w-24 text-zinc-500">로그인 ID</dt>
         <dd className="body-regular">{staff.loginId}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">전화번호</dt>
+        <dt className="body-small w-24 text-zinc-500">전화번호</dt>
         <dd className="body-regular">{staff.phoneNumber}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">유효 기간</dt>
+        <dt className="body-small w-24 text-zinc-500">유효 기간</dt>
         <dd className="body-regular">
           {formatDate(staff.validFrom)} ~ {formatDate(staff.validUntil)}
         </dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-gray-500">상태</dt>
+        <dt className="body-small w-24 text-zinc-500">상태</dt>
         <dd className="body-regular">{STATUS_LABEL[staff.status]}</dd>
       </div>
     </dl>

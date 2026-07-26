@@ -50,7 +50,7 @@ export function BoothMapUploadPanel() {
             const file = event.dataTransfer.files[0];
             if (file) handleFileSelected(file);
           }}
-          className="flex h-48 w-full max-w-lg cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed text-gray-500"
+          className="flex h-48 w-full max-w-lg cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed text-zinc-500"
         >
           <span className="body-regular">배치도 이미지를 드래그하거나 클릭해서 업로드</span>
           <input
@@ -93,14 +93,14 @@ export function BoothMapUploadPanel() {
         </div>
       )}
 
-      {state.status === "uploading" && <p className="body-regular text-gray-500">업로드 중...</p>}
+      {state.status === "uploading" && <p className="body-regular text-zinc-500">업로드 중...</p>}
 
       {state.status === "processing" && (
         <div className="flex flex-col gap-2">
-          <p className="body-regular text-gray-500">
+          <p className="body-regular text-zinc-500">
             이미지를 분석하는 중입니다 (보정 → 텍스트 인식 → 영역 추출 → 시설 분류)
           </p>
-          <p className="body-small text-gray-400">처리에는 시간이 걸릴 수 있습니다.</p>
+          <p className="body-small text-zinc-400">처리에는 시간이 걸릴 수 있습니다.</p>
         </div>
       )}
 
@@ -119,7 +119,7 @@ export function BoothMapUploadPanel() {
 
       {state.status === "done" && (
         <div className="flex flex-col gap-3">
-          <p className="body-regular text-gray-500">
+          <p className="body-regular text-zinc-500">
             자동 배치 결과입니다. 아래에서 위치를 확인하고 수정할 수 있습니다. (드래그 이동/저장은
             아직 미구현)
           </p>
