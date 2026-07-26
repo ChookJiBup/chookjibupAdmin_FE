@@ -64,7 +64,10 @@ export function Header({
 
   return (
     <header className="flex items-center justify-between bg-white px-10 py-3">
-      <Link href={href} className="flex h-12 w-[87px] shrink-0 items-center justify-center bg-zinc-200">
+      <Link
+        href={href}
+        className="flex h-12 w-[87px] shrink-0 items-center justify-center bg-zinc-200"
+      >
         <span className="heading-small text-primary">축지법</span>
       </Link>
       {action ?? defaultAction}

@@ -3,8 +3,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 export type ButtonVariant = "primary" | "outline" | "destructive" | "link" | "ghost";
 export type ButtonSize = "default" | "lg" | "sm";
 
-export interface ButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> {
+export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> {
   /** 버튼의 시각적 스타일. 기본값은 "primary". */
   variant?: ButtonVariant;
   /** 버튼 크기. 기본값은 "default". */
@@ -39,12 +38,10 @@ const ICON_SIZE: Record<ButtonSize, string> = {
 };
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
-  primary:
-    "bg-primary text-white hover:bg-secondary disabled:bg-zinc-200 disabled:text-zinc-400",
+  primary: "bg-primary text-white hover:bg-secondary disabled:bg-zinc-200 disabled:text-zinc-400",
   outline:
     "border border-zinc-300 bg-white text-zinc-950 hover:bg-zinc-100 disabled:border-zinc-400 disabled:bg-zinc-200 disabled:text-zinc-400",
-  destructive:
-    "bg-error text-white hover:bg-red-600 disabled:bg-zinc-200 disabled:text-zinc-400",
+  destructive: "bg-error text-white hover:bg-red-600 disabled:bg-zinc-200 disabled:text-zinc-400",
   link: "text-zinc-950 hover:underline disabled:text-zinc-400",
   ghost: "text-zinc-950 hover:bg-zinc-100 disabled:text-zinc-400",
 };

@@ -27,10 +27,7 @@ const variantClasses: Record<IconButtonVariant, string> = {
   ghost: "bg-transparent",
 };
 
-type IconButtonProps = Omit<
-  ComponentPropsWithoutRef<"button">,
-  "children" | "aria-label"
-> & {
+type IconButtonProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "aria-label"> & {
   /** 버튼 내부에 렌더링할 아이콘. `size` variant에 맞게 크기가 조정된다. */
   icon: ReactNode;
   variant?: IconButtonVariant;
@@ -54,9 +51,7 @@ export function IconButton({
       className={`inline-flex shrink-0 items-center justify-center rounded-full p-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 disabled:pointer-events-none disabled:opacity-50 ${sizeClasses[size]} ${variantClasses[variant]} ${className ?? ""}`}
       {...rest}
     >
-      <span
-        className={`inline-flex items-center justify-center ${iconSizeClasses[size]}`}
-      >
+      <span className={`inline-flex items-center justify-center ${iconSizeClasses[size]}`}>
         {icon}
       </span>
     </button>
