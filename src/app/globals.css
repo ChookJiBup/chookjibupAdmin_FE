@@ -27,9 +27,15 @@
   --color-red-600: #e7000b;
 
   --color-primary: var(--color-zinc-900);
+  --color-primary-foreground: #ffffff;
   --color-secondary: var(--color-zinc-700);
+  --color-secondary-foreground: #ffffff;
   --color-error: var(--color-red-500);
   --color-dimmed: rgb(0 0 0 / 25%);
+  --color-orange-100: #fedfc4;
+  --color-orange-500: #fd7e14;
+  --color-blue-100: #bfdeff;
+  --color-blue-500: #007cff;
 
   /* Typography scale — Figma "축지법" Typography 토큰 (node 74:1623) */
   --text-xs: 12px;
