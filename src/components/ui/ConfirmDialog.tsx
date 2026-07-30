@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Cross2Icon } from "@radix-ui/react-icons";
-import { Button } from "./Button";
+import { Button, type ButtonVariant } from "./Button";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -14,6 +14,8 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   /** 기본값: "삭제" */
   confirmLabel?: string;
+  /** 확인 버튼 스타일. 기본값은 "destructive"(삭제류), 등록/저장류 확인에는 "primary"를 전달한다. */
+  confirmVariant?: ButtonVariant;
   onConfirm: () => void;
   confirmPending?: boolean;
 }
@@ -25,6 +27,7 @@ export function ConfirmDialog({
   description,
   cancelLabel = "취소",
   confirmLabel = "삭제",
+  confirmVariant = "destructive",
   onConfirm,
   confirmPending = false,
 }: ConfirmDialogProps) {
@@ -57,7 +60,7 @@ export function ConfirmDialog({
                 </Button>
               </Dialog.Close>
               <Button
-                variant="destructive"
+                variant={confirmVariant}
                 className="flex-1"
                 disabled={confirmPending}
                 onClick={onConfirm}
