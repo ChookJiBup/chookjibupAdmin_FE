@@ -35,6 +35,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local reference docs (AGENTS.md: 커밋 대상에 남기지 않음)
+reference/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

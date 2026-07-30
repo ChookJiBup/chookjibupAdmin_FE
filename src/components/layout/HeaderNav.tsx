@@ -1,3 +1,4 @@
+import type { AdminRole } from "@/features/auth/admin/types";
 import { Header } from "./Header";
 import { Nav, type NavItem } from "./Nav";
 
@@ -10,13 +11,16 @@ export interface HeaderNavProps {
   userName?: string;
   navItems?: NavItem[];
   festivalId?: string;
+  /** 로고 옆에 표시할 현재 축제명. 축제 범위 화면에서만 전달한다. */
+  festivalName?: string;
+  role?: AdminRole | null;
 }
 
-export function HeaderNav({ userName, navItems, festivalId }: HeaderNavProps) {
+export function HeaderNav({ userName, navItems, festivalId, festivalName, role }: HeaderNavProps) {
   return (
     <div className="flex flex-col">
-      <Header variant="login" userName={userName} />
-      <Nav items={navItems} festivalId={festivalId} />
+      <Header variant="login" userName={userName} festivalName={festivalName} />
+      <Nav items={navItems} festivalId={festivalId} role={role} />
     </div>
   );
 }

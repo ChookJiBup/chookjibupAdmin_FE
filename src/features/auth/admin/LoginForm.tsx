@@ -21,7 +21,7 @@ export function LoginForm() {
     mutationFn: loginAdmin,
     onSuccess: (data) => {
       setSession(data.accessToken, data.tokenType, data.expiresIn, data.admin);
-      router.push("/console/festivals");
+      router.push("/console");
     },
   });
 
