@@ -30,7 +30,10 @@ export interface NavProps {
   role?: AdminRole | null;
 }
 
-function buildDefaultItems(festivalId: string | undefined, role: AdminRole | null | undefined): NavItem[] {
+function buildDefaultItems(
+  festivalId: string | undefined,
+  role: AdminRole | null | undefined,
+): NavItem[] {
   if (!festivalId) {
     return [
       { label: "축제등록", href: "/console/festivals/new" },

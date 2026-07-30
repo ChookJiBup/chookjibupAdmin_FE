@@ -1,7 +1,13 @@
 import { CalendarIcon, DotFilledIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { MOCK_FESTIVALS } from "./mockFestivals";
 import type { FestivalProgressStatus, FestivalSummary } from "./types";
 

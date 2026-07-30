@@ -74,7 +74,9 @@ export function Header({
         >
           <span className="heading-small text-primary">축지법</span>
         </Link>
-        {festivalName ? <span className="body-regular-bold text-zinc-950">{festivalName}</span> : null}
+        {festivalName ? (
+          <span className="body-regular-bold text-zinc-950">{festivalName}</span>
+        ) : null}
       </div>
       {action ?? defaultAction}
     </header>
