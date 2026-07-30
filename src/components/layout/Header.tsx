@@ -20,6 +20,8 @@ export interface HeaderProps {
   variant?: HeaderVariant;
   /** 로고가 링크할 경로. */
   href?: string;
+  /** "login" variant에서 로고 옆에 표시할 현재 축제명. 축제 범위 화면에서만 전달한다. */
+  festivalName?: string;
   /** "login" variant의 유저 메뉴 버튼에 표시할 이름. */
   userName?: string;
   /** "login" variant에서 유저 메뉴 버튼이 링크할 경로. 기본값은 마이페이지. */
@@ -43,6 +45,7 @@ const CTA_LINK_CLASSES =
 export function Header({
   variant = "default",
   href = "/",
+  festivalName,
   userName = "user",
   userMenuHref = "/console/mypage",
   ctaHref = variant === "signup" ? "/login" : "/signup",
@@ -64,12 +67,15 @@ export function Header({
 
   return (
     <header className="flex items-center justify-between bg-white px-10 py-3">
-      <Link
-        href={href}
-        className="flex h-12 w-[87px] shrink-0 items-center justify-center bg-zinc-200"
-      >
-        <span className="heading-small text-primary">축지법</span>
-      </Link>
+      <div className="flex items-center gap-3">
+        <Link
+          href={href}
+          className="flex h-12 w-[87px] shrink-0 items-center justify-center bg-zinc-200"
+        >
+          <span className="heading-small text-primary">축지법</span>
+        </Link>
+        {festivalName ? <span className="body-regular-bold text-zinc-950">{festivalName}</span> : null}
+      </div>
       {action ?? defaultAction}
     </header>
   );
