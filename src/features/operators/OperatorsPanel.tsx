@@ -40,7 +40,9 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
   const allSelected = operators.length > 0 && selectedIds.size === operators.length;
 
   function toggleAll() {
-    setSelectedIds(allSelected ? new Set() : new Set(operators.map((operator) => operator.adminId)));
+    setSelectedIds(
+      allSelected ? new Set() : new Set(operators.map((operator) => operator.adminId)),
+    );
   }
 
   function toggleOne(adminId: string) {
@@ -123,7 +125,12 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                       {candidate.organization ? ` · ${candidate.organization}` : ""}
                     </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => handleAdd(candidate)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAdd(candidate)}
+                  >
                     추가
                   </Button>
                 </li>
@@ -170,9 +177,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                   <PersonIcon className="size-4 shrink-0 text-zinc-400" />
                   <p className="body-regular-bold text-zinc-950">
                     {operator.name}
-                    <span className="body-small font-normal text-zinc-500">
-                      ({operator.email})
-                    </span>
+                    <span className="body-small font-normal text-zinc-500">({operator.email})</span>
                   </p>
                 </label>
               ))}
