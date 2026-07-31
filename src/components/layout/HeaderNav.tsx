@@ -19,7 +19,7 @@ export interface HeaderNavProps {
 export function HeaderNav({ userName, navItems, festivalId, festivalName, role }: HeaderNavProps) {
   return (
     <div className="flex flex-col">
-      <Header variant="login" userName={userName} festivalName={festivalName} />
+      <Header variant="login" userName={userName} festivalName={festivalName} role={role} />
       <Nav items={navItems} festivalId={festivalId} role={role} />
     </div>
   );
