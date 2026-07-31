@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
  * 필요해 `<button>`을 `<a>` 안에 중첩하지 않고 `Link`에 직접 적용한다.
  */
 const ACTION_LINK_CLASSES =
-  "inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-primary px-4 py-3 body-large text-white transition-colors hover:bg-secondary";
+  "inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-primary px-4 py-3 body-large text-white transition-colors hover:bg-primary/90";
 
 export interface CompleteDialogProps {
   title: string;

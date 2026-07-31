@@ -1,6 +1,8 @@
 import { PersonIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { FestivalOwnerBadge, OperatorBadge } from "@/components/ui/RoleBadge";
+import type { AdminRole } from "@/features/auth/admin/types";
 
 /**
  * Header variant는 3가지:
@@ -22,6 +24,8 @@ export interface HeaderProps {
   href?: string;
   /** "login" variant에서 로고 옆에 표시할 현재 축제명. 축제 범위 화면에서만 전달한다. */
   festivalName?: string;
+  /** "login" variant에서 유저 메뉴 버튼 앞에 표시할 축제 내 역할 뱃지. 축제 범위 화면에서만 전달한다. */
+  role?: AdminRole | null;
   /** "login" variant의 유저 메뉴 버튼에 표시할 이름. */
   userName?: string;
   /** "login" variant에서 유저 메뉴 버튼이 링크할 경로. 기본값은 마이페이지. */
@@ -46,6 +50,7 @@ export function Header({
   variant = "default",
   href = "/",
   festivalName,
+  role,
   userName = "user",
   userMenuHref = "/console/mypage",
   ctaHref = variant === "signup" ? "/login" : "/signup",
@@ -53,12 +58,16 @@ export function Header({
 }: HeaderProps) {
   const defaultAction =
     variant === "login" ? (
-      <Link href={userMenuHref} className={USER_MENU_LINK_CLASSES}>
-        <span className="size-4 shrink-0">
-          <PersonIcon />
-        </span>
-        {userName} 님
-      </Link>
+      <div className="flex items-center gap-3">
+        {role === "FESTIVAL_OWNER" ? <FestivalOwnerBadge /> : null}
+        {role === "SUB_ADMIN" ? <OperatorBadge /> : null}
+        <Link href={userMenuHref} className={USER_MENU_LINK_CLASSES}>
+          <span className="size-4 shrink-0">
+            <PersonIcon />
+          </span>
+          {userName} 님
+        </Link>
+      </div>
     ) : (
       <Link href={ctaHref} className={CTA_LINK_CLASSES}>
         {variant === "signup" ? "로그인" : "회원가입"}
@@ -72,7 +81,7 @@ export function Header({
           href={href}
           className="flex h-12 w-[87px] shrink-0 items-center justify-center bg-zinc-200"
         >
-          <span className="heading-small text-primary">축지법</span>
+          <span className="heading-small text-zinc-900">축지법</span>
         </Link>
         {festivalName ? (
           <span className="body-regular-bold text-zinc-950">{festivalName}</span>

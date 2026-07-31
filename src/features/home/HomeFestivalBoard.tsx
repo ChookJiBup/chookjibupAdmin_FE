@@ -1,6 +1,7 @@
 import { CalendarIcon, DotFilledIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { FestivalOwnerBadge, OperatorBadge } from "@/components/ui/RoleBadge";
 import {
   Empty,
   EmptyContent,
@@ -12,7 +13,7 @@ import { MOCK_FESTIVALS } from "./mockFestivals";
 import type { FestivalProgressStatus, FestivalSummary } from "./types";
 
 const REGISTER_CTA_CLASSES =
-  "inline-flex items-center justify-center gap-2.5 rounded-md bg-primary px-4 py-2 body-regular text-white transition-colors hover:bg-secondary";
+  "inline-flex items-center justify-center gap-2.5 rounded-md bg-primary px-4 py-2 body-regular text-white transition-colors hover:bg-primary/90";
 
 const STATUS_ORDER: FestivalProgressStatus[] = ["UPCOMING", "ONGOING", "COMPLETED"];
 
@@ -24,14 +25,14 @@ const STATUS_LABEL: Record<FestivalProgressStatus, string> = {
 
 const STATUS_HEADER_STYLES: Record<FestivalProgressStatus, string> = {
   UPCOMING: "bg-zinc-100",
-  ONGOING: "bg-orange-100",
-  COMPLETED: "bg-blue-100",
+  ONGOING: "bg-point-300",
+  COMPLETED: "bg-secondary-300",
 };
 
 const STATUS_BODY_BORDER_STYLES: Record<FestivalProgressStatus, string> = {
   UPCOMING: "divide-zinc-200 border-zinc-200",
-  ONGOING: "divide-orange-500 border-orange-500",
-  COMPLETED: "divide-blue-500 border-blue-500",
+  ONGOING: "divide-point-600 border-point-600",
+  COMPLETED: "divide-secondary-600 border-secondary-600",
 };
 
 function formatFestivalDateRange(startDate: string, endDate: string) {
@@ -57,12 +58,7 @@ function FestivalCard({ festival }: { festival: FestivalSummary }) {
     >
       <div className="flex items-start gap-2">
         <p className="body-regular-bold text-zinc-950">{festival.name}</p>
-        <Badge
-          variant={festival.role === "FESTIVAL_OWNER" ? "default" : "secondary"}
-          className="h-auto rounded-md px-2 py-1 text-xs font-normal"
-        >
-          {festival.role === "FESTIVAL_OWNER" ? "총괄관리자" : "운영자"}
-        </Badge>
+        {festival.role === "FESTIVAL_OWNER" ? <FestivalOwnerBadge /> : <OperatorBadge />}
       </div>
       <div className="flex flex-col items-start gap-1">
         <div className="flex items-center gap-2">

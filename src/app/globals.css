@@ -23,19 +23,25 @@
   --color-zinc-800: #27272a;
   --color-zinc-900: #18181b;
   --color-zinc-950: #09090b;
+  --color-red-300: #fca5a5;
   --color-red-500: #fb2c36;
   --color-red-600: #e7000b;
 
-  --color-primary: var(--color-zinc-900);
+  --color-primary-300: #c8dafd;
+  --color-primary-500: #5a91f8;
+  --color-primary-600: #236cf6;
+  --color-primary: var(--color-primary-600);
   --color-primary-foreground: #ffffff;
   --color-secondary: var(--color-zinc-700);
   --color-secondary-foreground: #ffffff;
+  --color-secondary-300: #bfdeff;
+  --color-secondary-500: #409dff;
+  --color-secondary-600: #007cff;
+  --color-point-300: #fedfc4;
+  --color-point-500: #fd9e4f;
+  --color-point-600: #fd7e14;
   --color-error: var(--color-red-500);
-  --color-dimmed: rgb(0 0 0 / 25%);
-  --color-orange-100: #fedfc4;
-  --color-orange-500: #fd7e14;
-  --color-blue-100: #bfdeff;
-  --color-blue-500: #007cff;
+  --color-dimmed: color-mix(in srgb, var(--color-zinc-950) 25%, transparent);
 
   /* Typography scale — Figma "축지법" Typography 토큰 (node 74:1623) */
   --text-xs: 12px;
