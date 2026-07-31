@@ -124,6 +124,7 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
               placeholder="근무부서"
               value={department}
               onChange={(event) => setDepartment(event.target.value)}
+              required
             />
             <Input
               label="전화번호"
