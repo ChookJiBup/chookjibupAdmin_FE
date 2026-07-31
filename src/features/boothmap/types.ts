@@ -8,19 +8,36 @@ export type BoothMapUploadState =
   | { status: "selected"; file: File; previewUrl: string }
   | { status: "uploading"; file: File; previewUrl: string }
   | { status: "processing"; previewUrl: string }
-  | { status: "done"; previewUrl: string; objects: BoothMapObject[] }
+  | { status: "done"; previewUrl?: string; objects: BoothMapObject[] }
   | { status: "error"; message: string };
 
 /**
- * 7단계 "도메인 객체(JSON)"의 임시 형태이다.
+ * 좌표/크기가 있는 사각형 시설(부스, 건물, 화장실 등).
  * 좌표/크기 단위, 타입 enum 값은 백엔드 스키마 확정 전까지 가짜다.
+ * (docs/specs/03_부스맵_에디터_구현계획.md — FestivalBooth에 좌표 필드가 없어
+ * 지금은 화면(로컬 상태/localStorage) 안에서만 유효하다.)
  */
-export interface BoothMapObject {
+export type BoothMapShapeType =
+  "BOOTH" | "PATH" | "BUILDING" | "OPEN_SPACE" | "RESTROOM" | "ENTRANCE";
+
+export interface BoothMapShape {
+  kind: "shape";
   id: string;
-  type: "BOOTH" | "PATH" | "BUILDING" | "OPEN_SPACE" | "RESTROOM" | "ENTRANCE";
+  type: BoothMapShapeType;
   label: string;
   x: number;
   y: number;
   width: number;
   height: number;
 }
+
+/** 대기 라인(줄) — 클릭으로 점을 찍어 만드는 꺾은선. */
+export interface BoothMapQueueLine {
+  kind: "line";
+  id: string;
+  label: string;
+  /** Konva Line이 바로 쓸 수 있는 평탄화 좌표 [x1, y1, x2, y2, ...] */
+  points: number[];
+}
+
+export type BoothMapObject = BoothMapShape | BoothMapQueueLine;
