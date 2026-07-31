@@ -19,6 +19,8 @@ interface AdminAuthState {
     expiresIn: number,
     admin: AdminSummary,
   ) => void;
+  /** 프로필 수정 API가 아직 없어, 이 브라우저의 세션에만 반영한다(서버 미반영). */
+  updateAdminProfile: (patch: Partial<AdminSummary>) => void;
   clearSession: () => void;
   isSessionValid: () => boolean;
 }
@@ -35,6 +37,11 @@ export const useAdminAuthStore = create<AdminAuthState>()(
             expiresAt: Date.now() + expiresIn * 1000,
             admin,
           },
+        }),
+      updateAdminProfile: (patch) =>
+        set((state) => {
+          if (!state.session) return state;
+          return { session: { ...state.session, admin: { ...state.session.admin, ...patch } } };
         }),
       clearSession: () => set({ session: null }),
       isSessionValid: () => {

@@ -3,22 +3,50 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AdminLogoutButton } from "@/components/auth/AdminLogoutButton";
+import { Bottombar } from "@/components/ui/Bottombar";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { FormSection } from "@/components/ui/FormSection";
+import { Input } from "@/components/ui/Input";
 import { withdrawAdmin } from "@/features/auth/admin/api";
-import type { AdminRole } from "@/features/auth/admin/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 
-const ROLE_LABEL: Record<AdminRole, string> = {
-  FESTIVAL_OWNER: "총괄관리자",
-  SUB_ADMIN: "운영자",
-};
+// 부서/직급을 저장하는 백엔드 필드가 없어, 이 브라우저의 localStorage에만 기억한다.
+// 이름 수정도 서버 API가 없어 adminAuthStore(zustand persist)의 세션에만 반영된다.
+function profileExtraStorageKey(adminId: string) {
+  return `chookjibup-admin-profile-extra-${adminId}`;
+}
+
+interface ProfileExtra {
+  department: string;
+  position: string;
+}
+
+function loadProfileExtra(adminId: string): ProfileExtra {
+  if (typeof window === "undefined") return { department: "", position: "" };
+  const saved = window.localStorage.getItem(profileExtraStorageKey(adminId));
+  return saved ? (JSON.parse(saved) as ProfileExtra) : { department: "", position: "" };
+}
+
+type ConfirmKind = "logout" | "withdraw" | "save" | null;
 
 export default function MyPage() {
   const router = useRouter();
   const admin = useAdminAuthStore((state) => state.session?.admin);
   const clearSession = useAdminAuthStore((state) => state.clearSession);
-  const [withdrawArmed, setWithdrawArmed] = useState(false);
+  const updateAdminProfile = useAdminAuthStore((state) => state.updateAdminProfile);
+
+  // AdminAuthGuard가 hydrate + 세션 확인 전에는 children을 렌더링하지 않으므로,
+  // 이 컴포넌트가 처음 그려지는 시점엔 admin이 이미 준비돼 있다.
+  const [name, setName] = useState(() => admin?.name ?? "");
+  const [department, setDepartment] = useState(
+    () => (admin ? loadProfileExtra(admin.adminId) : { department: "", position: "" }).department,
+  );
+  const [position, setPosition] = useState(
+    () => (admin ? loadProfileExtra(admin.adminId) : { department: "", position: "" }).position,
+  );
+  const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
 
   const withdrawMutation = useMutation({
     mutationFn: withdrawAdmin,
@@ -28,84 +56,102 @@ export default function MyPage() {
     },
   });
 
+  function handleLogout() {
+    clearSession();
+    router.replace("/login");
+  }
+
+  function handleSaveProfile() {
+    if (!admin) return;
+    updateAdminProfile({ name });
+    window.localStorage.setItem(
+      profileExtraStorageKey(admin.adminId),
+      JSON.stringify({ department, position }),
+    );
+    setConfirmKind(null);
+  }
+
+  if (!admin) return null;
+
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="heading-small">마이페이지 (관리자)</h1>
-          <p className="body-small text-zinc-500">회원 정보 조회/수정, 회원 탈퇴</p>
+    <div className="flex max-w-[790px] flex-col gap-6 pb-[72px]">
+      <FormSection label="프로필 설정">
+        <Input label="이메일" disabled value={admin.email} />
+        <Input label="이름" value={name} onChange={(event) => setName(event.target.value)} />
+        <div className="flex gap-3">
+          <Input
+            label="부서"
+            wrapperClassName="flex-1"
+            value={department}
+            onChange={(event) => setDepartment(event.target.value)}
+          />
+          <Input
+            label="직급"
+            wrapperClassName="flex-1"
+            value={position}
+            onChange={(event) => setPosition(event.target.value)}
+          />
         </div>
-        <AdminLogoutButton />
-      </div>
+      </FormSection>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="body-regular-bold">회원 정보</h2>
-        {admin && (
-          <dl className="flex flex-col gap-1">
-            <div className="flex gap-2">
-              <dt className="body-small w-20 text-zinc-500">이메일</dt>
-              <dd className="body-regular">{admin.email}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="body-small w-20 text-zinc-500">이름</dt>
-              <dd className="body-regular">{admin.name}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="body-small w-20 text-zinc-500">소속</dt>
-              <dd className="body-regular">{admin.organization}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="body-small w-20 text-zinc-500">역할</dt>
-              <dd className="body-regular">
-                {admin.role ? ROLE_LABEL[admin.role] : "연결된 축제 없음"}
-              </dd>
-            </div>
-          </dl>
-        )}
-        <p className="body-small text-zinc-400">
-          이메일/조직/비밀번호 변경은 아직 백엔드 API가 준비되지 않아 제공되지 않습니다.
-        </p>
-      </section>
+      <FormSection label="보안설정">
+        <div className="flex items-center justify-between">
+          <p className="body-regular text-zinc-950">비밀번호 변경</p>
+          <Button variant="outline" size="sm" onClick={() => router.push("/forgot-password")}>
+            비밀번호 재설정
+          </Button>
+        </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="body-regular-bold text-error">회원 탈퇴</h2>
-        <p className="body-small text-zinc-500">
-          탈퇴하면 계정이 비활성화되어 더 이상 로그인할 수 없습니다. 총괄관리자로 연결된 축제가
-          있으면 탈퇴가 제한될 수 있습니다.
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="body-regular text-zinc-950">로그아웃</p>
+          <Button variant="outline" size="sm" onClick={() => setConfirmKind("logout")}>
+            로그아웃
+          </Button>
+        </div>
 
-        {withdrawMutation.isError && (
+        <div className="flex items-center justify-between">
+          <p className="body-regular text-zinc-950">계정 삭제</p>
+          <Button variant="destructive" size="sm" onClick={() => setConfirmKind("withdraw")}>
+            탈퇴하기
+          </Button>
+        </div>
+
+        {withdrawMutation.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(withdrawMutation.error)}</p>
-        )}
+        ) : null}
+      </FormSection>
 
-        {!withdrawArmed ? (
-          <button
-            type="button"
-            onClick={() => setWithdrawArmed(true)}
-            className="body-regular w-fit rounded-lg border border-error px-4 py-2 text-error"
-          >
-            회원 탈퇴
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => withdrawMutation.mutate()}
-              disabled={withdrawMutation.isPending}
-              className="body-regular-bold rounded-lg border border-error bg-error px-4 py-2 text-white disabled:opacity-50"
-            >
-              {withdrawMutation.isPending ? "처리 중..." : "정말 탈퇴합니다"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setWithdrawArmed(false)}
-              className="body-regular rounded-lg border px-4 py-2"
-            >
-              취소
-            </button>
-          </div>
-        )}
-      </section>
+      <Bottombar submitLabel="수정하기" onSubmit={() => setConfirmKind("save")} />
+
+      <ConfirmDialog
+        open={confirmKind === "logout"}
+        onOpenChange={(open) => !open && setConfirmKind(null)}
+        title="로그아웃 하시겠습니까?"
+        description="모든 기기에서 로그아웃됩니다."
+        confirmLabel="로그아웃"
+        confirmVariant="primary"
+        onConfirm={handleLogout}
+      />
+
+      <ConfirmDialog
+        open={confirmKind === "withdraw"}
+        onOpenChange={(open) => !open && setConfirmKind(null)}
+        title="탈퇴하시겠습니까?"
+        description="계정 삭제는 영구적입니다. 계정이나 데이터를 복구할 수 없습니다."
+        confirmLabel="탈퇴하기"
+        confirmVariant="destructive"
+        confirmPending={withdrawMutation.isPending}
+        onConfirm={() => withdrawMutation.mutate()}
+      />
+
+      <ConfirmDialog
+        open={confirmKind === "save"}
+        onOpenChange={(open) => !open && setConfirmKind(null)}
+        title="변경사항을 저장하시겠습니까?"
+        confirmLabel="수정"
+        confirmVariant="primary"
+        onConfirm={handleSaveProfile}
+      />
     </div>
   );
 }
