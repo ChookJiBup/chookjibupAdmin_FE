@@ -1,195 +1,218 @@
 "use client";
 
+import { PersonIcon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useState } from "react";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { createFieldStaff, deleteFieldStaff, getFieldStaffList } from "./api";
-import type { CreateFieldStaffResult, FieldStaffStatus } from "./types";
-
-const STATUS_LABEL: Record<FieldStaffStatus, string> = {
-  ACTIVE: "활성",
-  DELETED: "삭제됨",
-};
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("ko-KR");
-}
-
-function DeleteButton({ festivalId, staffId }: { festivalId: string; staffId: string }) {
-  const [open, setOpen] = useState(false);
-  const queryClient = useQueryClient();
-
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteFieldStaff(festivalId, staffId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
-      setOpen(false);
-    },
-  });
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="body-small rounded-lg border px-3 py-1.5"
-      >
-        삭제
-      </button>
-
-      {deleteMutation.isError && (
-        <p className="body-small text-error">{getApiErrorMessage(deleteMutation.error)}</p>
-      )}
-
-      <ConfirmDialog
-        open={open}
-        onOpenChange={setOpen}
-        description="삭제한 스태프 계정은 복구할 수 없습니다."
-        confirmPending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate()}
-      />
-    </>
-  );
-}
+import type { CreateFieldStaffResult } from "./types";
 
 export function StaffsPanel({ festivalId }: { festivalId: string }) {
   const queryClient = useQueryClient();
-  const [loginId, setLoginId] = useState("");
   const [name, setName] = useState("");
+  const [department, setDepartment] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [created, setCreated] = useState<CreateFieldStaffResult | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // 근무부서를 저장하는 백엔드 필드가 없어, 이번 세션에서 직접 생성한 스태프에 한해 화면에서만 기억한다.
+  const [departmentByStaffId, setDepartmentByStaffId] = useState<Record<string, string>>({});
 
   const staffListQuery = useQuery({
     queryKey: ["field-staff", festivalId],
     queryFn: () => getFieldStaffList(festivalId),
   });
+  const staffList = staffListQuery.data ?? [];
+
+  // 아이디 발급 API가 없어, 현재 스태프 수를 기반으로 다음 아이디를 미리 보여준다.
+  const previewLoginId = `staff${staffList.length + 1}`;
 
   const createMutation = useMutation({
-    mutationFn: () => createFieldStaff(festivalId, { loginId, name, phoneNumber }),
+    mutationFn: () => createFieldStaff(festivalId, { loginId: previewLoginId, name, phoneNumber }),
     onSuccess: (result) => {
+      if (department) {
+        setDepartmentByStaffId((prev) => ({ ...prev, [result.staffId]: department }));
+      }
       setCreated(result);
-      setLoginId("");
       setName("");
+      setDepartment("");
       setPhoneNumber("");
       queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (staffIds: string[]) =>
+      Promise.all(staffIds.map((staffId) => deleteFieldStaff(festivalId, staffId))),
+    onSuccess: () => {
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
+    },
+  });
+
+  const allSelected = staffList.length > 0 && selectedIds.size === staffList.length;
+
+  function toggleAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(staffList.map((staff) => staff.staffId)));
+  }
+
+  function toggleOne(staffId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(staffId)) {
+        next.delete(staffId);
+      } else {
+        next.add(staffId);
+      }
+      return next;
+    });
+  }
+
   return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <h2 className="body-regular-bold">현장 스태프 목록</h2>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-start gap-6">
+        <div className="flex w-[360px] shrink-0 flex-col gap-4 rounded-lg border border-zinc-300 p-6">
+          <p className="body-large-bold text-zinc-950">스태프 추가</p>
 
-        {staffListQuery.isLoading && <p className="body-regular text-zinc-500">불러오는 중...</p>}
+          {created ? (
+            <div className="flex flex-col gap-1 rounded-lg bg-zinc-50 px-4 py-3">
+              <p className="body-small-bold text-zinc-950">
+                {created.name}({created.loginId}) 계정이 생성되었습니다.
+              </p>
+              <p className="body-small text-zinc-950">
+                임시 비밀번호: <span className="font-mono">{created.temporaryPassword}</span>
+              </p>
+              <p className="body-caption text-zinc-500">
+                임시 비밀번호는 지금만 확인할 수 있습니다. 스태프에게 바로 전달해주세요.
+              </p>
+            </div>
+          ) : null}
 
-        {staffListQuery.isError && (
-          <p className="body-small text-error">{getApiErrorMessage(staffListQuery.error)}</p>
-        )}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setCreated(null);
+              createMutation.mutate();
+            }}
+          >
+            <Input
+              label="이름"
+              placeholder="이름"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              maxLength={100}
+            />
+            <Input
+              label="아이디"
+              disabled
+              value={previewLoginId}
+              helperText="아이디는 자동으로 생성됩니다"
+            />
+            <Input
+              label="비밀번호"
+              type="password"
+              disabled
+              value="0000"
+              helperText="기본 비밀번호는 0000입니다"
+            />
+            <Input
+              label="근무부서"
+              placeholder="근무부서"
+              value={department}
+              onChange={(event) => setDepartment(event.target.value)}
+            />
+            <Input
+              label="전화번호"
+              placeholder="전화번호"
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              required
+              pattern="^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$"
+              title="예: 010-1234-5678"
+            />
 
-        {staffListQuery.data && staffListQuery.data.length === 0 && (
-          <p className="body-regular text-zinc-500">등록된 스태프가 없습니다.</p>
-        )}
+            {createMutation.isError ? (
+              <p className="body-caption text-error">{getApiErrorMessage(createMutation.error)}</p>
+            ) : null}
 
-        {staffListQuery.data && staffListQuery.data.length > 0 && (
-          <ul className="flex flex-col gap-2">
-            {staffListQuery.data.map((staff) => (
-              <li
-                key={staff.staffId}
-                className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3"
-              >
-                <Link
-                  href={`/console/festivals/${festivalId}/staffs/${staff.staffId}`}
-                  className="flex-1"
-                >
-                  <p className="body-regular-bold hover:underline">
-                    {staff.name} <span className="body-small text-zinc-500">({staff.loginId})</span>
-                  </p>
-                  <p className="body-small text-zinc-500">
-                    {staff.phoneNumber} · {formatDate(staff.validFrom)} ~{" "}
-                    {formatDate(staff.validUntil)} · {STATUS_LABEL[staff.status]}
-                  </p>
-                </Link>
-                <DeleteButton festivalId={festivalId} staffId={staff.staffId} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "추가하는 중..." : "추가하기"}
+              </Button>
+            </div>
+          </form>
+        </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="body-regular-bold">스태프 계정 생성</h2>
-
-        {created && (
-          <div className="flex flex-col gap-1 rounded-lg border border-error px-4 py-3">
-            <p className="body-regular-bold">
-              {created.name} ({created.loginId}) 계정이 생성되었습니다.
-            </p>
-            <p className="body-regular">
-              임시 비밀번호: <span className="font-mono">{created.temporaryPassword}</span>
-            </p>
-            <p className="body-small text-zinc-500">
-              임시 비밀번호는 지금만 확인할 수 있습니다. 스태프에게 바로 전달해주세요.
+        <div className="flex flex-1 flex-col rounded-lg border border-zinc-300">
+          <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-4">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={toggleAll}
+              disabled={staffList.length === 0}
+            />
+            <p className="body-regular-bold text-zinc-950">
+              전체 <span className="text-primary">{staffList.length}</span>
             </p>
           </div>
-        )}
 
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setCreated(null);
-            createMutation.mutate();
-          }}
-        >
-          <input
-            type="text"
-            required
-            minLength={4}
-            maxLength={30}
-            pattern="^[A-Za-z0-9._-]+$"
-            title="영문, 숫자, ., _, - 로 4~30자"
-            placeholder="로그인 아이디"
-            value={loginId}
-            onChange={(event) => setLoginId(event.target.value)}
-            className="body-regular rounded-lg border px-3 py-2"
-          />
-          <input
-            type="text"
-            required
-            maxLength={100}
-            placeholder="이름"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="body-regular rounded-lg border px-3 py-2"
-          />
-          <input
-            type="text"
-            required
-            pattern="^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$"
-            title="예: 010-1234-5678"
-            placeholder="전화번호 (예: 010-1234-5678)"
-            value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.target.value)}
-            className="body-regular rounded-lg border px-3 py-2"
-          />
+          {staffListQuery.isLoading ? (
+            <p className="body-regular p-6 text-zinc-500">불러오는 중...</p>
+          ) : null}
 
-          {createMutation.isError && (
-            <p className="body-small text-error">{getApiErrorMessage(createMutation.error)}</p>
-          )}
+          {staffListQuery.isError ? (
+            <p className="body-small p-6 text-error">{getApiErrorMessage(staffListQuery.error)}</p>
+          ) : null}
 
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="body-regular-bold w-fit rounded-lg border px-4 py-2 disabled:opacity-50"
+          {!staffListQuery.isLoading && staffList.length === 0 ? (
+            <p className="body-regular p-6 text-zinc-500">등록된 스태프가 없습니다.</p>
+          ) : null}
+
+          {staffList.length > 0 ? (
+            <div className="flex flex-col divide-y divide-zinc-200">
+              {staffList.map((staff) => (
+                <label
+                  key={staff.staffId}
+                  className="flex cursor-pointer items-center gap-3 px-6 py-4"
+                >
+                  <Checkbox
+                    checked={selectedIds.has(staff.staffId)}
+                    onCheckedChange={() => toggleOne(staff.staffId)}
+                  />
+                  <PersonIcon className="size-4 shrink-0 text-zinc-400" />
+                  <div className="flex flex-col gap-0.5">
+                    <p className="body-regular-bold text-zinc-950">
+                      {staff.name}({staff.phoneNumber})
+                    </p>
+                    <p className="body-caption text-zinc-500">
+                      {departmentByStaffId[staff.staffId] ?? "-"} · {staff.loginId}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {selectedIds.size > 0 ? (
+        <div className="flex items-center justify-between border-t border-zinc-200 pt-4">
+          <p className="body-small text-zinc-950">
+            <span className="body-small-bold text-primary">{selectedIds.size}</span>개 선택됨
+          </p>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate([...selectedIds])}
           >
-            {createMutation.isPending ? "생성 중..." : "생성"}
-          </button>
-        </form>
-      </section>
+            삭제하기
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
