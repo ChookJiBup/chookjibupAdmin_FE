@@ -22,6 +22,7 @@ const MOCK_FESTIVAL_DETAIL = {
 
 export function FestivalDetailPanel() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,11 +69,13 @@ export function FestivalDetailPanel() {
       </div>
 
       <div className="flex justify-end gap-3">
+        <Button type="button" variant="outline" onClick={() => setDeleteDialogOpen(true)}>
+          삭제하기
+        </Button>
         {/* 축제 수정 API(PATCH)는 있지만 단건 조회 API가 없어 기존 값을 정확히 불러올 수 없다.
             지금은 화면만 구현하고, 실제 수정 동작은 조회 API가 생긴 뒤에 연결한다. */}
-        <Button type="button">수정하기</Button>
-        <Button type="button" variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-          삭제하기
+        <Button type="button" onClick={() => setEditDialogOpen(true)}>
+          수정하기
         </Button>
       </div>
 
@@ -82,6 +85,15 @@ export function FestivalDetailPanel() {
         title="삭제하시겠습니까?"
         // 축제 삭제 API가 아직 없어 확인 후 실제 삭제는 이뤄지지 않는다.
         onConfirm={() => setDeleteDialogOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        title="축제를 수정하시겠습니까?"
+        confirmLabel="수정"
+        confirmVariant="primary"
+        onConfirm={() => setEditDialogOpen(false)}
       />
     </div>
   );
