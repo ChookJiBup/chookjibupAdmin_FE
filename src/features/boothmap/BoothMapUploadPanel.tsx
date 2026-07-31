@@ -1,19 +1,33 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
+import { boothMapDraftStorageKey, BoothMapEditor } from "./BoothMapEditor";
 import { mockUploadAndProcess } from "./mockPipeline";
 import type { BoothMapUploadState } from "./types";
 
-// Konva는 canvas(window)에 의존해 SSR에서 렌더링할 수 없다.
-// (react-konva named export를 각각 dynamic import하면 Turbopack에서
-// "Cannot use 'in' operator to search for 'default' in Layer" 에러가 나서,
-// 캔버스 전체를 하나의 컴포넌트로 묶어 통째로 dynamic import한다.)
-const BoothMapCanvas = dynamic(() => import("./BoothMapCanvas"), { ssr: false });
+const noSubscription = () => () => {};
 
-export function BoothMapUploadPanel() {
+/** 이 축제의 로컬 부스맵 초안이 저장돼 있는지. SSR에서는 항상 false로 취급한다. */
+function useHasSavedDraft(festivalId: string) {
+  return useSyncExternalStore(
+    noSubscription,
+    () => window.localStorage.getItem(boothMapDraftStorageKey(festivalId)) !== null,
+    () => false,
+  );
+}
+
+export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
   const [state, setState] = useState<BoothMapUploadState>({ status: "idle" });
+  const [draftDismissed, setDraftDismissed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 저장된 로컬 초안이 있으면 다시 업로드하지 않고 바로 편집기를 연다.
+  // (배치도 이미지는 blob URL이라 새로고침하면 살아있지 않아 배경 없이 연다.)
+  const hasSavedDraft = useHasSavedDraft(festivalId);
+  const effectiveState: BoothMapUploadState =
+    state.status === "idle" && hasSavedDraft && !draftDismissed
+      ? { status: "done", objects: [] }
+      : state;
 
   function handleFileSelected(file: File) {
     const previewUrl = URL.createObjectURL(file);
@@ -37,12 +51,13 @@ export function BoothMapUploadPanel() {
 
   function reset() {
     setState({ status: "idle" });
+    setDraftDismissed(true);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {state.status === "idle" && (
+      {effectiveState.status === "idle" && (
         <label
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
@@ -66,11 +81,11 @@ export function BoothMapUploadPanel() {
         </label>
       )}
 
-      {state.status === "selected" && (
+      {effectiveState.status === "selected" && (
         <div className="flex flex-col gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={state.previewUrl}
+            src={effectiveState.previewUrl}
             alt="배치도 미리보기"
             className="max-h-64 max-w-lg rounded-lg border object-contain"
           />
@@ -93,9 +108,11 @@ export function BoothMapUploadPanel() {
         </div>
       )}
 
-      {state.status === "uploading" && <p className="body-regular text-zinc-500">업로드 중...</p>}
+      {effectiveState.status === "uploading" && (
+        <p className="body-regular text-zinc-500">업로드 중...</p>
+      )}
 
-      {state.status === "processing" && (
+      {effectiveState.status === "processing" && (
         <div className="flex flex-col gap-2">
           <p className="body-regular text-zinc-500">
             이미지를 분석하는 중입니다 (보정 → 텍스트 인식 → 영역 추출 → 시설 분류)
@@ -104,9 +121,9 @@ export function BoothMapUploadPanel() {
         </div>
       )}
 
-      {state.status === "error" && (
+      {effectiveState.status === "error" && (
         <div className="flex flex-col gap-2">
-          <p className="body-small text-error">{state.message}</p>
+          <p className="body-small text-error">{effectiveState.message}</p>
           <button
             type="button"
             onClick={reset}
@@ -117,31 +134,25 @@ export function BoothMapUploadPanel() {
         </div>
       )}
 
-      {state.status === "done" && (
+      {effectiveState.status === "done" && (
         <div className="flex flex-col gap-3">
-          <p className="body-regular text-zinc-500">
-            자동 배치 결과입니다. 아래에서 위치를 확인하고 수정할 수 있습니다. (드래그 이동/저장은
-            아직 미구현)
-          </p>
-          <div className="w-fit rounded-lg border">
-            <BoothMapCanvas objects={state.objects} />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled
-              className="body-regular-bold rounded-lg border px-4 py-2 opacity-50"
-            >
-              저장 (미구현)
-            </button>
+          <div className="flex items-center justify-between">
+            <p className="body-regular text-zinc-500">
+              자동 배치 결과입니다. 아래에서 자유롭게 옮기고 수정해 보세요.
+            </p>
             <button
               type="button"
               onClick={reset}
-              className="body-regular rounded-lg border px-4 py-2"
+              className="body-small shrink-0 rounded-lg border px-3 py-1.5 text-zinc-950"
             >
               다시 업로드
             </button>
           </div>
+          <BoothMapEditor
+            festivalId={festivalId}
+            previewUrl={effectiveState.previewUrl}
+            initialObjects={effectiveState.objects}
+          />
         </div>
       )}
     </div>

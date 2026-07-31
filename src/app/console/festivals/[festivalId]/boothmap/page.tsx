@@ -9,7 +9,7 @@ export default async function BoothMapEditPage({
   return (
     <div className="flex flex-col gap-4">
       <h1 className="heading-small">축제 부스맵 수정 (관리자) — {festivalId}</h1>
-      <BoothMapUploadPanel />
+      <BoothMapUploadPanel festivalId={festivalId} />
     </div>
   );
 }
