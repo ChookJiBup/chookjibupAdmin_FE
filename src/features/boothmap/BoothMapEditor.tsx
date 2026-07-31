@@ -22,11 +22,9 @@ export function boothMapDraftStorageKey(festivalId: string) {
  */
 export function BoothMapEditor({
   festivalId,
-  previewUrl,
   initialObjects,
 }: {
   festivalId: string;
-  previewUrl?: string;
   initialObjects: BoothMapObject[];
 }) {
   const objects = useBoothMapStore((state) => state.objects);
@@ -134,7 +132,6 @@ export function BoothMapEditor({
           }}
         />
         <BoothMapCanvas
-          previewUrl={previewUrl}
           pendingFacilityType={pendingFacilityType}
           onPendingFacilityPlaced={() => setPendingFacilityType(null)}
         />

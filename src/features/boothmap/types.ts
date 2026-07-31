@@ -8,7 +8,7 @@ export type BoothMapUploadState =
   | { status: "selected"; file: File; previewUrl: string }
   | { status: "uploading"; file: File; previewUrl: string }
   | { status: "processing"; previewUrl: string }
-  | { status: "done"; previewUrl?: string; objects: BoothMapObject[] }
+  | { status: "done"; objects: BoothMapObject[] }
   | { status: "error"; message: string };
 
 /**

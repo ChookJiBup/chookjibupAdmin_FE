@@ -1,9 +1,9 @@
 "use client";
 
 import type Konva from "konva";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Fragment } from "react";
-import { Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
+import { Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import { FACILITY_COLOR } from "./FacilityPalette";
 import { snapToGrid, useBoothMapStore } from "./store";
 import type { BoothMapShapeType } from "./types";
@@ -13,33 +13,18 @@ export const CANVAS_HEIGHT = 420;
 const GRID_LINES_X = Array.from({ length: CANVAS_WIDTH / 20 }, (_, index) => index * 20);
 const GRID_LINES_Y = Array.from({ length: CANVAS_HEIGHT / 20 }, (_, index) => index * 20);
 
-/** blob/http(s) URL을 Konva Image에 쓸 수 있는 HTMLImageElement로 읽어들인다. */
-function useHtmlImage(src: string | undefined) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-
-  useEffect(() => {
-    if (!src) return;
-    const element = new window.Image();
-    element.onload = () => setImage(element);
-    element.src = src;
-    return () => {
-      element.onload = null;
-    };
-  }, [src]);
-
-  return src ? image : null;
-}
-
 /**
  * 이 파일은 항상 `next/dynamic(..., { ssr: false })`를 통해서만 불러온다.
  * Konva는 canvas(window)에 의존해 SSR에서 렌더링할 수 없다.
+ *
+ * 업로드한 배치도 원본 이미지는 배경으로 깔지 않는다 — AI가 이미지를 분석해
+ * 인식한 시설들이 처음부터 블록(사각형)으로 세팅되고, 그 블록들 자체를
+ * Figma/Canva처럼 편집하는 것이 이 캔버스의 역할이다.
  */
 export default function BoothMapCanvas({
-  previewUrl,
   pendingFacilityType,
   onPendingFacilityPlaced,
 }: {
-  previewUrl?: string;
   pendingFacilityType: BoothMapShapeType | null;
   onPendingFacilityPlaced: () => void;
 }) {
@@ -56,7 +41,6 @@ export default function BoothMapCanvas({
   const addDraftLinePoint = useBoothMapStore((state) => state.addDraftLinePoint);
   const finishDraftLine = useBoothMapStore((state) => state.finishDraftLine);
 
-  const backgroundImage = useHtmlImage(previewUrl);
   const containerRef = useRef<HTMLDivElement>(null);
   const shapeRefs = useRef(new Map<string, Konva.Rect>());
   const transformerRef = useRef<Konva.Transformer>(null);
@@ -139,11 +123,7 @@ export default function BoothMapCanvas({
           }}
         >
           <Layer listening={false}>
-            {backgroundImage ? (
-              <KonvaImage image={backgroundImage} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} />
-            ) : (
-              <Rect width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#fafafa" />
-            )}
+            <Rect width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#fafafa" />
             {GRID_LINES_X.map((x) => (
               <Line
                 key={`grid-x-${x}`}
