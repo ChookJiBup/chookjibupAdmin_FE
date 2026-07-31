@@ -22,3 +22,18 @@ export function OperatorBadge({ className }: { className?: string }) {
     </Badge>
   );
 }
+
+/** 스태프(현장 스태프) 역할 뱃지. */
+export function StaffBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      className={cn(
+        ROLE_BADGE_BASE_CLASSES,
+        "bg-point-600 text-white hover:bg-point-600",
+        className,
+      )}
+    >
+      스태프
+    </Badge>
+  );
+}

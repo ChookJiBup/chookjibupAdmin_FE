@@ -1,5 +1,6 @@
 import { StaffAuthGuard } from "@/components/auth/StaffAuthGuard";
 import { StaffLogoutButton } from "@/components/auth/StaffLogoutButton";
+import { StaffBadge } from "@/components/ui/RoleBadge";
 import { StaffDashboardPanel } from "@/features/staffDashboard/StaffDashboardPanel";
 
 export default function StaffDashboardPage() {
@@ -7,7 +8,10 @@ export default function StaffDashboardPage() {
     <StaffAuthGuard>
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between">
-          <h1 className="heading-small">실시간 혼잡도 / 줄끝라인 수정 (스태프)</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="heading-small">실시간 혼잡도 / 줄끝라인 수정</h1>
+            <StaffBadge />
+          </div>
           <StaffLogoutButton />
         </div>
         <p className="body-small text-zinc-500">
