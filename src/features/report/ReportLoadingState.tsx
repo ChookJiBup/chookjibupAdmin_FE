@@ -33,9 +33,7 @@ export function ReportLoadingState({ totalDays, onDone }: ReportLoadingStateProp
       <p className="body-regular text-zinc-950">축제 결과를 분석하고 있어요</p>
       <div className="flex w-80 items-center gap-3">
         <div className="h-px flex-1 animate-pulse bg-zinc-300" />
-        <p className="body-small shrink-0 text-zinc-500">
-          {Math.min(day, totalDays)}일차 분석 중
-        </p>
+        <p className="body-small shrink-0 text-zinc-500">{Math.min(day, totalDays)}일차 분석 중</p>
         <div className="h-px flex-1 animate-pulse bg-zinc-300" />
       </div>
     </div>
