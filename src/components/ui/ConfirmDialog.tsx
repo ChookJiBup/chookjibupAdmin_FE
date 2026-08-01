@@ -45,7 +45,9 @@ export function ConfirmDialog({
           </div>
 
           <div>
-            <Dialog.Title className="heading-small text-center text-zinc-950">{title}</Dialog.Title>
+            <Dialog.Title className="heading-regular text-center text-zinc-950">
+              {title}
+            </Dialog.Title>
 
             {description ? (
               <Dialog.Description className="body-regular mt-3 text-center text-zinc-950">
@@ -55,12 +57,13 @@ export function ConfirmDialog({
 
             <div className="mt-8 flex gap-3">
               <Dialog.Close asChild>
-                <Button variant="outline" className="flex-1">
+                <Button variant="outline" size="lg" className="flex-1">
                   {cancelLabel}
                 </Button>
               </Dialog.Close>
               <Button
                 variant={confirmVariant}
+                size="lg"
                 className="flex-1"
                 disabled={confirmPending}
                 onClick={onConfirm}

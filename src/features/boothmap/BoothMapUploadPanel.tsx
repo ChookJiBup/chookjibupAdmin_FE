@@ -43,7 +43,7 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
     setState({ status: "processing", previewUrl });
     try {
       const objects = await mockUploadAndProcess();
-      setState({ status: "done", previewUrl, objects });
+      setState({ status: "done", objects });
     } catch {
       setState({ status: "error", message: "이미지 처리 중 오류가 발생했습니다." });
     }
@@ -148,11 +148,7 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
               다시 업로드
             </button>
           </div>
-          <BoothMapEditor
-            festivalId={festivalId}
-            previewUrl={effectiveState.previewUrl}
-            initialObjects={effectiveState.objects}
-          />
+          <BoothMapEditor festivalId={festivalId} initialObjects={effectiveState.objects} />
         </div>
       )}
     </div>

@@ -15,11 +15,12 @@ import {
 } from "@/components/ui/attachment";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
 import { createFestival } from "@/features/festivals/api";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { SearchDialog } from "./SearchDialog";
+import { SearchDialog, type SearchDialogState } from "./SearchDialog";
 
 const DATE_DISPLAY_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/;
 
@@ -30,16 +31,6 @@ function toIsoDate(displayDate: string) {
 
 function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/** 그룹 라벨 + 필드 영역을 좌우로 배치하는 카드 한 칸. */
-function FormSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-6 rounded-lg border border-zinc-300 px-8 py-6">
-      <p className="body-large-bold w-44 shrink-0 whitespace-nowrap text-zinc-950">{label}</p>
-      <div className="flex flex-1 flex-col gap-3">{children}</div>
-    </div>
-  );
 }
 
 export function FestivalRegisterForm() {
@@ -56,7 +47,9 @@ export function FestivalRegisterForm() {
   const [dateError, setDateError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
+  const [festivalSearchState, setFestivalSearchState] = useState<SearchDialogState>("default");
   const [addressSearchOpen, setAddressSearchOpen] = useState(false);
+  const [addressSearchState, setAddressSearchState] = useState<SearchDialogState>("default");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
 
@@ -205,18 +198,29 @@ export function FestivalRegisterForm() {
 
       <SearchDialog
         open={festivalSearchOpen}
-        onOpenChange={setFestivalSearchOpen}
+        onOpenChange={(next) => {
+          setFestivalSearchOpen(next);
+          if (!next) setFestivalSearchState("default");
+        }}
         title="축제 검색"
         placeholder="검색어를 입력해 주세요"
         helperText="축제명으로 검색하면 이전 축제 정보를 불러올 수 있어요."
         helperItems={["도로명 + 건물번호(예: 세계로 10)"]}
-        // 이전 축제 정보를 불러오는 검색 API가 아직 없어 검색만 닫고 자동 입력은 하지 않는다.
-        onSubmit={() => {}}
+        state={festivalSearchState}
+        // 이전 축제 정보를 불러오는 검색 API가 아직 없어 검색하면 항상 결과 없음으로 처리한다.
+        onSearch={() => setFestivalSearchState("none")}
+        noResultSubtext="이전 축제 정보를 불러오는 기능은 아직 준비 중입니다."
+        onSelectResult={() => {}}
+        onManualInput={() => setFestivalSearchOpen(false)}
+        manualInputLabel="닫기"
       />
 
       <SearchDialog
         open={addressSearchOpen}
-        onOpenChange={setAddressSearchOpen}
+        onOpenChange={(next) => {
+          setAddressSearchOpen(next);
+          if (!next) setAddressSearchState("default");
+        }}
         title="주소 찾기"
         placeholder="주소를 입력하세요"
         helperText="도로명, 건물명, 또는 지번 중 편한 방법으로 검색하세요."
@@ -225,7 +229,15 @@ export function FestivalRegisterForm() {
           "지역명(동/리) + 번지(예: 반곡동 1914-6)",
           "지역명(동/리) + 건물명(예: 한국관광공사)",
         ]}
-        onSubmit={(value) => setAddress(value)}
+        state={addressSearchState}
+        // 주소 검색 API가 아직 없어 검색하면 항상 결과 없음으로 처리하고, 직접 입력으로 유도한다.
+        onSearch={() => setAddressSearchState("none")}
+        noResultSubtext="주소 검색 기능은 아직 준비 중입니다. 직접 입력해 주세요."
+        onSelectResult={() => {}}
+        onManualInput={(value) => {
+          setAddress(value);
+          setAddressSearchOpen(false);
+        }}
       />
 
       <ConfirmDialog

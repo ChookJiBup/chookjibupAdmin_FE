@@ -3,7 +3,16 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+
+export type SearchDialogState = "default" | "none" | "result";
+
+export interface SearchDialogResult {
+  id: string;
+  label: string;
+  description?: string;
+}
 
 export interface SearchDialogProps {
   open: boolean;
@@ -12,10 +21,21 @@ export interface SearchDialogProps {
   placeholder: string;
   helperText: string;
   helperItems?: string[];
-  onSubmit: (value: string) => void;
+  /** 검색 상태 — 검색 전은 "default", 검색했는데 결과가 없으면 "none", 있으면 "result". */
+  state: SearchDialogState;
+  /** "검색" 버튼 클릭 또는 Enter로 호출된다. */
+  onSearch: (value: string) => void;
+  searchPending?: boolean;
+  results?: SearchDialogResult[];
+  onSelectResult: (result: SearchDialogResult) => void;
+  noResultText?: string;
+  noResultSubtext?: string;
+  /** "none"/"result" 상태에서만 노출되는 폴백 버튼 — 검색으로 못 찾은 값을 직접 쓴다. */
+  onManualInput: (value: string) => void;
+  manualInputLabel?: string;
 }
 
-/** 축제 검색/주소 찾기처럼 "제목 + 검색창 + 안내문구" 구조를 공유하는 모달. */
+/** 축제 검색/주소 찾기처럼 "제목 + 검색창 + 결과 목록" 구조를 공유하는 모달. */
 export function SearchDialog({
   open,
   onOpenChange,
@@ -23,7 +43,15 @@ export function SearchDialog({
   placeholder,
   helperText,
   helperItems,
-  onSubmit,
+  state,
+  onSearch,
+  searchPending = false,
+  results = [],
+  onSelectResult,
+  noResultText = "검색 결과가 없습니다.",
+  noResultSubtext,
+  onManualInput,
+  manualInputLabel = "직접 입력",
 }: SearchDialogProps) {
   const [value, setValue] = useState("");
 
@@ -51,29 +79,70 @@ export function SearchDialog({
               event.preventDefault();
               const trimmed = value.trim();
               if (!trimmed) return;
-              onSubmit(trimmed);
-              onOpenChange(false);
-              setValue("");
+              onSearch(trimmed);
             }}
           >
             <Input
               autoFocus
+              layout="with-button"
               placeholder={placeholder}
               value={value}
               onChange={(event) => setValue(event.target.value)}
+              button={
+                <Button type="submit" disabled={searchPending}>
+                  검색
+                </Button>
+              }
             />
-            <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
-              <p className="body-small-bold text-zinc-950">{helperText}</p>
-              {helperItems && helperItems.length > 0 ? (
-                <ul className="flex flex-col gap-1">
-                  {helperItems.map((item) => (
-                    <li key={item} className="body-small text-zinc-500">
-                      · {item}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
+
+            {state === "default" ? (
+              <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
+                <p className="body-small-bold text-zinc-950">{helperText}</p>
+                {helperItems && helperItems.length > 0 ? (
+                  <ul className="flex flex-col gap-1">
+                    {helperItems.map((item) => (
+                      <li key={item} className="body-small text-zinc-500">
+                        · {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+
+            {state === "none" ? (
+              <div className="flex flex-col gap-1 rounded-lg bg-zinc-50 p-4">
+                <p className="body-small-bold text-zinc-950">{noResultText}</p>
+                {noResultSubtext ? (
+                  <p className="body-small text-zinc-500">{noResultSubtext}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {state === "result" ? (
+              <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border border-zinc-200 p-1">
+                {results.map((result) => (
+                  <li key={result.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectResult(result)}
+                      className="flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-zinc-100"
+                    >
+                      <span className="body-small-bold text-zinc-950">{result.label}</span>
+                      {result.description ? (
+                        <span className="body-caption text-zinc-500">{result.description}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {state !== "default" ? (
+              <Button type="button" variant="outline" onClick={() => onManualInput(value.trim())}>
+                {manualInputLabel}
+              </Button>
+            ) : null}
           </form>
         </Dialog.Content>
       </Dialog.Portal>

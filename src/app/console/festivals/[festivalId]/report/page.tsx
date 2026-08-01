@@ -1,4 +1,4 @@
-import { ReportPanel } from "@/features/report/ReportPanel";
+import { ReportFlow } from "@/features/report/ReportFlow";
 
 export default async function OperationReportPage({
   params,
@@ -13,7 +13,7 @@ export default async function OperationReportPage({
         진행완료된 축제에 한해 확인 가능. 첫 진입 시 축제방문인원을 입력받으며, 건너뛰면 특정 결과는
         조회할 수 없다.
       </p>
-      <ReportPanel festivalId={festivalId} />
+      <ReportFlow festivalId={festivalId} />
     </div>
   );
 }

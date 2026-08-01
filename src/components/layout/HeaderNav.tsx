@@ -14,13 +14,22 @@ export interface HeaderNavProps {
   /** 로고 옆에 표시할 현재 축제명. 축제 범위 화면에서만 전달한다. */
   festivalName?: string;
   role?: AdminRole | null;
+  /** true면 Nav 탭 줄을 숨기고 Header만 보여준다(예: 방문인원 입력/분석 중 화면). */
+  hideNav?: boolean;
 }
 
-export function HeaderNav({ userName, navItems, festivalId, festivalName, role }: HeaderNavProps) {
+export function HeaderNav({
+  userName,
+  navItems,
+  festivalId,
+  festivalName,
+  role,
+  hideNav = false,
+}: HeaderNavProps) {
   return (
     <div className="flex flex-col">
       <Header variant="login" userName={userName} festivalName={festivalName} role={role} />
-      <Nav items={navItems} festivalId={festivalId} role={role} />
+      {hideNav ? null : <Nav items={navItems} festivalId={festivalId} role={role} />}
     </div>
   );
 }
