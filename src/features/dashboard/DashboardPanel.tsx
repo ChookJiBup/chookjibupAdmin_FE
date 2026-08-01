@@ -1,60 +1,72 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { getApiErrorMessage } from "@/lib/api/httpError";
-import { getFestivalDashboard } from "./api";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil1Icon, PlusIcon, MinusIcon } from "@radix-ui/react-icons";
+import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
+import { AiSuggestionToasts } from "./AiSuggestionToasts";
+import { BoothMapView } from "./BoothMapView";
+import { BoothTreeSidebar } from "./BoothTreeSidebar";
+import { DashboardStatsBar } from "./DashboardStatsBar";
+import { MOCK_AI_SUGGESTIONS, MOCK_SUMMARY, MOCK_ZONES } from "./mockData";
+import type { Booth } from "./types";
 
-const OPERATING_STATUS_LABEL: Record<string, string> = {
-  PREPARING: "준비중",
-  RUNNING: "운영중",
-  CLOSED: "종료",
-};
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border px-4 py-3">
-      <p className="body-small text-zinc-500">{label}</p>
-      <p className="heading-small">{value}</p>
-    </div>
-  );
-}
+const ALL_BOOTHS = MOCK_ZONES.flatMap((zone) => zone.booths);
 
 export function DashboardPanel({ festivalId }: { festivalId: string }) {
-  const dashboardQuery = useQuery({
-    queryKey: ["festival-dashboard", festivalId],
-    queryFn: () => getFestivalDashboard(festivalId),
-    // 실시간 대시보드 성격상 주기적으로 새로고침한다. 갱신 주기는 백엔드와 협의 전이라 임시값이다.
-    refetchInterval: 15000,
-  });
-
-  if (dashboardQuery.isLoading) {
-    return <p className="body-regular text-zinc-500">불러오는 중...</p>;
-  }
-
-  if (dashboardQuery.isError) {
-    return <p className="body-small text-error">{getApiErrorMessage(dashboardQuery.error)}</p>;
-  }
-
-  const dashboard = dashboardQuery.data;
-  if (!dashboard) return null;
+  const router = useRouter();
+  const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
+  const [zoomStep, setZoomStep] = useState(0);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          label="운영 상태"
-          value={OPERATING_STATUS_LABEL[dashboard.operatingStatus] ?? dashboard.operatingStatus}
+    <div className="relative h-full min-h-[600px] w-full overflow-hidden rounded-lg">
+      <BoothMapView
+        booths={ALL_BOOTHS}
+        selectedBooth={selectedBooth}
+        onSelectBooth={setSelectedBooth}
+        zoomStep={zoomStep}
+      />
+
+      <BoothTreeSidebar
+        zones={MOCK_ZONES}
+        selectedBoothId={selectedBooth?.boothId}
+        onSelectBooth={setSelectedBooth}
+        className="absolute top-3 bottom-3 left-3 w-72"
+      />
+
+      <Button
+        variant="outline"
+        size="sm"
+        icon={<Pencil1Icon />}
+        className="absolute top-3 right-3 bg-white shadow-md"
+        onClick={() => router.push(`/console/festivals/${festivalId}/boothmap`)}
+      >
+        수정하기
+      </Button>
+
+      <div className="absolute right-3 bottom-20 flex flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-md">
+        <IconButton
+          variant="ghost"
+          aria-label="지도 확대"
+          icon={<PlusIcon />}
+          onClick={() => setZoomStep((step) => step - 1)}
+          className="rounded-none border-b border-zinc-200"
         />
-        <StatCard label="현재 방문자 수" value={dashboard.currentVisitorCount.toLocaleString()} />
-        <StatCard label="활성 대기열 수" value={dashboard.activeQueueCount.toLocaleString()} />
-        <StatCard label="평균 대기 시간" value={`${dashboard.averageWaitMinutes}분`} />
+        <IconButton
+          variant="ghost"
+          aria-label="지도 축소"
+          icon={<MinusIcon />}
+          onClick={() => setZoomStep((step) => step + 1)}
+          className="rounded-none"
+        />
       </div>
-      <p className="body-small text-zinc-400">
-        마지막 갱신: {new Date(dashboard.updatedAt).toLocaleString("ko-KR")}
-      </p>
-      <p className="body-small text-zinc-400">
-        축제 운영 AI 제안은 백엔드 API가 아직 없어 이번 화면에 포함하지 않았습니다.
-      </p>
+
+      <div className="absolute right-3 bottom-3 left-[318px]">
+        <DashboardStatsBar summary={MOCK_SUMMARY} selectedBooth={selectedBooth} />
+      </div>
+
+      <AiSuggestionToasts suggestions={MOCK_AI_SUGGESTIONS} />
     </div>
   );
 }

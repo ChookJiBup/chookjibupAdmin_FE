@@ -3,6 +3,7 @@
 import { useParams, usePathname } from "next/navigation";
 import { AdminAuthGuard } from "@/components/auth/AdminAuthGuard";
 import { HeaderNav } from "@/components/layout/HeaderNav";
+import { Toaster } from "@/components/ui/sonner";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 
@@ -34,6 +35,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
         />
         <div className="flex-1 px-10 py-[30px]">{children}</div>
       </div>
+      <Toaster position="top-right" />
     </AdminAuthGuard>
   );
 }
