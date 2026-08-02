@@ -48,7 +48,7 @@ function buildDefaultItems(
 
   if (role === "SUB_ADMIN") {
     return [
-      { label: "대시보드", href: `${festivalBase}/dashboard` },
+      { label: "대시보드", href: `${festivalBase}/operator-dashboard` },
       { label: "스태프관리", href: `${festivalBase}/staffs` },
     ];
   }
