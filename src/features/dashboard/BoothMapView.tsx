@@ -76,7 +76,7 @@ export function BoothMapView({
 
   if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50">
+      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50">
         <p className="body-small text-zinc-500">
           NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다.
         </p>
@@ -86,7 +86,7 @@ export function BoothMapView({
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50">
+      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50">
         <p className="body-small text-error">카카오맵을 불러오지 못했습니다.</p>
       </div>
     );
@@ -94,7 +94,7 @@ export function BoothMapView({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50">
+      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50">
         <p className="body-small text-zinc-500">지도를 불러오는 중...</p>
       </div>
     );
@@ -104,10 +104,15 @@ export function BoothMapView({
     <Map
       center={FESTIVAL_MAP_CENTER}
       level={4 + zoomStep}
-      minLevel={2}
-      maxLevel={8}
       scrollwheel={false}
-      className="h-full w-full"
+      className="absolute inset-0 isolate"
+      // react-kakao-maps-sdk의 minLevel/maxLevel prop은 내부적으로 서로 뒤바뀐 채
+      // kakao.maps.Map.setMinLevel/setMaxLevel에 전달되는 버그가 있어(v1.2.1),
+      // onCreate에서 직접 정확한 인자로 호출한다.
+      onCreate={(map) => {
+        map.setMinLevel(2);
+        map.setMaxLevel(8);
+      }}
     >
       {booths.map((booth) => (
         <MapMarker
