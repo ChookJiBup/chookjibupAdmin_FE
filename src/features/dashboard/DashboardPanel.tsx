@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil1Icon, PlusIcon, MinusIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
+import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { AiSuggestionToasts } from "./AiSuggestionToasts";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
@@ -18,9 +19,16 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const router = useRouter();
   const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
   const [zoomStep, setZoomStep] = useState(0);
+  const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
+
+  // 지도가 네비바 바로 아래부터 화면 전체를 채우도록 콘솔 콘텐츠 영역의 여백을 없앤다(디자인 스펙).
+  useEffect(() => {
+    setFullBleed(true);
+    return () => setFullBleed(false);
+  }, [setFullBleed]);
 
   return (
-    <div className="relative h-full min-h-[600px] w-full overflow-hidden rounded-lg">
+    <div className="relative h-full w-full overflow-hidden">
       <BoothMapView
         booths={ALL_BOOTHS}
         selectedBooth={selectedBooth}
