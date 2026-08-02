@@ -6,7 +6,7 @@ import { Pencil1Icon, PlusIcon, MinusIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
-import { AiSuggestionToasts } from "./AiSuggestionToasts";
+import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
@@ -19,7 +19,11 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const router = useRouter();
   const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
   const [zoomStep, setZoomStep] = useState(0);
+  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<string[]>([]);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
+  const activeSuggestions = MOCK_AI_SUGGESTIONS.filter(
+    (suggestion) => !dismissedSuggestionIds.includes(suggestion.id),
+  );
 
   // 지도가 네비바 바로 아래부터 화면 전체를 채우도록 콘솔 콘텐츠 영역의 여백을 없앤다(디자인 스펙).
   useEffect(() => {
@@ -34,6 +38,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         selectedBooth={selectedBooth}
         onSelectBooth={setSelectedBooth}
         zoomStep={zoomStep}
+        suggestions={activeSuggestions}
       />
 
       <BoothTreeSidebar
@@ -74,7 +79,11 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         <DashboardStatsBar summary={MOCK_SUMMARY} selectedBooth={selectedBooth} />
       </div>
 
-      <AiSuggestionToasts suggestions={MOCK_AI_SUGGESTIONS} />
+      <AiSuggestionPanel
+        suggestions={activeSuggestions}
+        onDismiss={(id) => setDismissedSuggestionIds((ids) => [...ids, id])}
+        className="absolute top-3 left-[318px]"
+      />
     </div>
   );
 }

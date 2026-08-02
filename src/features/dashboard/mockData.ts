@@ -113,6 +113,11 @@ export const MOCK_AI_SUGGESTIONS: AiSuggestion[] = [
     id: "ai-1",
     title: "프랜차이즈 김밥 구역이 혼잡합니다",
     description: "인접한 이색김밥존으로 안내 표지판을 배치하는 것을 추천합니다.",
+    path: [
+      { lat: FESTIVAL_MAP_CENTER.lat + 0.0025, lng: FESTIVAL_MAP_CENTER.lng - 0.0015 },
+      { lat: FESTIVAL_MAP_CENTER.lat + 0.0025, lng: FESTIVAL_MAP_CENTER.lng + 0.0045 },
+      { lat: FESTIVAL_MAP_CENTER.lat + 0.0009, lng: FESTIVAL_MAP_CENTER.lng + 0.0045 },
+    ],
   },
 ];
 
