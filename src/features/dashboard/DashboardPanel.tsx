@@ -44,10 +44,10 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
       />
 
       <Button
-        variant="outline"
+        variant="primary"
         size="sm"
         icon={<Pencil1Icon />}
-        className="absolute top-3 right-3 bg-white shadow-md"
+        className="absolute top-3 right-3 shadow-md"
         onClick={() => router.push(`/console/festivals/${festivalId}/boothmap`)}
       >
         수정하기

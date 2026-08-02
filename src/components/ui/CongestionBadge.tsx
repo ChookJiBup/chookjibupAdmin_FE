@@ -11,7 +11,7 @@ const CONGESTION_LABEL: Record<CongestionLevel, string> = {
 };
 
 const CONGESTION_CLASSES: Record<CongestionLevel, string> = {
-  LOW: "bg-zinc-600 text-white hover:bg-zinc-600",
+  LOW: "bg-primary text-white hover:bg-primary",
   MEDIUM: "bg-point-600 text-white hover:bg-point-600",
   HIGH: "bg-red-600 text-white hover:bg-red-600",
 };

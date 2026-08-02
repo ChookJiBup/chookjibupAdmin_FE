@@ -9,7 +9,7 @@ import { FESTIVAL_MAP_CENTER } from "./mockData";
 import type { Booth } from "./types";
 
 const CONGESTION_MARKER_COLOR: Record<Booth["congestionLevel"], string> = {
-  LOW: "#52525c",
+  LOW: "#236cf6",
   MEDIUM: "#fd7e14",
   HIGH: "#e7000b",
 };
