@@ -58,20 +58,20 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         수정하기
       </Button>
 
-      <div className="absolute right-3 bottom-20 flex flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-md">
+      <div className="absolute right-3 bottom-20 flex flex-col gap-1">
         <IconButton
-          variant="ghost"
+          size="lg"
           aria-label="지도 확대"
           icon={<PlusIcon />}
           onClick={() => setZoomStep((step) => step - 1)}
-          className="rounded-none border-b border-zinc-200"
+          className="shadow-md"
         />
         <IconButton
-          variant="ghost"
+          size="lg"
           aria-label="지도 축소"
           icon={<MinusIcon />}
           onClick={() => setZoomStep((step) => step + 1)}
-          className="rounded-none"
+          className="shadow-md"
         />
       </div>
 
