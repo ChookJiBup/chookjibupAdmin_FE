@@ -18,9 +18,11 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import { createFestival } from "@/features/festivals/api";
+import { setCachedMapId } from "@/features/boothmap/mapIdCache";
+import { createFestival, createFestivalWithMap } from "@/features/festivals/api";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
+import { toSingleMainVenueLocation } from "./types";
 
 const DATE_DISPLAY_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/;
 
@@ -54,21 +56,38 @@ export function FestivalRegisterForm() {
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      createFestival({
+    mutationFn: async () => {
+      const request = {
         name,
         description,
-        // 백엔드 CreateFestivalRequest에 상세주소 필드가 따로 없어 기본주소와 합쳐서 보낸다.
-        address: addressDetail ? `${address} ${addressDetail}` : address,
+        // TODO(다중 장소 UI): 지금은 입력창이 하나뿐이라 단일 MAIN_VENUE 장소로 감싸 보낸다.
+        // 백엔드는 이제 장소를 여러 개(locations[])까지 받을 수 있다.
+        locations: [toSingleMainVenueLocation(address, addressDetail)],
         startDate: toIsoDate(startDate),
         endDate: toIsoDate(endDate),
         // 운영 시작/종료 시간은 이번 화면 디자인에 없어 임시 기본값을 보낸다.
         // 디자인에 운영시간 입력이 추가되면 이 기본값을 실제 입력값으로 교체해야 한다.
         operationStartTime: "09:00:00",
         operationEndTime: "18:00:00",
-      }),
-    onSuccess: (festival) => {
-      router.push(`/console/festivals/${festival.festivalId}`);
+      };
+
+      // 배치도 이미지를 첨부했으면 축제 생성과 동시에 배치도도 만든다 — 배치도는
+      // 이 API에서만 만들 수 있어(나중에 따로 붙이는 API가 없다), 여기서 놓치면
+      // 이 축제는 앞으로도 배치도를 가질 방법이 없다.
+      if (boothMapFile) {
+        const { festival, map } = await createFestivalWithMap(request, boothMapFile);
+        setCachedMapId(festival.festivalId, map.mapId);
+        return { festival, hasMap: true };
+      }
+      const festival = await createFestival(request);
+      return { festival, hasMap: false };
+    },
+    onSuccess: ({ festival, hasMap }) => {
+      router.push(
+        hasMap
+          ? `/console/festivals/${festival.festivalId}/boothmap`
+          : `/console/festivals/${festival.festivalId}`,
+      );
     },
   });
 
