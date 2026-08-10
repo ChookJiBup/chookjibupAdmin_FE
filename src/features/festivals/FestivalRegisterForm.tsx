@@ -151,7 +151,7 @@ export function FestivalRegisterForm() {
   const addressSearchTarget = locations.find((loc) => loc.key === addressSearchTargetKey) ?? null;
 
   return (
-    <div className="flex max-w-[790px] flex-col gap-6">
+    <div className="col-span-2 flex flex-col gap-6">
       <FormSection label="축제 기본정보 입력">
         <Input
           layout="with-button"

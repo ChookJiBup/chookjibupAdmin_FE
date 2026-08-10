@@ -71,9 +71,9 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-6">
-        <div className="flex w-[360px] shrink-0 flex-col gap-4 rounded-lg border border-zinc-300 p-6">
+    <div className="col-span-3 flex flex-col gap-4">
+      <div className="grid grid-cols-3 items-start gap-6">
+        <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 p-6">
           <p className="body-large-bold text-zinc-950">스태프 추가</p>
 
           {created ? (
@@ -148,7 +148,7 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
           </form>
         </div>
 
-        <div className="flex flex-1 flex-col rounded-lg border border-zinc-300">
+        <div className="col-span-2 flex flex-col rounded-lg border border-zinc-300">
           <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-4">
             <Checkbox
               checked={allSelected}

@@ -25,9 +25,9 @@ export function FestivalDetailPanel() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex gap-6">
-        <div className="flex max-w-[460px] flex-1 flex-col gap-4 rounded-lg border border-zinc-300 px-8 py-6">
+    <div className="col-span-3 flex flex-col gap-6">
+      <div className="grid grid-cols-3 gap-6">
+        <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 px-8 py-6">
           <p className="body-large-bold text-zinc-950">축제 정보</p>
 
           <Input label="축제명" defaultValue={MOCK_FESTIVAL_DETAIL.name} />
@@ -63,7 +63,7 @@ export function FestivalDetailPanel() {
           </div>
         </div>
 
-        <div className="flex flex-1 items-center justify-center rounded-lg bg-zinc-100">
+        <div className="col-span-2 flex items-center justify-center rounded-lg bg-zinc-100">
           <ImageIcon className="size-16 text-zinc-400" />
         </div>
       </div>

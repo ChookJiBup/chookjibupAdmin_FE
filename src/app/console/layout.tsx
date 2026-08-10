@@ -42,7 +42,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
               fullBleed ? "overflow-hidden" : "overflow-y-auto px-10 py-[30px]",
             )}
           >
-            {children}
+            {/*
+              Figma 레이아웃 가이드: Columns 3 / Stretch / Margin 40 / Gutter 24.
+              Margin은 위 px-10(=40px)가 이미 담당하고, 여기서는 3-컬럼 그리드 +
+              24px(gap-6) 거터만 정의한다. 각 화면 루트는 col-span-1/2/3으로
+              몇 컬럼을 쓸지 선언한다 — 폭을 w-2/3 같은 비율로 직접 계산하지 않는다.
+            */}
+            {fullBleed ? children : <div className="grid grid-cols-3 gap-6">{children}</div>}
           </div>
         </div>
       </div>
