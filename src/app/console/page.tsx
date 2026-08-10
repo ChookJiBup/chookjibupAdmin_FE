@@ -1,5 +1,9 @@
 import { HomeFestivalBoard } from "@/features/home/HomeFestivalBoard";
 
 export default function ConsoleHomePage() {
-  return <HomeFestivalBoard />;
+  return (
+    <div className="col-span-3">
+      <HomeFestivalBoard />
+    </div>
+  );
 }

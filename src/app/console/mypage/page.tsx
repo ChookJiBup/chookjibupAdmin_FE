@@ -74,7 +74,7 @@ export default function MyPage() {
   if (!admin) return null;
 
   return (
-    <div className="flex w-2/3 flex-col gap-6 pb-[72px]">
+    <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
       <FormSection label="프로필 설정">
         <Input label="이메일" disabled value={admin.email} />
         <Input label="이름" value={name} onChange={(event) => setName(event.target.value)} />
