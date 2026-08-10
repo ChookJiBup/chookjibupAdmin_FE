@@ -1,52 +1,33 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Bottombar } from "@/components/ui/Bottombar";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
-import { withdrawAdmin } from "@/features/auth/admin/api";
+import {
+  getAdminProfile,
+  requestAuthenticatedPasswordReset,
+  withdrawAdmin,
+} from "@/features/auth/admin/api";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 
-// 부서/직급을 저장하는 백엔드 필드가 없어, 이 브라우저의 localStorage에만 기억한다.
-// 이름 수정도 서버 API가 없어 adminAuthStore(zustand persist)의 세션에만 반영된다.
-function profileExtraStorageKey(adminId: string) {
-  return `chookjibup-admin-profile-extra-${adminId}`;
-}
-
-interface ProfileExtra {
-  department: string;
-  position: string;
-}
-
-function loadProfileExtra(adminId: string): ProfileExtra {
-  if (typeof window === "undefined") return { department: "", position: "" };
-  const saved = window.localStorage.getItem(profileExtraStorageKey(adminId));
-  return saved ? (JSON.parse(saved) as ProfileExtra) : { department: "", position: "" };
-}
-
-type ConfirmKind = "logout" | "withdraw" | "save" | null;
+type ConfirmKind = "logout" | "withdraw" | null;
 
 export default function MyPage() {
   const router = useRouter();
   const admin = useAdminAuthStore((state) => state.session?.admin);
   const clearSession = useAdminAuthStore((state) => state.clearSession);
-  const updateAdminProfile = useAdminAuthStore((state) => state.updateAdminProfile);
-
-  // AdminAuthGuard가 hydrate + 세션 확인 전에는 children을 렌더링하지 않으므로,
-  // 이 컴포넌트가 처음 그려지는 시점엔 admin이 이미 준비돼 있다.
-  const [name, setName] = useState(() => admin?.name ?? "");
-  const [department, setDepartment] = useState(
-    () => (admin ? loadProfileExtra(admin.adminId) : { department: "", position: "" }).department,
-  );
-  const [position, setPosition] = useState(
-    () => (admin ? loadProfileExtra(admin.adminId) : { department: "", position: "" }).position,
-  );
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
+
+  const profileQuery = useQuery({
+    queryKey: ["admin-profile"],
+    queryFn: getAdminProfile,
+  });
 
   const withdrawMutation = useMutation({
     mutationFn: withdrawAdmin,
@@ -56,49 +37,49 @@ export default function MyPage() {
     },
   });
 
+  const passwordResetMutation = useMutation({
+    mutationFn: requestAuthenticatedPasswordReset,
+    onSuccess: () => toast.success("비밀번호 변경 링크를 이메일로 전송했습니다."),
+  });
+
   function handleLogout() {
     clearSession();
     router.replace("/login");
   }
 
-  function handleSaveProfile() {
-    if (!admin) return;
-    updateAdminProfile({ name });
-    window.localStorage.setItem(
-      profileExtraStorageKey(admin.adminId),
-      JSON.stringify({ department, position }),
-    );
-    setConfirmKind(null);
-  }
-
   if (!admin) return null;
+  const profile = profileQuery.data;
 
   return (
     <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
       <FormSection label="프로필 설정">
-        <Input label="이메일" disabled value={admin.email} />
-        <Input label="이름" value={name} onChange={(event) => setName(event.target.value)} />
+        <Input label="이메일" disabled value={profile?.email ?? admin.email} />
+        <Input label="이름" disabled value={profile?.name ?? admin.name} />
+        <Input label="소속 기관" disabled value={profile?.organization ?? admin.organization} />
         <div className="flex gap-3">
           <Input
             label="부서"
             wrapperClassName="flex-1"
-            value={department}
-            onChange={(event) => setDepartment(event.target.value)}
+            disabled
+            value={profile?.department ?? ""}
           />
-          <Input
-            label="직급"
-            wrapperClassName="flex-1"
-            value={position}
-            onChange={(event) => setPosition(event.target.value)}
-          />
+          <Input label="직급" wrapperClassName="flex-1" disabled value={profile?.rank ?? ""} />
         </div>
+        {profileQuery.isError ? (
+          <p className="body-small text-error">{getApiErrorMessage(profileQuery.error)}</p>
+        ) : null}
       </FormSection>
 
       <FormSection label="보안설정">
         <div className="flex items-center justify-between">
           <p className="body-regular text-zinc-950">비밀번호 변경</p>
-          <Button variant="outline" size="sm" onClick={() => router.push("/forgot-password")}>
-            비밀번호 재설정
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={passwordResetMutation.isPending}
+            onClick={() => passwordResetMutation.mutate()}
+          >
+            변경 링크 받기
           </Button>
         </div>
 
@@ -119,9 +100,10 @@ export default function MyPage() {
         {withdrawMutation.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(withdrawMutation.error)}</p>
         ) : null}
+        {passwordResetMutation.isError ? (
+          <p className="body-small text-error">{getApiErrorMessage(passwordResetMutation.error)}</p>
+        ) : null}
       </FormSection>
-
-      <Bottombar submitLabel="수정하기" onSubmit={() => setConfirmKind("save")} />
 
       <ConfirmDialog
         open={confirmKind === "logout"}
@@ -142,15 +124,6 @@ export default function MyPage() {
         confirmVariant="destructive"
         confirmPending={withdrawMutation.isPending}
         onConfirm={() => withdrawMutation.mutate()}
-      />
-
-      <ConfirmDialog
-        open={confirmKind === "save"}
-        onOpenChange={(open) => !open && setConfirmKind(null)}
-        title="변경사항을 저장하시겠습니까?"
-        confirmLabel="수정"
-        confirmVariant="primary"
-        onConfirm={handleSaveProfile}
       />
     </div>
   );

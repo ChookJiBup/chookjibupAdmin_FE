@@ -1,28 +1,73 @@
 "use client";
 
 import { ImageIcon } from "@radix-ui/react-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
+import { getApiErrorMessage } from "@/lib/api/httpError";
+import { getManagedFestival, updateFestival } from "./api";
+import type { FestivalLocationRequest } from "./types";
 
-/**
- * 축제 단건 조회 API가 아직 백엔드에 없어 임시로 사용하는 더미 데이터.
- * API가 준비되면 festivalId로 실제 조회한 값으로 교체한다.
- */
-const MOCK_FESTIVAL_DETAIL = {
-  name: "김천김밥축제",
-  description: "너는 네 삶을 바꿔야 한다(You Must Change Your Life)\n매주 월요일 휴관",
-  address: "전남광주통합특별시 북구 비엔날레로 111(용봉동)",
-  addressDetail: "광주비엔날레 전시관",
-  startDate: "2026.09.05",
-  endDate: "2026.11.15",
-};
-
-export function FestivalDetailPanel() {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
+  const queryClient = useQueryClient();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [name, setName] = useState<string | null>(null);
+  const [description, setDescription] = useState<string | null>(null);
+  const [detailAddress, setDetailAddress] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
+
+  const festivalQuery = useQuery({
+    queryKey: ["managed-festival", festivalId],
+    queryFn: () => getManagedFestival(festivalId),
+  });
+  const festival = festivalQuery.data;
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!festival) return Promise.resolve();
+      const locations: FestivalLocationRequest[] = festival.locations.map((location) => ({
+        ...location,
+        detailAddress: location.primary
+          ? (detailAddress ?? festival.detailAddress)
+          : (location.detailAddress ?? undefined),
+        roadAddress: location.roadAddress ?? undefined,
+        jibunAddress: location.jibunAddress ?? undefined,
+        postalCode: location.postalCode ?? undefined,
+        buildingManagementNumber: location.buildingManagementNumber ?? undefined,
+        latitude: location.latitude ?? undefined,
+        longitude: location.longitude ?? undefined,
+        boundaryGeometry: location.boundaryGeometry ?? undefined,
+      }));
+      return updateFestival(festivalId, {
+        name: name ?? festival.festivalName,
+        description: description ?? festival.description,
+        locations,
+        startDate: startDate ?? festival.startDate,
+        endDate: endDate ?? festival.endDate,
+        operationStartTime: festival.operationStartTime,
+        operationEndTime: festival.operationEndTime,
+      });
+    },
+    onSuccess: () => {
+      setEditDialogOpen(false);
+      setName(null);
+      setDescription(null);
+      setDetailAddress(null);
+      setStartDate(null);
+      setEndDate(null);
+      queryClient.invalidateQueries({ queryKey: ["managed-festival", festivalId] });
+      queryClient.invalidateQueries({ queryKey: ["managed-festivals"] });
+    },
+  });
+
+  if (festivalQuery.isLoading) return <p className="body-regular text-zinc-500">불러오는 중...</p>;
+  if (festivalQuery.isError) {
+    return <p className="body-small text-error">{getApiErrorMessage(festivalQuery.error)}</p>;
+  }
+  if (!festival) return null;
 
   return (
     <div className="col-span-3 flex flex-col gap-6">
@@ -30,13 +75,18 @@ export function FestivalDetailPanel() {
         <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 px-8 py-6">
           <p className="body-large-bold text-zinc-950">축제 정보</p>
 
-          <Input label="축제명" defaultValue={MOCK_FESTIVAL_DETAIL.name} />
+          <Input
+            label="축제명"
+            value={name ?? festival.festivalName}
+            onChange={(event) => setName(event.target.value)}
+          />
 
           <div className="flex w-full flex-col gap-1">
             <label className="body-small-bold text-zinc-950">내용</label>
             <Textarea
               rows={3}
-              defaultValue={MOCK_FESTIVAL_DETAIL.description}
+              value={description ?? festival.description}
+              onChange={(event) => setDescription(event.target.value)}
               className="rounded-lg border-zinc-400 bg-white body-regular! text-zinc-950 focus-visible:border-primary focus-visible:ring-0"
             />
           </div>
@@ -44,8 +94,11 @@ export function FestivalDetailPanel() {
           <div className="flex w-full flex-col gap-1">
             <label className="body-small-bold text-zinc-950">장소</label>
             <div className="flex flex-col gap-2">
-              <Input disabled defaultValue={MOCK_FESTIVAL_DETAIL.address} />
-              <Input defaultValue={MOCK_FESTIVAL_DETAIL.addressDetail} />
+              <Input disabled value={festival.address} />
+              <Input
+                value={detailAddress ?? festival.detailAddress}
+                onChange={(event) => setDetailAddress(event.target.value)}
+              />
             </div>
           </div>
 
@@ -53,12 +106,16 @@ export function FestivalDetailPanel() {
             <Input
               label="시작날짜"
               wrapperClassName="flex-1"
-              defaultValue={MOCK_FESTIVAL_DETAIL.startDate}
+              type="date"
+              value={startDate ?? festival.startDate}
+              onChange={(event) => setStartDate(event.target.value)}
             />
             <Input
               label="종료날짜"
               wrapperClassName="flex-1"
-              defaultValue={MOCK_FESTIVAL_DETAIL.endDate}
+              type="date"
+              value={endDate ?? festival.endDate}
+              onChange={(event) => setEndDate(event.target.value)}
             />
           </div>
         </div>
@@ -69,23 +126,10 @@ export function FestivalDetailPanel() {
       </div>
 
       <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={() => setDeleteDialogOpen(true)}>
-          삭제하기
-        </Button>
-        {/* 축제 수정 API(PATCH)는 있지만 단건 조회 API가 없어 기존 값을 정확히 불러올 수 없다.
-            지금은 화면만 구현하고, 실제 수정 동작은 조회 API가 생긴 뒤에 연결한다. */}
         <Button type="button" onClick={() => setEditDialogOpen(true)}>
           수정하기
         </Button>
       </div>
-
-      <ConfirmDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        title="삭제하시겠습니까?"
-        // 축제 삭제 API가 아직 없어 확인 후 실제 삭제는 이뤄지지 않는다.
-        onConfirm={() => setDeleteDialogOpen(false)}
-      />
 
       <ConfirmDialog
         open={editDialogOpen}
@@ -93,8 +137,12 @@ export function FestivalDetailPanel() {
         title="축제를 수정하시겠습니까?"
         confirmLabel="수정"
         confirmVariant="primary"
-        onConfirm={() => setEditDialogOpen(false)}
+        confirmPending={updateMutation.isPending}
+        onConfirm={() => updateMutation.mutate()}
       />
+      {updateMutation.isError ? (
+        <p className="body-small text-error">{getApiErrorMessage(updateMutation.error)}</p>
+      ) : null}
     </div>
   );
 }

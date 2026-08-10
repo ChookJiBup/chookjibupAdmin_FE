@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Pencil1Icon, PlusIcon, MinusIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +11,8 @@ import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
-import { MOCK_AI_SUGGESTIONS, MOCK_SUMMARY, MOCK_ZONES } from "./mockData";
+import { getFestivalDashboard } from "./api";
+import { MOCK_AI_SUGGESTIONS, MOCK_ZONES } from "./mockData";
 import type { Booth } from "./types";
 
 const ALL_BOOTHS = MOCK_ZONES.flatMap((zone) => zone.booths);
@@ -24,6 +26,11 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const activeSuggestions = MOCK_AI_SUGGESTIONS.filter(
     (suggestion) => !dismissedSuggestionIds.includes(suggestion.id),
   );
+  const dashboardQuery = useQuery({
+    queryKey: ["festival-dashboard", festivalId],
+    queryFn: () => getFestivalDashboard(festivalId),
+    refetchInterval: 30_000,
+  });
 
   // 지도가 네비바 바로 아래부터 화면 전체를 채우도록 콘솔 콘텐츠 영역의 여백을 없앤다(디자인 스펙).
   useEffect(() => {
@@ -76,7 +83,43 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
       </div>
 
       <div className="absolute right-3 bottom-3 left-[318px]">
-        <DashboardStatsBar summary={MOCK_SUMMARY} selectedBooth={selectedBooth} />
+        {selectedBooth ? (
+          <DashboardStatsBar selectedBooth={selectedBooth} />
+        ) : (
+          <div className="flex items-center gap-8 rounded-lg border border-zinc-200 bg-white px-5 py-4">
+            {dashboardQuery.isLoading ? (
+              <p className="body-small text-zinc-500">운영 지표를 불러오는 중...</p>
+            ) : dashboardQuery.isError ? (
+              <p className="body-small text-error">운영 지표를 불러오지 못했습니다.</p>
+            ) : dashboardQuery.data ? (
+              <>
+                <div>
+                  <p className="body-regular-bold">{dashboardQuery.data.operatingStatus}</p>
+                  <p className="body-small text-zinc-500">운영 상태</p>
+                </div>
+                <div>
+                  <p className="body-regular-bold">
+                    {dashboardQuery.data.currentVisitorCount.toLocaleString()}명
+                  </p>
+                  <p className="body-small text-zinc-500">현재 방문자</p>
+                </div>
+                <div>
+                  <p className="body-regular-bold">
+                    {dashboardQuery.data.activeQueueCount.toLocaleString()}개
+                  </p>
+                  <p className="body-small text-zinc-500">활성 대기열</p>
+                </div>
+                <div>
+                  <p className="body-regular-bold">{dashboardQuery.data.averageWaitMinutes}분</p>
+                  <p className="body-small text-zinc-500">평균 대기시간</p>
+                </div>
+                {!dashboardQuery.data.dataAvailable ? (
+                  <p className="body-caption text-zinc-500">실시간 운영 지표 연결 대기 중</p>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <AiSuggestionPanel

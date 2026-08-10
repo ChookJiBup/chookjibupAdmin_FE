@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { createFieldStaff, deleteFieldStaff, getFieldStaffList } from "./api";
+import { createFieldStaff, deleteFieldStaffBulk, getFieldStaffList } from "./api";
 import type { CreateFieldStaffResult } from "./types";
 
 export function StaffsPanel({ festivalId }: { festivalId: string }) {
@@ -44,8 +44,7 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (staffIds: string[]) =>
-      Promise.all(staffIds.map((staffId) => deleteFieldStaff(festivalId, staffId))),
+    mutationFn: (staffIds: string[]) => deleteFieldStaffBulk(festivalId, staffIds),
     onSuccess: () => {
       setSelectedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });

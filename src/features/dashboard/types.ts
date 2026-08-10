@@ -39,3 +39,13 @@ export interface AiSuggestion {
   /** 제안 내용을 지도 위에 경로선으로 보여줄 때의 경유 좌표(있을 때만 그린다). */
   path?: { lat: number; lng: number }[];
 }
+
+export interface FestivalDashboard {
+  festivalId: string;
+  dataAvailable: boolean;
+  operatingStatus: string;
+  currentVisitorCount: number;
+  activeQueueCount: number;
+  averageWaitMinutes: number;
+  updatedAt: string | null;
+}

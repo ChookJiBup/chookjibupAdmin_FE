@@ -1,18 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { AuthCard } from "@/components/ui/AuthCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { getApiErrorMessage } from "@/lib/api/httpError";
+import { requestPasswordReset } from "./api";
 
-/**
- * 비밀번호 재설정 이메일 발송 API가 아직 없어서, 실제 발송 없이
- * 화면 흐름만 재현한다 — 제출하면 바로 재설정 화면으로 이동한다.
- */
 export function ForgotPasswordForm() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
+  const mutation = useMutation({ mutationFn: () => requestPasswordReset(email) });
 
   return (
     <AuthCard title="비밀번호 찾기">
@@ -26,7 +24,7 @@ export function ForgotPasswordForm() {
         className="mt-8 flex flex-col gap-5"
         onSubmit={(event) => {
           event.preventDefault();
-          router.push("/reset-password");
+          mutation.mutate();
         }}
       >
         <Input
@@ -38,8 +36,15 @@ export function ForgotPasswordForm() {
           onChange={(event) => setEmail(event.target.value)}
         />
 
-        <Button type="submit" size="lg" className="w-full">
-          보내기
+        {mutation.isSuccess ? (
+          <p className="body-small text-primary">입력한 이메일로 재설정 링크를 보냈습니다.</p>
+        ) : null}
+        {mutation.isError ? (
+          <p className="body-small text-error">{getApiErrorMessage(mutation.error)}</p>
+        ) : null}
+
+        <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
+          {mutation.isPending ? "보내는 중..." : "보내기"}
         </Button>
       </form>
     </AuthCard>
