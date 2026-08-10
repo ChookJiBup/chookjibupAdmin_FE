@@ -33,9 +33,16 @@ export function nodeToBoothMapObject(
 ): BoothMapObject | null {
   const geometry = node.geometry;
 
-  if (node.nodeType === "QUEUE" || node.geometryType === "POLYLINE" || node.geometryType === "POLYGON") {
+  if (
+    node.nodeType === "QUEUE" ||
+    node.geometryType === "POLYLINE" ||
+    node.geometryType === "POLYGON"
+  ) {
     if (!isPolyLike(geometry) || geometry.points.length === 0) return null;
-    const points = geometry.points.flatMap((point) => [point.x * imageWidth, point.y * imageHeight]);
+    const points = geometry.points.flatMap((point) => [
+      point.x * imageWidth,
+      point.y * imageHeight,
+    ]);
     const line: BoothMapQueueLine = {
       kind: "line",
       id: `node-${node.nodeId}`,
@@ -50,12 +57,14 @@ export function nodeToBoothMapObject(
 
   if (!isRectangleLike(geometry)) return null;
 
-  const width = "width" in geometry && typeof geometry.width === "number"
-    ? geometry.width * imageWidth
-    : imageWidth * POINT_APPROXIMATION_RATIO;
-  const height = "height" in geometry && typeof geometry.height === "number"
-    ? geometry.height * imageHeight
-    : imageHeight * POINT_APPROXIMATION_RATIO;
+  const width =
+    "width" in geometry && typeof geometry.width === "number"
+      ? geometry.width * imageWidth
+      : imageWidth * POINT_APPROXIMATION_RATIO;
+  const height =
+    "height" in geometry && typeof geometry.height === "number"
+      ? geometry.height * imageHeight
+      : imageHeight * POINT_APPROXIMATION_RATIO;
 
   const shape: BoothMapShape = {
     kind: "shape",

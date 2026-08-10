@@ -13,7 +13,9 @@ function createDraftKey() {
   return `location-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function createLocationDraft(locationType: FestivalLocationType = "SUB_VENUE"): LocationDraft {
+export function createLocationDraft(
+  locationType: FestivalLocationType = "SUB_VENUE",
+): LocationDraft {
   return {
     key: createDraftKey(),
     locationType,

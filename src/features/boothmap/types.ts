@@ -29,7 +29,13 @@ export type NodeSource = "AI" | "ADMIN";
 export type MapAnalysisJobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 /** geometry는 이미지 가로/세로 대비 0~1 정규화 값이다(MapGeometryValidator 기준). */
-export type RectangleGeometry = { x: number; y: number; width: number; height: number; rotation?: number };
+export type RectangleGeometry = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+};
 export type PointGeometry = { x: number; y: number };
 export type PolyGeometry = { points: { x: number; y: number }[] };
 export type NodeGeometry = RectangleGeometry | PointGeometry | PolyGeometry;

@@ -77,8 +77,14 @@ export default function BoothMapCanvas({
 
   const gridStepX = Math.max(GRID_STEP, Math.ceil(width / MAX_GRID_LINES / GRID_STEP) * GRID_STEP);
   const gridStepY = Math.max(GRID_STEP, Math.ceil(height / MAX_GRID_LINES / GRID_STEP) * GRID_STEP);
-  const gridLinesX = Array.from({ length: Math.floor(width / gridStepX) }, (_, index) => index * gridStepX);
-  const gridLinesY = Array.from({ length: Math.floor(height / gridStepY) }, (_, index) => index * gridStepY);
+  const gridLinesX = Array.from(
+    { length: Math.floor(width / gridStepX) },
+    (_, index) => index * gridStepX,
+  );
+  const gridLinesY = Array.from(
+    { length: Math.floor(height / gridStepY) },
+    (_, index) => index * gridStepY,
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const shapeRefs = useRef(new Map<string, Konva.Rect>());
@@ -168,10 +174,20 @@ export default function BoothMapCanvas({
               <>
                 <Rect width={width} height={height} fill="#fafafa" />
                 {gridLinesX.map((x) => (
-                  <Line key={`grid-x-${x}`} points={[x, 0, x, height]} stroke="#f4f4f5" strokeWidth={1} />
+                  <Line
+                    key={`grid-x-${x}`}
+                    points={[x, 0, x, height]}
+                    stroke="#f4f4f5"
+                    strokeWidth={1}
+                  />
                 ))}
                 {gridLinesY.map((y) => (
-                  <Line key={`grid-y-${y}`} points={[0, y, width, y]} stroke="#f4f4f5" strokeWidth={1} />
+                  <Line
+                    key={`grid-y-${y}`}
+                    points={[0, y, width, y]}
+                    stroke="#f4f4f5"
+                    strokeWidth={1}
+                  />
                 ))}
               </>
             )}
@@ -210,7 +226,9 @@ export default function BoothMapCanvas({
                     height={object.height}
                     fill={FACILITY_COLOR[object.type]}
                     opacity={backgroundImage ? 0.75 : 1}
-                    stroke={object.id === selectedId ? "#236cf6" : needsReview ? "#f97316" : "#71717b"}
+                    stroke={
+                      object.id === selectedId ? "#236cf6" : needsReview ? "#f97316" : "#71717b"
+                    }
                     strokeWidth={object.id === selectedId ? 2 : 1}
                     dash={needsReview && object.id !== selectedId ? [4, 3] : undefined}
                     draggable={tool === "select"}

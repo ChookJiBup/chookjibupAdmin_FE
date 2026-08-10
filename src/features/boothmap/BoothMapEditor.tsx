@@ -146,10 +146,22 @@ export function BoothMapEditor({
 
         <div className="mx-1 h-5 w-px bg-zinc-200" />
 
-        <Button type="button" variant="outline" size="sm" onClick={undo} disabled={past.length === 0}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={undo}
+          disabled={past.length === 0}
+        >
           Undo
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={redo} disabled={future.length === 0}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={redo}
+          disabled={future.length === 0}
+        >
           Redo
         </Button>
 
@@ -215,7 +227,12 @@ export function BoothMapEditor({
           >
             배치도 삭제
           </Button>
-          <Button type="button" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </Button>
         </div>

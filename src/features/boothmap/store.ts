@@ -1,10 +1,5 @@
 import { create } from "zustand";
-import type {
-  BoothMapObject,
-  BoothMapQueueLine,
-  BoothMapShape,
-  BoothMapShapeType,
-} from "./types";
+import type { BoothMapObject, BoothMapQueueLine, BoothMapShape, BoothMapShapeType } from "./types";
 
 export type BoothMapTool = "select" | "queue-line";
 

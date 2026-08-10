@@ -36,7 +36,10 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
   const [manualMapId, setManualMapId] = useState("");
 
   const state: PanelState =
-    override ?? (cachedMapId ? { status: "polling", mapId: cachedMapId, progress: null } : { status: "no-map" });
+    override ??
+    (cachedMapId
+      ? { status: "polling", mapId: cachedMapId, progress: null }
+      : { status: "no-map" });
 
   useEffect(() => {
     if (state.status !== "polling") return;
@@ -63,7 +66,8 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
           setOverride({
             status: "failed",
             mapId,
-            message: error instanceof Error ? error.message : "배치도 분석 상태 확인에 실패했습니다.",
+            message:
+              error instanceof Error ? error.message : "배치도 분석 상태 확인에 실패했습니다.",
           });
         }
       });
@@ -120,7 +124,8 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
         </p>
         {progress ? (
           <p className="body-small text-zinc-400">
-            상태: {progress.status} · 시도 {progress.attemptCount}회 · 인식 {progress.detectedCount}개
+            상태: {progress.status} · 시도 {progress.attemptCount}회 · 인식 {progress.detectedCount}
+            개
           </p>
         ) : null}
         <p className="body-caption text-zinc-400">시간이 걸릴 수 있습니다. 자동으로 갱신됩니다.</p>
@@ -142,7 +147,9 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
             clearCachedMapId(festivalId);
             setOverride({ status: "no-map" });
           }}
-          onImageReplaced={() => setOverride({ status: "polling", mapId: state.mapId, progress: null })}
+          onImageReplaced={() =>
+            setOverride({ status: "polling", mapId: state.mapId, progress: null })
+          }
         />
       </div>
     );

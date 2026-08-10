@@ -24,7 +24,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { setCachedMapId } from "@/features/boothmap/mapIdCache";
 import { createFestival, createFestivalWithMap } from "@/features/festivals/api";
@@ -222,7 +228,9 @@ export function FestivalRegisterForm() {
                   wrapperClassName="flex-1"
                   placeholder="장소 이름(예: 메인 무대)"
                   value={location.locationName}
-                  onChange={(event) => updateLocation(location.key, { locationName: event.target.value })}
+                  onChange={(event) =>
+                    updateLocation(location.key, { locationName: event.target.value })
+                  }
                 />
               </div>
 
@@ -244,7 +252,9 @@ export function FestivalRegisterForm() {
               <Input
                 placeholder="상세주소"
                 value={location.detailAddress}
-                onChange={(event) => updateLocation(location.key, { detailAddress: event.target.value })}
+                onChange={(event) =>
+                  updateLocation(location.key, { detailAddress: event.target.value })
+                }
               />
             </div>
           ))}
@@ -365,7 +375,8 @@ export function FestivalRegisterForm() {
         noResultSubtext="주소 검색 기능은 아직 준비 중입니다. 직접 입력해 주세요."
         onSelectResult={() => {}}
         onManualInput={(value) => {
-          if (addressSearchTargetKey) updateLocation(addressSearchTargetKey, { roadAddress: value });
+          if (addressSearchTargetKey)
+            updateLocation(addressSearchTargetKey, { roadAddress: value });
           setAddressSearchTargetKey(null);
         }}
       />
