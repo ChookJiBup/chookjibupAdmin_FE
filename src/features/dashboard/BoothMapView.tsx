@@ -80,9 +80,7 @@ export function BoothMapView({
   if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY) {
     return (
       <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50">
-        <p className="body-small text-zinc-500">
-          NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다.
-        </p>
+        <p className="body-small text-zinc-500">NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다.</p>
       </div>
     );
   }

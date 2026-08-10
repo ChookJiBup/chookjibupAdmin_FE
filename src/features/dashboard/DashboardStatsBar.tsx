@@ -58,7 +58,9 @@ function BoothQueueUpdateBar({ booth }: { booth: Booth }) {
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex items-center gap-1.5">
-            <span className="body-small text-zinc-500">{findZoneName(MOCK_ZONES, booth.zoneId)}</span>
+            <span className="body-small text-zinc-500">
+              {findZoneName(MOCK_ZONES, booth.zoneId)}
+            </span>
             <span className="body-small text-zinc-300">&gt;</span>
             <span className="body-small-bold text-zinc-950">{booth.name}</span>
             <CongestionBadge level={booth.congestionLevel} />
