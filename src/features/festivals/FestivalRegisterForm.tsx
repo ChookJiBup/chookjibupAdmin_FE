@@ -1,6 +1,12 @@
 "use client";
 
-import { CheckIcon, Cross2Icon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import {
+  CheckIcon,
+  Cross2Icon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -14,17 +20,30 @@ import {
   AttachmentTitle,
 } from "@/components/ui/attachment";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { setCachedMapId } from "@/features/boothmap/mapIdCache";
 import { createFestival, createFestivalWithMap } from "@/features/festivals/api";
 import { getApiErrorMessage } from "@/lib/api/httpError";
+import {
+  createInitialLocationDrafts,
+  createLocationDraft,
+  isLocationDraftComplete,
+  toFestivalLocationRequests,
+  type LocationDraft,
+} from "./locationDraft";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
-import { toSingleMainVenueLocation } from "./types";
+import { FESTIVAL_LOCATION_TYPE_LABEL, type FestivalLocationType } from "./types";
 
 const DATE_DISPLAY_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/;
+const LOCATION_TYPE_OPTIONS = Object.entries(FESTIVAL_LOCATION_TYPE_LABEL) as [
+  FestivalLocationType,
+  string,
+][];
 
 /** "YYYY.mm.dd" 화면 표기를 API가 요구하는 "yyyy-MM-dd"로 변환한다. */
 function toIsoDate(displayDate: string) {
@@ -41,28 +60,43 @@ export function FestivalRegisterForm() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [address, setAddress] = useState("");
-  const [addressDetail, setAddressDetail] = useState("");
+  const [locations, setLocations] = useState<LocationDraft[]>(() => createInitialLocationDrafts());
+  const [primaryKey, setPrimaryKey] = useState(() => locations[0].key);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [boothMapFile, setBoothMapFile] = useState<File | null>(null);
-  const [dateError, setDateError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
   const [festivalSearchState, setFestivalSearchState] = useState<SearchDialogState>("default");
-  const [addressSearchOpen, setAddressSearchOpen] = useState(false);
+  const [addressSearchTargetKey, setAddressSearchTargetKey] = useState<string | null>(null);
   const [addressSearchState, setAddressSearchState] = useState<SearchDialogState>("default");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+
+  function updateLocation(key: string, patch: Partial<Omit<LocationDraft, "key">>) {
+    setLocations((current) => current.map((loc) => (loc.key === key ? { ...loc, ...patch } : loc)));
+  }
+
+  function addLocation() {
+    setLocations((current) => [...current, createLocationDraft()]);
+  }
+
+  function removeLocation(key: string) {
+    setLocations((current) => {
+      if (current.length <= 1) return current;
+      const next = current.filter((loc) => loc.key !== key);
+      if (primaryKey === key) setPrimaryKey(next[0].key);
+      return next;
+    });
+  }
 
   const createMutation = useMutation({
     mutationFn: async () => {
       const request = {
         name,
         description,
-        // TODO(다중 장소 UI): 지금은 입력창이 하나뿐이라 단일 MAIN_VENUE 장소로 감싸 보낸다.
-        // 백엔드는 이제 장소를 여러 개(locations[])까지 받을 수 있다.
-        locations: [toSingleMainVenueLocation(address, addressDetail)],
+        locations: toFestivalLocationRequests(locations, primaryKey),
         startDate: toIsoDate(startDate),
         endDate: toIsoDate(endDate),
         // 운영 시작/종료 시간은 이번 화면 디자인에 없어 임시 기본값을 보낸다.
@@ -93,16 +127,22 @@ export function FestivalRegisterForm() {
 
   function handleSubmitClick() {
     if (!DATE_DISPLAY_PATTERN.test(startDate) || !DATE_DISPLAY_PATTERN.test(endDate)) {
-      setDateError("날짜는 YYYY.mm.dd 형식으로 입력해 주세요.");
+      setFormError("날짜는 YYYY.mm.dd 형식으로 입력해 주세요.");
       return;
     }
     if (toIsoDate(startDate) > toIsoDate(endDate)) {
-      setDateError("종료날짜는 시작날짜보다 빠를 수 없습니다.");
+      setFormError("종료날짜는 시작날짜보다 빠를 수 없습니다.");
       return;
     }
-    setDateError(null);
+    if (locations.some((location) => !isLocationDraftComplete(location))) {
+      setFormError("모든 장소에 이름과 주소를 입력해 주세요.");
+      return;
+    }
+    setFormError(null);
     setSubmitDialogOpen(true);
   }
+
+  const addressSearchTarget = locations.find((loc) => loc.key === addressSearchTargetKey) ?? null;
 
   return (
     <div className="flex max-w-[790px] flex-col gap-6">
@@ -127,24 +167,93 @@ export function FestivalRegisterForm() {
         />
       </FormSection>
 
-      <FormSection label="축제 상세정보 입력">
-        {address ? (
-          <Input disabled value={address} />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddressSearchOpen(true)}
-            className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 body-regular text-zinc-950 transition-colors hover:bg-zinc-50"
-          >
-            <MagnifyingGlassIcon className="size-4" />
-            주소 찾기
-          </button>
-        )}
-        <Input
-          placeholder="상세주소"
-          value={addressDetail}
-          onChange={(event) => setAddressDetail(event.target.value)}
-        />
+      <FormSection label="축제 장소 입력">
+        <div className="flex flex-col gap-4">
+          {locations.map((location, index) => (
+            <div
+              key={location.key}
+              className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <p className="body-small-bold text-zinc-950">장소 {index + 1}</p>
+                  <label className="flex items-center gap-1.5">
+                    <Checkbox
+                      checked={location.key === primaryKey}
+                      onCheckedChange={(checked) => {
+                        if (checked) setPrimaryKey(location.key);
+                      }}
+                    />
+                    <span className="body-caption text-zinc-500">대표 장소</span>
+                  </label>
+                </div>
+                {locations.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon={<TrashIcon />}
+                    onClick={() => removeLocation(location.key)}
+                  >
+                    삭제
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="flex gap-3">
+                <Select
+                  value={location.locationType}
+                  onValueChange={(value) =>
+                    updateLocation(location.key, { locationType: value as FestivalLocationType })
+                  }
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOCATION_TYPE_OPTIONS.map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  wrapperClassName="flex-1"
+                  placeholder="장소 이름(예: 메인 무대)"
+                  value={location.locationName}
+                  onChange={(event) => updateLocation(location.key, { locationName: event.target.value })}
+                />
+              </div>
+
+              {location.roadAddress ? (
+                <Input disabled value={location.roadAddress} />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddressSearchTargetKey(location.key);
+                    setAddressSearchState("default");
+                  }}
+                  className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 body-regular text-zinc-950 transition-colors hover:bg-zinc-50"
+                >
+                  <MagnifyingGlassIcon className="size-4" />
+                  주소 찾기
+                </button>
+              )}
+              <Input
+                placeholder="상세주소"
+                value={location.detailAddress}
+                onChange={(event) => updateLocation(location.key, { detailAddress: event.target.value })}
+              />
+            </div>
+          ))}
+
+          <Button type="button" variant="outline" icon={<PlusIcon />} onClick={addLocation}>
+            장소 추가
+          </Button>
+        </div>
+
         <div className="flex gap-3">
           <Input
             label="시작날짜"
@@ -161,7 +270,7 @@ export function FestivalRegisterForm() {
             onChange={(event) => setEndDate(event.target.value)}
           />
         </div>
-        {dateError ? <p className="body-caption text-error">{dateError}</p> : null}
+        {formError ? <p className="body-caption text-error">{formError}</p> : null}
       </FormSection>
 
       <FormSection label="축제부스지도 첨부">
@@ -235,10 +344,12 @@ export function FestivalRegisterForm() {
       />
 
       <SearchDialog
-        open={addressSearchOpen}
+        open={addressSearchTarget !== null}
         onOpenChange={(next) => {
-          setAddressSearchOpen(next);
-          if (!next) setAddressSearchState("default");
+          if (!next) {
+            setAddressSearchTargetKey(null);
+            setAddressSearchState("default");
+          }
         }}
         title="주소 찾기"
         placeholder="주소를 입력하세요"
@@ -254,8 +365,8 @@ export function FestivalRegisterForm() {
         noResultSubtext="주소 검색 기능은 아직 준비 중입니다. 직접 입력해 주세요."
         onSelectResult={() => {}}
         onManualInput={(value) => {
-          setAddress(value);
-          setAddressSearchOpen(false);
+          if (addressSearchTargetKey) updateLocation(addressSearchTargetKey, { roadAddress: value });
+          setAddressSearchTargetKey(null);
         }}
       />
 

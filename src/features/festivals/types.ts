@@ -13,6 +13,18 @@ export type FestivalLocationType =
 
 export type FestivalLocationSourceType = "MANUAL" | "API";
 
+export const FESTIVAL_LOCATION_TYPE_LABEL: Record<FestivalLocationType, string> = {
+  MAIN_VENUE: "메인 행사장",
+  SUB_VENUE: "부속 행사장",
+  STAGE_AREA: "무대/공연 구역",
+  EXPERIENCE_AREA: "체험 구역",
+  PARKING: "주차장",
+  SHUTTLE_STOP: "셔틀 정류장",
+  ENTRANCE: "출입구",
+  OPERATING_AREA: "운영 구역",
+  OTHER: "기타",
+};
+
 export interface FestivalLocationRequest {
   /** 수정할 기존 장소 UUID. 신규 장소는 생략(undefined). */
   locationId?: string;
@@ -80,19 +92,4 @@ export interface CreateFestivalResponse {
 export interface CreateFestivalWithMapResponse {
   festival: CreateFestivalResponse;
   map: FestivalMapSummary;
-}
-
-/** 화면에서 단일 주소 입력을 백엔드가 요구하는 locations[] 하나짜리 배열로 감쌀 때 쓴다. */
-export function toSingleMainVenueLocation(
-  roadAddress: string,
-  detailAddress: string,
-): FestivalLocationRequest {
-  return {
-    locationType: "MAIN_VENUE",
-    locationName: "메인 행사장",
-    roadAddress,
-    detailAddress: detailAddress || undefined,
-    primary: true,
-    sortOrder: 0,
-  };
 }
