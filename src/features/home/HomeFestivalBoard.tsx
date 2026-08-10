@@ -47,7 +47,7 @@ function formatFestivalDateRange(startDate: string, endDate: string) {
 function getFestivalHref(festival: FestivalSummary) {
   return festival.role === "FESTIVAL_OWNER"
     ? `/console/festivals/${festival.festivalId}`
-    : `/console/festivals/${festival.festivalId}/dashboard`;
+    : `/console/festivals/${festival.festivalId}/operator-dashboard`;
 }
 
 function FestivalCard({ festival }: { festival: FestivalSummary }) {

@@ -3,6 +3,8 @@
 import { useParams, usePathname } from "next/navigation";
 import { AdminAuthGuard } from "@/components/auth/AdminAuthGuard";
 import { HeaderNav } from "@/components/layout/HeaderNav";
+import { Toaster } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 
@@ -14,6 +16,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
   const adminName = useAdminAuthStore((state) => state.session?.admin.name);
   const adminRole = useAdminAuthStore((state) => state.session?.admin.role);
   const hideNav = useConsoleUiStore((state) => state.hideNav);
+  const fullBleed = useConsoleUiStore((state) => state.fullBleed);
   const pathname = usePathname();
   const params = useParams<{ festivalId?: string }>();
   const festivalId = params?.festivalId;
@@ -24,7 +27,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
 
   return (
     <AdminAuthGuard>
-      <div className="flex min-h-full flex-col">
+      <div className="flex h-screen flex-col">
         <HeaderNav
           userName={adminName}
           navItems={navItems}
@@ -32,8 +35,18 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           role={adminRole}
           hideNav={hideNav}
         />
-        <div className="flex-1 px-10 py-[30px]">{children}</div>
+        <div className="relative flex-1">
+          <div
+            className={cn(
+              "absolute inset-0",
+              fullBleed ? "overflow-hidden" : "overflow-y-auto px-10 py-[30px]",
+            )}
+          >
+            {children}
+          </div>
+        </div>
       </div>
+      <Toaster position="top-right" />
     </AdminAuthGuard>
   );
 }

@@ -1,156 +1,169 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
-import { boothMapDraftStorageKey, BoothMapEditor } from "./BoothMapEditor";
-import { mockUploadAndProcess } from "./mockPipeline";
-import type { BoothMapUploadState } from "./types";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { BoothMapEditor } from "./BoothMapEditor";
+import { pollMapAnalysis } from "./analysisPolling";
+import { clearCachedMapId, getCachedMapId, setCachedMapId } from "./mapIdCache";
+import type { MapAnalysisStatusResponse } from "./types";
+
+type PanelState =
+  | { status: "no-map" }
+  | { status: "polling"; mapId: string; progress: MapAnalysisStatusResponse | null }
+  | { status: "ready"; mapId: string }
+  | { status: "failed"; mapId: string; message: string };
 
 const noSubscription = () => () => {};
 
-/** 이 축제의 로컬 부스맵 초안이 저장돼 있는지. SSR에서는 항상 false로 취급한다. */
-function useHasSavedDraft(festivalId: string) {
+/** 캐시된 mapId. SSR에서는 항상 null로 취급하고(하이드레이션 이후 클라이언트에서 다시 읽는다). */
+function useCachedMapId(festivalId: string) {
   return useSyncExternalStore(
     noSubscription,
-    () => window.localStorage.getItem(boothMapDraftStorageKey(festivalId)) !== null,
-    () => false,
+    () => getCachedMapId(festivalId),
+    () => null,
   );
 }
 
+/**
+ * `BoothMapEditPage`가 이 컴포넌트를 `key={festivalId}`로 렌더링하므로, 축제를
+ * 바꿔 들어오면 컴포넌트가 통째로 다시 마운트되어 아래 로컬 상태(override)도 함께
+ * 초기화된다 — festivalId 변화를 감지하는 별도 effect가 필요 없다.
+ */
 export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
-  const [state, setState] = useState<BoothMapUploadState>({ status: "idle" });
-  const [draftDismissed, setDraftDismissed] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cachedMapId = useCachedMapId(festivalId);
+  const [override, setOverride] = useState<PanelState | null>(null);
+  const [manualMapId, setManualMapId] = useState("");
 
-  // 저장된 로컬 초안이 있으면 다시 업로드하지 않고 바로 편집기를 연다.
-  // (배치도 이미지는 blob URL이라 새로고침하면 살아있지 않아 배경 없이 연다.)
-  const hasSavedDraft = useHasSavedDraft(festivalId);
-  const effectiveState: BoothMapUploadState =
-    state.status === "idle" && hasSavedDraft && !draftDismissed
-      ? { status: "done", objects: [] }
-      : state;
+  const state: PanelState =
+    override ??
+    (cachedMapId
+      ? { status: "polling", mapId: cachedMapId, progress: null }
+      : { status: "no-map" });
 
-  function handleFileSelected(file: File) {
-    const previewUrl = URL.createObjectURL(file);
-    setState({ status: "selected", file, previewUrl });
+  useEffect(() => {
+    if (state.status !== "polling") return;
+    const { mapId } = state;
+    let cancelled = false;
+
+    pollMapAnalysis(festivalId, mapId, (progress) => {
+      if (!cancelled) setOverride({ status: "polling", mapId, progress });
+    })
+      .then((finalStatus) => {
+        if (cancelled) return;
+        if (finalStatus.status === "COMPLETED") {
+          setOverride({ status: "ready", mapId });
+        } else {
+          setOverride({
+            status: "failed",
+            mapId,
+            message: finalStatus.failureMessage ?? "배치도 분석에 실패했습니다.",
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setOverride({
+            status: "failed",
+            mapId,
+            message:
+              error instanceof Error ? error.message : "배치도 분석 상태 확인에 실패했습니다.",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status === "polling" ? state.mapId : null]);
+
+  if (state.status === "no-map") {
+    return (
+      <div className="flex max-w-lg flex-col gap-3 rounded-lg border border-dashed border-zinc-300 p-4">
+        <p className="body-regular text-zinc-500">
+          이 축제에 등록된 배치도를 찾을 수 없습니다. 배치도는 &ldquo;새 축제 만들기&rdquo; 화면에서
+          이미지를 첨부해야만 생성할 수 있어요(기존 축제에 나중에 배치도를 붙이는 기능은 아직
+          백엔드에 없습니다).
+        </p>
+        <div className="flex flex-col gap-2">
+          <p className="body-caption text-zinc-500">
+            이미 배치도를 만들었고 mapId를 알고 있다면 직접 입력해서 열 수 있어요(임시 방편).
+          </p>
+          <div className="flex gap-2">
+            <Input
+              wrapperClassName="flex-1"
+              placeholder="mapId(UUID)"
+              value={manualMapId}
+              onChange={(event) => setManualMapId(event.target.value)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!manualMapId.trim()}
+              onClick={() => {
+                const mapId = manualMapId.trim();
+                setCachedMapId(festivalId, mapId);
+                setOverride({ status: "polling", mapId, progress: null });
+              }}
+            >
+              열기
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  async function handleUpload() {
-    if (state.status !== "selected") return;
-    const { file, previewUrl } = state;
-
-    setState({ status: "uploading", file, previewUrl });
-    // TODO: 실제로는 업로드(1단계) 완료 응답을 받은 뒤 처리 상태를 별도로 조회해야 한다.
-    setState({ status: "processing", previewUrl });
-    try {
-      const objects = await mockUploadAndProcess();
-      setState({ status: "done", objects });
-    } catch {
-      setState({ status: "error", message: "이미지 처리 중 오류가 발생했습니다." });
-    }
+  if (state.status === "polling") {
+    const { progress } = state;
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="body-regular text-zinc-500">
+          배치도 이미지를 분석하는 중입니다 (OpenAI가 도면을 인식해 부스/시설 후보를 만듭니다).
+        </p>
+        {progress ? (
+          <p className="body-small text-zinc-400">
+            상태: {progress.status} · 시도 {progress.attemptCount}회 · 인식 {progress.detectedCount}
+            개
+          </p>
+        ) : null}
+        <p className="body-caption text-zinc-400">시간이 걸릴 수 있습니다. 자동으로 갱신됩니다.</p>
+      </div>
+    );
   }
 
-  function reset() {
-    setState({ status: "idle" });
-    setDraftDismissed(true);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  if (state.status === "failed") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="body-small text-error">{state.message}</p>
+        <p className="body-caption text-zinc-500">
+          아래 편집기에서 이미지를 다시 교체해 재분석을 시도할 수 있습니다.
+        </p>
+        <BoothMapEditor
+          festivalId={festivalId}
+          mapId={state.mapId}
+          onMapDeleted={() => {
+            clearCachedMapId(festivalId);
+            setOverride({ status: "no-map" });
+          }}
+          onImageReplaced={() =>
+            setOverride({ status: "polling", mapId: state.mapId, progress: null })
+          }
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {effectiveState.status === "idle" && (
-        <label
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            const file = event.dataTransfer.files[0];
-            if (file) handleFileSelected(file);
-          }}
-          className="flex h-48 w-full max-w-lg cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed text-zinc-500"
-        >
-          <span className="body-regular">배치도 이미지를 드래그하거나 클릭해서 업로드</span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) handleFileSelected(file);
-            }}
-          />
-        </label>
-      )}
-
-      {effectiveState.status === "selected" && (
-        <div className="flex flex-col gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={effectiveState.previewUrl}
-            alt="배치도 미리보기"
-            className="max-h-64 max-w-lg rounded-lg border object-contain"
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleUpload}
-              className="body-regular-bold rounded-lg border px-4 py-2"
-            >
-              업로드
-            </button>
-            <button
-              type="button"
-              onClick={reset}
-              className="body-regular rounded-lg border px-4 py-2"
-            >
-              다시 선택
-            </button>
-          </div>
-        </div>
-      )}
-
-      {effectiveState.status === "uploading" && (
-        <p className="body-regular text-zinc-500">업로드 중...</p>
-      )}
-
-      {effectiveState.status === "processing" && (
-        <div className="flex flex-col gap-2">
-          <p className="body-regular text-zinc-500">
-            이미지를 분석하는 중입니다 (보정 → 텍스트 인식 → 영역 추출 → 시설 분류)
-          </p>
-          <p className="body-small text-zinc-400">처리에는 시간이 걸릴 수 있습니다.</p>
-        </div>
-      )}
-
-      {effectiveState.status === "error" && (
-        <div className="flex flex-col gap-2">
-          <p className="body-small text-error">{effectiveState.message}</p>
-          <button
-            type="button"
-            onClick={reset}
-            className="body-regular w-fit rounded-lg border px-4 py-2"
-          >
-            다시 시도
-          </button>
-        </div>
-      )}
-
-      {effectiveState.status === "done" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="body-regular text-zinc-500">
-              자동 배치 결과입니다. 아래에서 자유롭게 옮기고 수정해 보세요.
-            </p>
-            <button
-              type="button"
-              onClick={reset}
-              className="body-small shrink-0 rounded-lg border px-3 py-1.5 text-zinc-950"
-            >
-              다시 업로드
-            </button>
-          </div>
-          <BoothMapEditor festivalId={festivalId} initialObjects={effectiveState.objects} />
-        </div>
-      )}
-    </div>
+    <BoothMapEditor
+      festivalId={festivalId}
+      mapId={state.mapId}
+      onMapDeleted={() => {
+        clearCachedMapId(festivalId);
+        setOverride({ status: "no-map" });
+      }}
+      onImageReplaced={() => setOverride({ status: "polling", mapId: state.mapId, progress: null })}
+    />
   );
 }
