@@ -1,23 +1,31 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { AuthCard } from "@/components/ui/AuthCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { getApiErrorMessage } from "@/lib/api/httpError";
+import { confirmPasswordReset } from "./api";
 
 interface ResetPasswordFormProps {
   /** 비밀번호 변경이 성공적으로 완료됐을 때 호출된다. */
   onComplete: () => void;
 }
 
-/**
- * 비밀번호 재설정 API가 아직 없어서, 실제 변경 없이
- * 화면 흐름만 재현한다 — 제출하면 바로 완료 모달로 전환한다.
- */
 export function ResetPasswordForm({ onComplete }: ResetPasswordFormProps) {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [mismatch, setMismatch] = useState(false);
+  const mutation = useMutation({
+    mutationFn: () =>
+      confirmPasswordReset({
+        token: new URLSearchParams(window.location.search).get("token") ?? "",
+        password,
+        passwordConfirm,
+      }),
+    onSuccess: onComplete,
+  });
 
   return (
     <AuthCard title="비밀번호 재설정">
@@ -30,7 +38,7 @@ export function ResetPasswordForm({ onComplete }: ResetPasswordFormProps) {
             return;
           }
           setMismatch(false);
-          onComplete();
+          mutation.mutate();
         }}
       >
         <Input
@@ -53,8 +61,11 @@ export function ResetPasswordForm({ onComplete }: ResetPasswordFormProps) {
           errorText={mismatch ? "비밀번호가 일치하지 않습니다." : undefined}
         />
 
-        <Button type="submit" size="lg" className="w-full">
-          변경하기
+        {mutation.isError ? (
+          <p className="body-small text-error">{getApiErrorMessage(mutation.error)}</p>
+        ) : null}
+        <Button type="submit" size="lg" className="w-full" disabled={mutation.isPending}>
+          {mutation.isPending ? "변경 중..." : "변경하기"}
         </Button>
       </form>
     </AuthCard>

@@ -1,22 +1,19 @@
 "use client";
 
 import { MagnifyingGlassIcon, PersonIcon } from "@radix-ui/react-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { getSubAdmins, searchSubAdminCandidates } from "./api";
-import type { SubAdmin } from "./types";
+import { assignSubAdmin, deleteSubAdmins, getSubAdmins, searchSubAdminCandidates } from "./api";
 
 export function OperatorsPanel({ festivalId }: { festivalId: string }) {
   const [keywordInput, setKeywordInput] = useState("");
   const [searchKeyword, setSearchKeyword] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // 운영자 초대/삭제 API가 아직 없어, 이번 세션 화면 안에서만 반영되는 로컬 상태로 관리한다.
-  const [addedOperators, setAddedOperators] = useState<SubAdmin[]>([]);
-  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
   const subAdminsQuery = useQuery({
     queryKey: ["sub-admins", festivalId],
@@ -29,9 +26,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
     enabled: searchKeyword !== null && searchKeyword.length > 0,
   });
 
-  const operators = [...addedOperators, ...(subAdminsQuery.data ?? [])].filter(
-    (operator) => !removedIds.has(operator.adminId),
-  );
+  const operators = subAdminsQuery.data ?? [];
   const addedIds = new Set(operators.map((operator) => operator.adminId));
   const candidates = (candidatesQuery.data ?? []).filter(
     (candidate) => !addedIds.has(candidate.adminId),
@@ -57,15 +52,21 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
     });
   }
 
-  function handleAdd(candidate: SubAdmin) {
-    setAddedOperators((prev) => [candidate, ...prev]);
-  }
+  const assignMutation = useMutation({
+    mutationFn: (adminId: string) => assignSubAdmin(festivalId, adminId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sub-admins", festivalId] });
+      queryClient.invalidateQueries({ queryKey: ["sub-admin-candidates", festivalId] });
+    },
+  });
 
-  function handleDeleteSelected() {
-    setRemovedIds((prev) => new Set([...prev, ...selectedIds]));
-    setAddedOperators((prev) => prev.filter((operator) => !selectedIds.has(operator.adminId)));
-    setSelectedIds(new Set());
-  }
+  const deleteMutation = useMutation({
+    mutationFn: (adminIds: string[]) => deleteSubAdmins(festivalId, adminIds),
+    onSuccess: () => {
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["sub-admins", festivalId] });
+    },
+  });
 
   return (
     <div className="col-span-3 flex flex-col gap-4">
@@ -129,7 +130,8 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => handleAdd(candidate)}
+                    disabled={assignMutation.isPending}
+                    onClick={() => assignMutation.mutate(candidate.adminId)}
                   >
                     추가
                   </Button>
@@ -191,7 +193,12 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
           <p className="body-small text-zinc-950">
             <span className="body-small-bold text-primary">{selectedIds.size}</span>개 선택됨
           </p>
-          <Button type="button" variant="destructive" onClick={handleDeleteSelected}>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate([...selectedIds])}
+          >
             삭제하기
           </Button>
         </div>

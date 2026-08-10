@@ -4,7 +4,23 @@ import type {
   CreateFestivalRequest,
   CreateFestivalResponse,
   CreateFestivalWithMapResponse,
+  ManagedFestivalDetail,
+  UpdateFestivalRequest,
 } from "./types";
+
+export async function getManagedFestival(festivalId: string): Promise<ManagedFestivalDetail> {
+  const { data } = await adminApiClient.get<ApiResponse<ManagedFestivalDetail>>(
+    `/admin/me/managed-festivals/${festivalId}`,
+  );
+  return data.data;
+}
+
+export async function updateFestival(
+  festivalId: string,
+  request: UpdateFestivalRequest,
+): Promise<void> {
+  await adminApiClient.patch<ApiResponse<void>>(`/festivals/${festivalId}`, request);
+}
 
 export async function createFestival(
   request: CreateFestivalRequest,

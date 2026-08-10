@@ -56,3 +56,19 @@ export interface AdminSignupResponse {
   role: AdminRole | null;
   status: AdminStatus;
 }
+
+export interface AdminAccountProfile {
+  adminId: string;
+  email: string;
+  name: string;
+  organization: string;
+  department: string;
+  rank: string;
+  status: AdminStatus;
+}
+
+export interface AdminPasswordResetConfirmRequest {
+  token: string;
+  password: string;
+  passwordConfirm: string;
+}

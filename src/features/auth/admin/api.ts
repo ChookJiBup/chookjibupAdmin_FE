@@ -5,9 +5,30 @@ import type {
   AdminEmailVerificationRequest,
   AdminLoginRequest,
   AdminLoginResponse,
+  AdminAccountProfile,
+  AdminPasswordResetConfirmRequest,
   AdminSignupRequest,
   AdminSignupResponse,
 } from "./types";
+
+export async function getAdminProfile(): Promise<AdminAccountProfile> {
+  const { data } = await adminApiClient.get<ApiResponse<AdminAccountProfile>>("/admin/me");
+  return data.data;
+}
+
+export async function requestAuthenticatedPasswordReset(): Promise<void> {
+  await adminApiClient.post<ApiResponse<void>>("/admin/me/password-reset/request");
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await adminApiClient.post<ApiResponse<void>>("/admin/auth/password-reset/request", { email });
+}
+
+export async function confirmPasswordReset(
+  request: AdminPasswordResetConfirmRequest,
+): Promise<void> {
+  await adminApiClient.post<ApiResponse<void>>("/admin/auth/password-reset/confirm", request);
+}
 
 export async function loginAdmin(request: AdminLoginRequest): Promise<AdminLoginResponse> {
   const { data } = await adminApiClient.post<ApiResponse<AdminLoginResponse>>(

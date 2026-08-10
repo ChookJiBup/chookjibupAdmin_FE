@@ -1,6 +1,8 @@
-import { CalendarIcon, DotFilledIcon } from "@radix-ui/react-icons";
+"use client";
+
+import { CalendarIcon } from "@radix-ui/react-icons";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { FestivalOwnerBadge, OperatorBadge } from "@/components/ui/RoleBadge";
 import {
   Empty,
@@ -9,7 +11,8 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { MOCK_FESTIVALS } from "./mockFestivals";
+import { getApiErrorMessage } from "@/lib/api/httpError";
+import { getManagedFestivals } from "./api";
 import type { FestivalProgressStatus, FestivalSummary } from "./types";
 
 const REGISTER_CTA_CLASSES =
@@ -57,7 +60,7 @@ function FestivalCard({ festival }: { festival: FestivalSummary }) {
       className="flex w-full flex-col gap-2 px-5 py-4 transition-colors hover:bg-zinc-50"
     >
       <div className="flex items-start gap-2">
-        <p className="body-regular-bold text-zinc-950">{festival.name}</p>
+        <p className="body-regular-bold text-zinc-950">{festival.festivalName}</p>
         {festival.role === "FESTIVAL_OWNER" ? <FestivalOwnerBadge /> : <OperatorBadge />}
       </div>
       <div className="flex flex-col items-start gap-1">
@@ -67,12 +70,6 @@ function FestivalCard({ festival }: { festival: FestivalSummary }) {
             {formatFestivalDateRange(festival.startDate, festival.endDate)}
           </p>
         </div>
-        {festival.status === "UPCOMING" && festival.dDayLabel && (
-          <Badge className="h-auto gap-1 rounded-full bg-zinc-100 px-2 py-1 text-xs font-normal text-zinc-950">
-            <DotFilledIcon className="size-4" />
-            {festival.dDayLabel}
-          </Badge>
-        )}
       </div>
     </Link>
   );
@@ -107,7 +104,21 @@ function StatusColumn({
 }
 
 export function HomeFestivalBoard() {
-  if (MOCK_FESTIVALS.length === 0) {
+  const festivalsQuery = useQuery({
+    queryKey: ["managed-festivals"],
+    queryFn: getManagedFestivals,
+  });
+
+  if (festivalsQuery.isLoading) {
+    return <p className="body-regular text-zinc-500">축제 목록을 불러오는 중...</p>;
+  }
+
+  if (festivalsQuery.isError) {
+    return <p className="body-small text-error">{getApiErrorMessage(festivalsQuery.error)}</p>;
+  }
+
+  const festivals = festivalsQuery.data ?? [];
+  if (festivals.length === 0) {
     return (
       <Empty className="min-h-[480px] rounded-none border-none p-0">
         <EmptyHeader>
@@ -129,7 +140,7 @@ export function HomeFestivalBoard() {
 
   const festivalsByStatus = STATUS_ORDER.map((status) => ({
     status,
-    festivals: MOCK_FESTIVALS.filter((festival) => festival.status === status),
+    festivals: festivals.filter((festival) => festival.progressStatus === status),
   }));
 
   return (

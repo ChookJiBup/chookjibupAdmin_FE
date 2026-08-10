@@ -93,3 +93,23 @@ export interface CreateFestivalWithMapResponse {
   festival: CreateFestivalResponse;
   map: FestivalMapSummary;
 }
+
+export interface ManagedFestivalDetail {
+  festivalId: string;
+  seriesId: string;
+  festivalName: string;
+  description: string;
+  festivalYear: number;
+  role: "FESTIVAL_OWNER" | "SUB_ADMIN";
+  festivalStatus: "DRAFT" | "PUBLISHED" | "CANCELLED";
+  progressStatus: "UPCOMING" | "ONGOING" | "COMPLETED";
+  address: string;
+  detailAddress: string;
+  startDate: string;
+  endDate: string;
+  operationStartTime: string;
+  operationEndTime: string;
+  locations: FestivalLocationResponse[];
+}
+
+export type UpdateFestivalRequest = CreateFestivalRequest;
