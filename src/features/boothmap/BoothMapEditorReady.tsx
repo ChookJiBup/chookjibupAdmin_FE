@@ -374,7 +374,12 @@ export function BoothMapEditorReady({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span title={past.length === 0 ? "되돌릴 편집 내용이 없습니다." : undefined}>
-              <IconButton icon={<ResetIcon />} aria-label="실행취소" disabled={past.length === 0} onClick={undo} />
+              <IconButton
+                icon={<ResetIcon />}
+                aria-label="실행취소"
+                disabled={past.length === 0}
+                onClick={undo}
+              />
             </span>
             <span title={future.length === 0 ? "다시 실행할 편집 내용이 없습니다." : undefined}>
               <IconButton
@@ -386,7 +391,13 @@ export function BoothMapEditorReady({
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <Button type="button" variant="link" size="sm" onClick={onRequestDelete} className="text-error">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={onRequestDelete}
+              className="text-error"
+            >
               배치도 삭제
             </Button>
             <input
@@ -431,10 +442,14 @@ export function BoothMapEditorReady({
           </div>
         ) : null}
         {saveError && !conflict ? (
-          <p className="body-caption text-error rounded-lg bg-white px-3 py-2 shadow">{saveError}</p>
+          <p className="body-caption text-error rounded-lg bg-white px-3 py-2 shadow">
+            {saveError}
+          </p>
         ) : null}
         {replaceError ? (
-          <p className="body-caption text-error rounded-lg bg-white px-3 py-2 shadow">{replaceError}</p>
+          <p className="body-caption text-error rounded-lg bg-white px-3 py-2 shadow">
+            {replaceError}
+          </p>
         ) : null}
         {savedAt ? (
           <p className="body-caption rounded-lg bg-white px-3 py-2 text-zinc-500 shadow">
@@ -468,8 +483,16 @@ export function BoothMapEditorReady({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <IconButton icon={<PlusIcon />} aria-label="확대" onClick={() => setZoom((z) => z + 0.1)} />
-          <IconButton icon={<MinusIcon />} aria-label="축소" onClick={() => setZoom((z) => z - 0.1)} />
+          <IconButton
+            icon={<PlusIcon />}
+            aria-label="확대"
+            onClick={() => setZoom((z) => z + 0.1)}
+          />
+          <IconButton
+            icon={<MinusIcon />}
+            aria-label="축소"
+            onClick={() => setZoom((z) => z - 0.1)}
+          />
         </div>
       </div>
 
@@ -488,7 +511,11 @@ export function BoothMapEditorReady({
                 initialName="새 구역"
                 style={{ left: 288 + 24 + anchor.x, top: anchor.y }}
                 onConfirm={(name) => {
-                  const zone: LocalZone = { id: createLocalId(), name, boothIds: Array.from(checkedIds) };
+                  const zone: LocalZone = {
+                    id: createLocalId(),
+                    name,
+                    boothIds: Array.from(checkedIds),
+                  };
                   setZones((prev) => [...prev, zone]);
                   setExpandedZoneIds((prev) => new Set(prev).add(zone.id));
                   setCheckedIds(new Set());

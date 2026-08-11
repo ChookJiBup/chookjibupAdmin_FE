@@ -100,7 +100,9 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
               {progress.detectedCount}개
             </p>
           ) : null}
-          <p className="body-caption text-zinc-400">시간이 걸릴 수 있습니다. 자동으로 갱신됩니다.</p>
+          <p className="body-caption text-zinc-400">
+            시간이 걸릴 수 있습니다. 자동으로 갱신됩니다.
+          </p>
         </div>
       </div>
     );

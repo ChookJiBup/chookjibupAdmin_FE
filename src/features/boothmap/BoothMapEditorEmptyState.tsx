@@ -114,7 +114,11 @@ export function BoothMapEditorEmptyState({
             <IconButton icon={<ResetIcon />} aria-label="실행취소" disabled />
           </span>
           <span title="편집 내용이 없어 다시실행할 수 없습니다.">
-            <IconButton icon={<ResetIcon className="-scale-y-100" />} aria-label="다시실행" disabled />
+            <IconButton
+              icon={<ResetIcon className="-scale-y-100" />}
+              aria-label="다시실행"
+              disabled
+            />
           </span>
         </div>
         <div className="flex items-center gap-3">
