@@ -2,34 +2,19 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { deleteFestivalMap, getMapEditor, replaceFestivalMap, saveMapEditor } from "./api";
-import { FacilityPalette } from "./FacilityPalette";
+import { BoothMapEditorReady } from "./BoothMapEditorReady";
 import { boothMapObjectsToNodeChanges, nodeToBoothMapObject } from "./geometry";
-import { PropertyPanel } from "./PropertyPanel";
 import { useBoothMapStore } from "./store";
-import type { BoothMapShapeType } from "./types";
-
-// Konva는 canvas(window)에 의존해 SSR에서 렌더링할 수 없다.
-const BoothMapCanvas = dynamic(() => import("./BoothMapCanvas"), { ssr: false });
 
 const MAX_DISPLAY_WIDTH = 900;
 
-const ROADMAP_STATUS_LABEL: Record<string, string> = {
-  ANALYZING: "AI 분석 중",
-  REVIEW_REQUIRED: "검수 필요",
-  EDITING: "편집 중",
-  PUBLISHED: "게시됨",
-};
-
 /**
- * 부스맵 편집기 — 팔레트 + 캔버스 + 속성 패널 + 툴바.
- * 노드는 `GET .../editor`로 불러오고, 저장은 `PUT .../editor`로 서버에 반영한다
- * (editRevision 기반 낙관적 락 — 다른 관리자가 먼저 저장하면 409가 온다).
+ * 부스맵 편집기 — 데이터 로드(`GET .../editor`)/저장(`PUT .../editor`, editRevision
+ * 기반 낙관적 락)/이미지 교체/배치도 삭제를 맡고, 화면은 `BoothMapEditorReady`에 맡긴다.
  */
 export function BoothMapEditor({
   festivalId,
@@ -45,7 +30,6 @@ export function BoothMapEditor({
   onImageReplaced: () => void;
 }) {
   const queryClient = useQueryClient();
-  const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
   const editorQuery = useQuery({
     queryKey: ["boothmap-editor", festivalId, mapId],
@@ -53,19 +37,10 @@ export function BoothMapEditor({
   });
 
   const objects = useBoothMapStore((state) => state.objects);
-  const tool = useBoothMapStore((state) => state.tool);
-  const zoom = useBoothMapStore((state) => state.zoom);
-  const past = useBoothMapStore((state) => state.past);
-  const future = useBoothMapStore((state) => state.future);
   const deletedNodeIds = useBoothMapStore((state) => state.deletedNodeIds);
   const loadObjects = useBoothMapStore((state) => state.loadObjects);
-  const setTool = useBoothMapStore((state) => state.setTool);
   const setZoom = useBoothMapStore((state) => state.setZoom);
-  const undo = useBoothMapStore((state) => state.undo);
-  const redo = useBoothMapStore((state) => state.redo);
-  const cancelDraftLine = useBoothMapStore((state) => state.cancelDraftLine);
 
-  const [pendingFacilityType, setPendingFacilityType] = useState<BoothMapShapeType | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -131,158 +106,29 @@ export function BoothMapEditor({
     );
   }
 
-  const { imageWidth, imageHeight, displayImageUrl, roadmapStatus, analysis } = editorQuery.data;
+  const { imageWidth, imageHeight, displayImageUrl } = editorQuery.data;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-300 p-2">
-        <span className="body-small-bold rounded bg-zinc-100 px-2 py-1 text-zinc-950">
-          {ROADMAP_STATUS_LABEL[roadmapStatus] ?? roadmapStatus}
-        </span>
-        <span className="body-caption text-zinc-500">
-          AI 인식 {analysis.detectedCount}개 · 검수 필요{" "}
-          {objects.filter((object) => object.reviewStatus === "REVIEW_REQUIRED").length}개
-        </span>
-
-        <div className="mx-1 h-5 w-px bg-zinc-200" />
-
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={undo}
-          disabled={past.length === 0}
-        >
-          Undo
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={redo}
-          disabled={future.length === 0}
-        >
-          Redo
-        </Button>
-
-        <div className="mx-1 h-5 w-px bg-zinc-200" />
-
-        <Button type="button" variant="outline" size="sm" onClick={() => setZoom((z) => z - 0.1)}>
-          -
-        </Button>
-        <span className="body-small w-12 text-center text-zinc-950">{Math.round(zoom * 100)}%</span>
-        <Button type="button" variant="outline" size="sm" onClick={() => setZoom((z) => z + 0.1)}>
-          +
-        </Button>
-
-        <div className="mx-1 h-5 w-px bg-zinc-200" />
-
-        <Button
-          type="button"
-          variant={tool === "queue-line" ? "primary" : "outline"}
-          size="sm"
-          onClick={() => {
-            if (tool === "queue-line") {
-              cancelDraftLine();
-            } else {
-              setPendingFacilityType(null);
-              setTool("queue-line");
-            }
-          }}
-        >
-          대기열 그리기
-        </Button>
-
-        <div className="ml-auto flex items-center gap-2">
-          <span title="배치 최적화 API가 아직 백엔드에 없어 동작하지 않습니다.">
-            <Button type="button" variant="outline" size="sm" disabled>
-              최적 배치 제안
-            </Button>
-          </span>
-          <input
-            ref={replaceFileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) replaceMutation.mutate(file);
-              if (replaceFileInputRef.current) replaceFileInputRef.current.value = "";
-            }}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => replaceFileInputRef.current?.click()}
-            disabled={replaceMutation.isPending}
-          >
-            {replaceMutation.isPending ? "교체 중..." : "이미지 교체"}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            배치도 삭제
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </Button>
-        </div>
-      </div>
-
-      {conflict ? (
-        <div className="flex items-center justify-between rounded-lg border border-orange-300 bg-orange-50 px-3 py-2">
-          <p className="body-caption text-orange-700">
-            다른 관리자가 먼저 이 도면을 저장했습니다. 새로고침하면 최신 내용을 다시 불러옵니다
-            (지금 화면의 편집 내용은 사라집니다).
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setConflict(false);
-              editorQuery.refetch();
-            }}
-          >
-            새로고침
-          </Button>
-        </div>
-      ) : null}
-      {saveMutation.isError && !conflict ? (
-        <p className="body-caption text-error">{getApiErrorMessage(saveMutation.error)}</p>
-      ) : null}
-      {replaceMutation.isError ? (
-        <p className="body-caption text-error">{getApiErrorMessage(replaceMutation.error)}</p>
-      ) : null}
-      {savedAt ? <p className="body-caption text-zinc-500">{savedAt}에 저장됨</p> : null}
-
-      <div className="flex items-start gap-3">
-        <FacilityPalette
-          pendingType={pendingFacilityType}
-          onSelectPending={(type) => {
-            if (type) setTool("select");
-            setPendingFacilityType(type);
-          }}
-        />
-        <BoothMapCanvas
-          worldWidth={imageWidth}
-          worldHeight={imageHeight}
-          backgroundImageUrl={displayImageUrl}
-          pendingFacilityType={pendingFacilityType}
-          onPendingFacilityPlaced={() => setPendingFacilityType(null)}
-        />
-        <PropertyPanel />
-      </div>
-
+    <>
+      <BoothMapEditorReady
+        festivalId={festivalId}
+        imageWidth={imageWidth}
+        imageHeight={imageHeight}
+        displayImageUrl={displayImageUrl}
+        onSave={() => saveMutation.mutate()}
+        saving={saveMutation.isPending}
+        saveError={saveMutation.isError ? getApiErrorMessage(saveMutation.error) : null}
+        savedAt={savedAt}
+        conflict={conflict}
+        onRefreshAfterConflict={() => {
+          setConflict(false);
+          editorQuery.refetch();
+        }}
+        onReplaceFile={(file) => replaceMutation.mutate(file)}
+        replacing={replaceMutation.isPending}
+        replaceError={replaceMutation.isError ? getApiErrorMessage(replaceMutation.error) : null}
+        onRequestDelete={() => setDeleteDialogOpen(true)}
+      />
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -294,6 +140,6 @@ export function BoothMapEditor({
         confirmPending={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
       />
-    </div>
+    </>
   );
 }

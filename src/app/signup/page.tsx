@@ -11,10 +11,8 @@ export default function SignupPage() {
   return (
     <>
       <Header variant="signup" />
-      <main className="bg-dimmed grid flex-1 grid-cols-3 items-center gap-6 p-8">
-        <div className="col-start-2 flex justify-center">
-          {done ? <SignupCompletePanel /> : <SignupForm onComplete={() => setDone(true)} />}
-        </div>
+      <main className="bg-dimmed flex flex-1 flex-col items-center justify-center gap-2 p-8">
+        {done ? <SignupCompletePanel /> : <SignupForm onComplete={() => setDone(true)} />}
       </main>
     </>
   );
