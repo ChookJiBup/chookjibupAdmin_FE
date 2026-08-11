@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Map, useKakaoLoader } from "react-kakao-maps-sdk";
 import {
-  Cross1Icon,
   Cross2Icon,
   DimensionsIcon,
   FileIcon,
@@ -19,6 +18,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { FESTIVAL_MAP_CENTER } from "@/features/dashboard/mockData";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
+import { BoothMapGuideBanner } from "./BoothMapGuideBanner";
 import { setCachedMapId } from "./mapIdCache";
 
 /**
@@ -40,7 +40,6 @@ export function BoothMapEditorEmptyState({
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const [zoomStep, setZoomStep] = useState(0);
   const [manualMapId, setManualMapId] = useState("");
-  const [guideOpen, setGuideOpen] = useState(true);
   const [mapLoading, mapError] = useKakaoLoader({
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
   });
@@ -106,24 +105,7 @@ export function BoothMapEditorEmptyState({
           </div>
         </div>
 
-        {guideOpen ? (
-          <div className="flex w-[282px] items-start justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-5 py-4 shadow-md">
-            <div className="flex flex-col gap-1">
-              <p className="body-small-bold text-zinc-950">축제부스지도 수정</p>
-              <p className="body-small text-zinc-500">
-                우측 리스트/지도상의 핀/모달을 선택해 상세 정보를 편집할 수 있습니다.
-              </p>
-            </div>
-            <IconButton
-              variant="ghost"
-              size="sm"
-              icon={<Cross1Icon />}
-              aria-label="안내 닫기"
-              onClick={() => setGuideOpen(false)}
-              className="-mr-1 -mt-1 shrink-0"
-            />
-          </div>
-        ) : null}
+        <BoothMapGuideBanner />
       </div>
 
       <div className="absolute top-3 right-3 flex items-center gap-4">

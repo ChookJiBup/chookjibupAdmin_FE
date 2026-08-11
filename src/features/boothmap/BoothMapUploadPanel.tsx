@@ -108,43 +108,37 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
 
   if (state.status === "failed") {
     return (
-      <div className="col-span-3 flex flex-col gap-4">
-        <h1 className="heading-small">축제 부스맵 수정 (관리자) — {festivalId}</h1>
-        <div className="flex flex-col gap-2">
+      <div className="relative h-full w-full">
+        <div className="absolute top-3 left-1/2 z-30 w-[420px] -translate-x-1/2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 shadow-md">
           <p className="body-small text-error">{state.message}</p>
           <p className="body-caption text-zinc-500">
             아래 편집기에서 이미지를 다시 교체해 재분석을 시도할 수 있습니다.
           </p>
-          <BoothMapEditor
-            festivalId={festivalId}
-            mapId={state.mapId}
-            onMapDeleted={() => {
-              clearCachedMapId(festivalId);
-              setOverride({ status: "no-map" });
-            }}
-            onImageReplaced={() =>
-              setOverride({ status: "polling", mapId: state.mapId, progress: null })
-            }
-          />
         </div>
+        <BoothMapEditor
+          festivalId={festivalId}
+          mapId={state.mapId}
+          onMapDeleted={() => {
+            clearCachedMapId(festivalId);
+            setOverride({ status: "no-map" });
+          }}
+          onImageReplaced={() =>
+            setOverride({ status: "polling", mapId: state.mapId, progress: null })
+          }
+        />
       </div>
     );
   }
 
   return (
-    <div className="col-span-3 flex flex-col gap-4">
-      <h1 className="heading-small">축제 부스맵 수정 (관리자) — {festivalId}</h1>
-      <BoothMapEditor
-        festivalId={festivalId}
-        mapId={state.mapId}
-        onMapDeleted={() => {
-          clearCachedMapId(festivalId);
-          setOverride({ status: "no-map" });
-        }}
-        onImageReplaced={() =>
-          setOverride({ status: "polling", mapId: state.mapId, progress: null })
-        }
-      />
-    </div>
+    <BoothMapEditor
+      festivalId={festivalId}
+      mapId={state.mapId}
+      onMapDeleted={() => {
+        clearCachedMapId(festivalId);
+        setOverride({ status: "no-map" });
+      }}
+      onImageReplaced={() => setOverride({ status: "polling", mapId: state.mapId, progress: null })}
+    />
   );
 }
