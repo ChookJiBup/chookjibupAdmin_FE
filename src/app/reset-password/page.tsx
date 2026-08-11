@@ -11,14 +11,12 @@ export default function ResetPasswordPage() {
   return (
     <>
       <Header variant="default" />
-      <main className="bg-dimmed grid flex-1 grid-cols-3 items-center gap-6 p-8">
-        <div className="col-start-2 flex justify-center">
-          {done ? (
-            <ResetPasswordCompletePanel />
-          ) : (
-            <ResetPasswordForm onComplete={() => setDone(true)} />
-          )}
-        </div>
+      <main className="bg-dimmed flex flex-1 items-center justify-center p-8">
+        {done ? (
+          <ResetPasswordCompletePanel />
+        ) : (
+          <ResetPasswordForm onComplete={() => setDone(true)} />
+        )}
       </main>
     </>
   );
