@@ -28,7 +28,13 @@ export function HeaderNav({
 }: HeaderNavProps) {
   return (
     <div className="flex flex-col">
-      <Header variant="login" userName={userName} festivalName={festivalName} role={role} />
+      <Header
+        variant="login"
+        href="/console"
+        userName={userName}
+        festivalName={festivalName}
+        role={role}
+      />
       {hideNav ? null : <Nav items={navItems} festivalId={festivalId} role={role} />}
     </div>
   );

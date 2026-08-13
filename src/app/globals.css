@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: var(--color-zinc-50);
   --foreground: #171717;
 }
 
@@ -124,4 +124,13 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* 스크롤 기능은 유지하되, 스크롤바는 어디서도 시각적으로 보이지 않게 한다. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
 }

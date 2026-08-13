@@ -4,9 +4,19 @@ import type {
   CreateFestivalRequest,
   CreateFestivalResponse,
   CreateFestivalWithMapResponse,
+  FestivalSeriesSearchResult,
   ManagedFestivalDetail,
   UpdateFestivalRequest,
 } from "./types";
+
+/** "축제 등록" 화면에서 축제명 일부로 기존 축제 시리즈를 검색한다. */
+export async function searchFestivalSeries(keyword: string): Promise<FestivalSeriesSearchResult[]> {
+  const { data } = await adminApiClient.get<ApiResponse<FestivalSeriesSearchResult[]>>(
+    "/festival-series/search",
+    { params: { keyword } },
+  );
+  return data.data;
+}
 
 export async function getManagedFestival(festivalId: string): Promise<ManagedFestivalDetail> {
   const { data } = await adminApiClient.get<ApiResponse<ManagedFestivalDetail>>(

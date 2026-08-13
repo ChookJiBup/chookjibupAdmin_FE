@@ -31,8 +31,8 @@ export function CompleteDialog({
   return (
     <Dialog.Root open modal={false}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-dimmed" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 flex w-[480px] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl bg-white p-8">
+        <Dialog.Overlay className="fixed inset-x-0 top-[72px] bottom-0 z-30 bg-dimmed" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 flex w-[480px] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl bg-white p-8">
           <div className="size-[75px] rounded-full bg-zinc-200" />
 
           <Dialog.Title className="heading-regular mt-2 text-center text-zinc-950">

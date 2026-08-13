@@ -64,12 +64,12 @@ export function SearchDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-dimmed" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8">
-          <div className="flex items-center justify-between">
+        <Dialog.Overlay className="fixed inset-x-0 top-[118px] bottom-0 z-30 bg-dimmed" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8">
+          <div className="relative flex items-center justify-center">
             <Dialog.Title className="heading-small text-zinc-950">{title}</Dialog.Title>
-            <Dialog.Close aria-label="닫기" className="text-zinc-950">
-              <Cross2Icon className="size-4" />
+            <Dialog.Close aria-label="닫기" className="absolute right-0 text-zinc-950">
+              <Cross2Icon className="size-6" />
             </Dialog.Close>
           </div>
 
@@ -96,12 +96,12 @@ export function SearchDialog({
             />
 
             {state === "default" ? (
-              <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
+              <div className="mt-2 flex flex-col gap-2 rounded-lg bg-zinc-50 px-4 py-3">
                 <p className="body-small-bold text-zinc-950">{helperText}</p>
                 {helperItems && helperItems.length > 0 ? (
                   <ul className="flex flex-col gap-1">
                     {helperItems.map((item) => (
-                      <li key={item} className="body-small text-zinc-500">
+                      <li key={item} className="body-small text-zinc-950">
                         · {item}
                       </li>
                     ))}
@@ -111,26 +111,26 @@ export function SearchDialog({
             ) : null}
 
             {state === "none" ? (
-              <div className="flex flex-col gap-1 rounded-lg bg-zinc-50 p-4">
+              <div className="mt-2 flex flex-col gap-2 rounded-md bg-zinc-100 px-4 py-3">
                 <p className="body-small-bold text-zinc-950">{noResultText}</p>
                 {noResultSubtext ? (
-                  <p className="body-small text-zinc-500">{noResultSubtext}</p>
+                  <p className="body-small text-zinc-950">{noResultSubtext}</p>
                 ) : null}
               </div>
             ) : null}
 
             {state === "result" ? (
-              <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border border-zinc-200 p-1">
+              <ul className="flex max-h-[340px] flex-col divide-y divide-zinc-200 overflow-y-auto">
                 {results.map((result) => (
                   <li key={result.id}>
                     <button
                       type="button"
                       onClick={() => onSelectResult(result)}
-                      className="flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-zinc-100"
+                      className="flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-zinc-100"
                     >
                       <span className="body-small-bold text-zinc-950">{result.label}</span>
                       {result.description ? (
-                        <span className="body-caption text-zinc-500">{result.description}</span>
+                        <span className="body-small text-zinc-950">{result.description}</span>
                       ) : null}
                     </button>
                   </li>
@@ -139,7 +139,12 @@ export function SearchDialog({
             ) : null}
 
             {state !== "default" ? (
-              <Button type="button" variant="outline" onClick={() => onManualInput(value.trim())}>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2 self-start"
+                onClick={() => onManualInput(value.trim())}
+              >
                 {manualInputLabel}
               </Button>
             ) : null}

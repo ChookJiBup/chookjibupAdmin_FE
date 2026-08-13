@@ -46,6 +46,21 @@ function formatFestivalDateRange(startDate: string, endDate: string) {
   return `${format(startDate)}- ${format(endDate)}`;
 }
 
+/** 오늘부터 축제 시작일까지 남은 일수. 자정 기준 캘린더 일수 차이로 계산한다. */
+function calculateDday(startDate: string) {
+  const [year, month, day] = startDate.split("-").map(Number);
+  const start = new Date(year, month - 1, day);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = start.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function formatDday(startDate: string) {
+  const dday = calculateDday(startDate);
+  return dday === 0 ? "D-DAY" : dday > 0 ? `D-${dday}` : `D+${Math.abs(dday)}`;
+}
+
 /** 역할에 따라 축제 카드 클릭 시 이동할 경로. 총괄관리자는 축제관리, 운영자는 대시보드로 간다. */
 function getFestivalHref(festival: FestivalSummary) {
   return festival.role === "FESTIVAL_OWNER"
@@ -70,6 +85,9 @@ function FestivalCard({ festival }: { festival: FestivalSummary }) {
             {formatFestivalDateRange(festival.startDate, festival.endDate)}
           </p>
         </div>
+        {festival.progressStatus === "UPCOMING" && (
+          <p className="body-small text-zinc-600">• {formatDday(festival.startDate)}</p>
+        )}
       </div>
     </Link>
   );

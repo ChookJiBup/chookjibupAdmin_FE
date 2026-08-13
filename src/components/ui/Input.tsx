@@ -9,7 +9,9 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   /** 필드 위(또는 "label-left" 레이아웃에서는 옆)에 렌더링되는 라벨. */
   label?: string;
   /** 필드 아래 렌더링되는 도움말 텍스트. `errorText`가 있으면 숨겨진다. "label-left" 레이아웃에서는 표시되지 않는다. */
-  helperText?: string;
+  helperText?: ReactNode;
+  /** helperText의 타이포그래피·색상 클래스. 기본값은 `body-caption text-zinc-500`. */
+  helperTextClassName?: string;
   /** 필드 아래 렌더링되는 에러 메시지. 필드를 에러 상태로 전환한다. "label-left" 레이아웃에서는 표시되지 않는다. */
   errorText?: string;
   /** label/field/button의 구조적 레이아웃. 기본값은 `"default"`(라벨 위, 필드 아래). */
@@ -23,6 +25,7 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
 export function Input({
   label,
   helperText,
+  helperTextClassName = "body-small text-zinc-500",
   errorText,
   layout = "default",
   button,
@@ -57,8 +60,8 @@ export function Input({
       required={required}
       aria-invalid={isError || undefined}
       aria-describedby={describedBy}
-      className={`w-full rounded-lg border border-zinc-400 bg-white px-3 py-2 body-regular text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:placeholder:text-zinc-400 ${
-        isError ? "border-red-600 focus:border-red-600 placeholder:text-red-600" : ""
+      className={`w-full rounded-lg border border-zinc-400 bg-white px-3 py-2 body-regular text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:placeholder:text-zinc-400 ${
+        isError ? "border-red-600 placeholder:text-red-600" : ""
       } ${className ?? ""}`}
       {...props}
     />
@@ -74,12 +77,12 @@ export function Input({
   }
 
   return (
-    <div className={`flex w-full flex-col gap-1 ${wrapperClassName ?? ""}`}>
+    <div className={`flex w-full min-w-0 flex-col gap-1 ${wrapperClassName ?? ""}`}>
       {labelEl}
 
       {layout === "with-button" ? (
-        <div className="flex items-center gap-2">
-          <div className="flex-1">{field}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[140px] flex-1">{field}</div>
           {button}
         </div>
       ) : (
@@ -87,11 +90,11 @@ export function Input({
       )}
 
       {isError ? (
-        <p id={errorId} className="body-caption text-red-600">
+        <p id={errorId} className="body-small text-red-600">
           {errorText}
         </p>
       ) : helperText ? (
-        <p id={helperId} className="body-caption text-zinc-500">
+        <p id={helperId} className={helperTextClassName}>
           {helperText}
         </p>
       ) : null}

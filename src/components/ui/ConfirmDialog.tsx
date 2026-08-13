@@ -34,12 +34,12 @@ export function ConfirmDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-dimmed" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8">
-          <div className="flex items-center justify-end">
+        <Dialog.Overlay className="fixed inset-x-0 top-[118px] bottom-0 z-30 bg-dimmed" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8">
+          <div className="flex h-14 items-center justify-end">
             <Dialog.Close asChild>
               <button type="button" aria-label="닫기" className="text-zinc-950">
-                <Cross2Icon className="size-4" />
+                <Cross2Icon className="size-6" />
               </button>
             </Dialog.Close>
           </div>
