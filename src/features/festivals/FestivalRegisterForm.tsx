@@ -1,15 +1,10 @@
 "use client";
 
-import {
-  CheckIcon,
-  Cross2Icon,
-  MagnifyingGlassIcon,
-  PlusIcon,
-  TrashIcon,
-} from "@radix-ui/react-icons";
+import { CheckIcon, Cross2Icon, MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { useKakaoLoader } from "react-kakao-maps-sdk";
 import {
   Attachment,
   AttachmentAction,
@@ -19,21 +14,19 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@/components/ui/attachment";
+import { Bottombar } from "@/components/ui/Bottombar";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { setCachedMapId } from "@/features/boothmap/mapIdCache";
-import { createFestival, createFestivalWithMap } from "@/features/festivals/api";
+import {
+  createFestival,
+  createFestivalWithMap,
+  searchFestivalSeries,
+} from "@/features/festivals/api";
+import type { FestivalSeriesSearchResult } from "@/features/festivals/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import {
   createInitialLocationDrafts,
@@ -42,14 +35,14 @@ import {
   toFestivalLocationRequests,
   type LocationDraft,
 } from "./locationDraft";
-import { SearchDialog, type SearchDialogState } from "./SearchDialog";
-import { FESTIVAL_LOCATION_TYPE_LABEL, type FestivalLocationType } from "./types";
+import { SearchDialog, type SearchDialogResult, type SearchDialogState } from "./SearchDialog";
 
 const DATE_DISPLAY_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/;
-const LOCATION_TYPE_OPTIONS = Object.entries(FESTIVAL_LOCATION_TYPE_LABEL) as [
-  FestivalLocationType,
-  string,
-][];
+
+/** "yyyy-MM-dd"를 화면 표기 "YYYY.mm.dd"로 변환한다. */
+function toDisplayDate(isoDate: string) {
+  return isoDate.replaceAll("-", ".");
+}
 
 /** "YYYY.mm.dd" 화면 표기를 API가 요구하는 "yyyy-MM-dd"로 변환한다. */
 function toIsoDate(displayDate: string) {
@@ -58,6 +51,12 @@ function toIsoDate(displayDate: string) {
 
 function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 숫자만 입력받아 "YYYY.mm.dd" 형태로 자동 포맷팅한다. */
+function formatDateInput(raw: string) {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join(".");
 }
 
 export function FestivalRegisterForm() {
@@ -75,17 +74,79 @@ export function FestivalRegisterForm() {
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
   const [festivalSearchState, setFestivalSearchState] = useState<SearchDialogState>("default");
+  const [festivalSearchResults, setFestivalSearchResults] = useState<FestivalSeriesSearchResult[]>(
+    [],
+  );
+  const [festivalSearchPending, setFestivalSearchPending] = useState(false);
   const [addressSearchTargetKey, setAddressSearchTargetKey] = useState<string | null>(null);
   const [addressSearchState, setAddressSearchState] = useState<SearchDialogState>("default");
+  const [addressSearchResults, setAddressSearchResults] = useState<SearchDialogResult[]>([]);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+
+  useKakaoLoader({
+    appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
+    libraries: ["services"],
+  });
+
+  async function searchFestivals(keyword: string) {
+    setFestivalSearchPending(true);
+    try {
+      const results = await searchFestivalSeries(keyword);
+      setFestivalSearchResults(results);
+      setFestivalSearchState(results.length > 0 ? "result" : "none");
+    } finally {
+      setFestivalSearchPending(false);
+    }
+  }
+
+  function applyFestivalSeries(series: FestivalSeriesSearchResult) {
+    setName(series.name);
+    setDescription(series.latestDescription);
+    setLocations((current) => {
+      const [first, ...rest] = current;
+      return [
+        {
+          ...first,
+          roadAddress: series.latestAddress,
+          detailAddress: series.latestDetailAddress,
+        },
+        ...rest,
+      ];
+    });
+    setStartDate(toDisplayDate(series.latestStartDate));
+    setEndDate(toDisplayDate(series.latestEndDate));
+    setFestivalSearchOpen(false);
+  }
+
+  function searchAddress(keyword: string) {
+    const geocoder = new kakao.maps.services.Geocoder();
+    geocoder.addressSearch(keyword, (data, status) => {
+      if (status !== kakao.maps.services.Status.OK || data.length === 0) {
+        setAddressSearchResults([]);
+        setAddressSearchState("none");
+        return;
+      }
+      setAddressSearchResults(
+        data.map((item, index) => ({
+          id: `${item.address_name}-${index}`,
+          label: item.road_address?.address_name ?? item.address_name,
+          description: item.address_name,
+        })),
+      );
+      setAddressSearchState("result");
+    });
+  }
 
   function updateLocation(key: string, patch: Partial<Omit<LocationDraft, "key">>) {
     setLocations((current) => current.map((loc) => (loc.key === key ? { ...loc, ...patch } : loc)));
   }
 
   function addLocation() {
-    setLocations((current) => [...current, createLocationDraft()]);
+    setLocations((current) => [
+      ...current,
+      createLocationDraft("SUB_VENUE", `장소 ${current.length + 1}`),
+    ]);
   }
 
   function removeLocation(key: string) {
@@ -151,7 +212,7 @@ export function FestivalRegisterForm() {
   const addressSearchTarget = locations.find((loc) => loc.key === addressSearchTargetKey) ?? null;
 
   return (
-    <div className="col-span-2 flex flex-col gap-6">
+    <div className="col-span-2 flex min-w-0 flex-col gap-6 pb-24">
       <FormSection label="축제 기본정보 입력">
         <Input
           layout="with-button"
@@ -160,7 +221,7 @@ export function FestivalRegisterForm() {
           onChange={(event) => setName(event.target.value)}
           button={
             <Button type="button" onClick={() => setFestivalSearchOpen(true)}>
-              기본정보 불러오기
+              축제 검색하기
             </Button>
           }
         />
@@ -169,31 +230,16 @@ export function FestivalRegisterForm() {
           rows={3}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          className="rounded-lg border-zinc-400 bg-white body-regular! text-zinc-950 placeholder:text-zinc-400 focus-visible:border-primary focus-visible:ring-0"
         />
       </FormSection>
 
-      <FormSection label="축제 장소 입력">
+      <FormSection label="축제 상세정보 입력">
         <div className="flex flex-col gap-4">
           {locations.map((location, index) => (
-            <div
-              key={location.key}
-              className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
+            <div key={location.key} className="flex flex-col gap-3">
+              {index > 0 ? (
+                <div className="flex items-center justify-between gap-2">
                   <p className="body-small-bold text-zinc-950">장소 {index + 1}</p>
-                  <label className="flex items-center gap-1.5">
-                    <Checkbox
-                      checked={location.key === primaryKey}
-                      onCheckedChange={(checked) => {
-                        if (checked) setPrimaryKey(location.key);
-                      }}
-                    />
-                    <span className="body-caption text-zinc-500">대표 장소</span>
-                  </label>
-                </div>
-                {locations.length > 1 ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -203,39 +249,11 @@ export function FestivalRegisterForm() {
                   >
                     삭제
                   </Button>
-                ) : null}
-              </div>
-
-              <div className="flex gap-3">
-                <Select
-                  value={location.locationType}
-                  onValueChange={(value) =>
-                    updateLocation(location.key, { locationType: value as FestivalLocationType })
-                  }
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LOCATION_TYPE_OPTIONS.map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  wrapperClassName="flex-1"
-                  placeholder="장소 이름(예: 메인 무대)"
-                  value={location.locationName}
-                  onChange={(event) =>
-                    updateLocation(location.key, { locationName: event.target.value })
-                  }
-                />
-              </div>
+                </div>
+              ) : null}
 
               {location.roadAddress ? (
-                <Input disabled value={location.roadAddress} />
+                <Input disabled value={location.roadAddress} className="disabled:border-zinc-400!" />
               ) : (
                 <button
                   type="button"
@@ -258,10 +276,6 @@ export function FestivalRegisterForm() {
               />
             </div>
           ))}
-
-          <Button type="button" variant="outline" icon={<PlusIcon />} onClick={addLocation}>
-            장소 추가
-          </Button>
         </div>
 
         <div className="flex gap-3">
@@ -269,17 +283,31 @@ export function FestivalRegisterForm() {
             label="시작날짜"
             wrapperClassName="flex-1"
             placeholder="YYYY.mm.dd"
+            inputMode="numeric"
+            maxLength={10}
             value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
+            onChange={(event) => setStartDate(formatDateInput(event.target.value))}
           />
           <Input
             label="종료날짜"
             wrapperClassName="flex-1"
             placeholder="YYYY.mm.dd"
+            inputMode="numeric"
+            maxLength={10}
             value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
+            onChange={(event) => setEndDate(formatDateInput(event.target.value))}
           />
         </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          icon={<PlusIcon />}
+          className="mt-3"
+          onClick={addLocation}
+        >
+          장소 추가
+        </Button>
         {formError ? <p className="body-caption text-error">{formError}</p> : null}
       </FormSection>
 
@@ -325,14 +353,7 @@ export function FestivalRegisterForm() {
         <p className="body-small text-error">{getApiErrorMessage(createMutation.error)}</p>
       ) : null}
 
-      <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={() => setCancelDialogOpen(true)}>
-          취소하기
-        </Button>
-        <Button type="button" onClick={handleSubmitClick}>
-          등록하기
-        </Button>
-      </div>
+      <Bottombar onCancel={() => setCancelDialogOpen(true)} onSubmit={handleSubmitClick} />
 
       <SearchDialog
         open={festivalSearchOpen}
@@ -341,16 +362,26 @@ export function FestivalRegisterForm() {
           if (!next) setFestivalSearchState("default");
         }}
         title="축제 검색"
-        placeholder="검색어를 입력해 주세요"
+        placeholder="축제명을 입력해 주세요"
         helperText="축제명으로 검색하면 이전 축제 정보를 불러올 수 있어요."
-        helperItems={["도로명 + 건물번호(예: 세계로 10)"]}
+        helperItems={["이미 API에 등록된 축제면 이전 말고 현재 축제 정보를 불러오는지"]}
         state={festivalSearchState}
-        // 이전 축제 정보를 불러오는 검색 API가 아직 없어 검색하면 항상 결과 없음으로 처리한다.
-        onSearch={() => setFestivalSearchState("none")}
-        noResultSubtext="이전 축제 정보를 불러오는 기능은 아직 준비 중입니다."
-        onSelectResult={() => {}}
-        onManualInput={() => setFestivalSearchOpen(false)}
-        manualInputLabel="닫기"
+        results={festivalSearchResults.map((series) => ({
+          id: series.seriesId,
+          label: series.name,
+          description: series.latestAddress,
+        }))}
+        searchPending={festivalSearchPending}
+        onSearch={searchFestivals}
+        noResultSubtext="하단의 직접 입력을 눌러 축제명을 등록해 주세요"
+        onSelectResult={(result) => {
+          const series = festivalSearchResults.find((item) => item.seriesId === result.id);
+          if (series) applyFestivalSeries(series);
+        }}
+        onManualInput={(value) => {
+          setName(value);
+          setFestivalSearchOpen(false);
+        }}
       />
 
       <SearchDialog
@@ -370,10 +401,14 @@ export function FestivalRegisterForm() {
           "지역명(동/리) + 건물명(예: 한국관광공사)",
         ]}
         state={addressSearchState}
-        // 주소 검색 API가 아직 없어 검색하면 항상 결과 없음으로 처리하고, 직접 입력으로 유도한다.
-        onSearch={() => setAddressSearchState("none")}
-        noResultSubtext="주소 검색 기능은 아직 준비 중입니다. 직접 입력해 주세요."
-        onSelectResult={() => {}}
+        results={addressSearchResults}
+        onSearch={searchAddress}
+        noResultSubtext="하단의 직접 입력을 눌러 주소를 등록해 주세요"
+        onSelectResult={(result) => {
+          if (addressSearchTargetKey)
+            updateLocation(addressSearchTargetKey, { roadAddress: result.label });
+          setAddressSearchTargetKey(null);
+        }}
         onManualInput={(value) => {
           if (addressSearchTargetKey)
             updateLocation(addressSearchTargetKey, { roadAddress: value });
@@ -387,7 +422,7 @@ export function FestivalRegisterForm() {
         title="등록을 취소하시겠습니까?"
         description="작성된 정보는 저장되지 않습니다."
         cancelLabel="취소"
-        confirmLabel="취소"
+        confirmLabel="확인"
         onConfirm={() => router.back()}
       />
 

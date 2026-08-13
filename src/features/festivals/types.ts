@@ -113,3 +113,22 @@ export interface ManagedFestivalDetail {
 }
 
 export type UpdateFestivalRequest = CreateFestivalRequest;
+
+/** "축제 등록" 화면에서 축제명으로 기존 축제 시리즈를 검색한 결과 한 건. */
+export interface FestivalSeriesSearchResult {
+  seriesId: string;
+  name: string;
+  latestFestivalId: string;
+  latestYear: number;
+  latestDescription: string;
+  latestAddress: string;
+  latestDetailAddress: string;
+  /** yyyy-MM-dd */
+  latestStartDate: string;
+  /** yyyy-MM-dd */
+  latestEndDate: string;
+  /** HH:mm:ss */
+  latestOperationStartTime: string;
+  /** HH:mm:ss */
+  latestOperationEndTime: string;
+}

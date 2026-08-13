@@ -15,11 +15,12 @@ function createDraftKey() {
 
 export function createLocationDraft(
   locationType: FestivalLocationType = "SUB_VENUE",
+  locationName = "",
 ): LocationDraft {
   return {
     key: createDraftKey(),
     locationType,
-    locationName: "",
+    locationName,
     roadAddress: "",
     detailAddress: "",
   };
