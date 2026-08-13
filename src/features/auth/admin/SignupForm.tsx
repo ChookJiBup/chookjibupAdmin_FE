@@ -1,16 +1,38 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthCard } from "@/components/ui/AuthCard";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { confirmEmailVerification, requestEmailVerification, signupAdmin } from "./api";
+import type { PolicySlug } from "./policyContent";
 
-type Step = "email" | "code" | "profile";
+type Step = "agree" | "email" | "code" | "profile";
 
 const CODE_TIMER_SECONDS = 5 * 60;
+
+interface AgreementItem {
+  key: PolicySlug;
+  label: string;
+}
+
+const AGREEMENT_ITEMS: AgreementItem[] = [
+  { key: "terms", label: "축지법 서비스 이용약관" },
+  { key: "privacy", label: "개인정보 수집 및 이용동의" },
+  { key: "privacy-outsourcing", label: "개인정보 취급 위탁 동의" },
+];
+
+type Agreements = Record<PolicySlug, boolean>;
+
+const INITIAL_AGREEMENTS: Agreements = {
+  terms: false,
+  privacy: false,
+  "privacy-outsourcing": false,
+};
 
 interface SignupFormProps {
   /** 회원가입이 성공적으로 완료됐을 때 호출된다. */
@@ -24,7 +46,8 @@ function formatRemaining(seconds: number) {
 }
 
 export function SignupForm({ onComplete }: SignupFormProps) {
-  const [step, setStep] = useState<Step>("email");
+  const [step, setStep] = useState<Step>("agree");
+  const [agreements, setAgreements] = useState<Agreements>(INITIAL_AGREEMENTS);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -35,7 +58,13 @@ export function SignupForm({ onComplete }: SignupFormProps) {
 
   useEffect(() => {
     if (step !== "code" || remaining <= 0) return;
-    const timer = setInterval(() => setRemaining((value) => value - 1), 1000);
+    const timer = setInterval(() => {
+      setRemaining((value) => {
+        const next = value - 1;
+        if (next <= 0) setCode("");
+        return next;
+      });
+    }, 1000);
     return () => clearInterval(timer);
   }, [step, remaining]);
 
@@ -57,6 +86,17 @@ export function SignupForm({ onComplete }: SignupFormProps) {
     onSuccess: () => setStep("profile"),
   });
 
+  const allAgreed = AGREEMENT_ITEMS.every((item) => agreements[item.key]);
+
+  const toggleAll = (checked: boolean) => {
+    setAgreements(
+      AGREEMENT_ITEMS.reduce(
+        (acc, item) => ({ ...acc, [item.key]: checked }),
+        {} as Agreements,
+      ),
+    );
+  };
+
   const signupMutation = useMutation({
     mutationFn: () =>
       signupAdmin({
@@ -71,12 +111,56 @@ export function SignupForm({ onComplete }: SignupFormProps) {
 
   return (
     <AuthCard title="회원가입">
+      {step === "agree" && (
+        <div className="mt-8 flex flex-col">
+          <label className="flex cursor-pointer items-center gap-2 py-2">
+            <Checkbox
+              checked={allAgreed}
+              onCheckedChange={(checked) => toggleAll(checked === true)}
+            />
+            <span className="body-large-bold text-zinc-950">전체 동의하기</span>
+          </label>
+
+          <div className="mt-2 flex flex-col divide-y divide-zinc-200">
+            {AGREEMENT_ITEMS.map((item) => (
+              <div key={item.key} className="flex items-center justify-between py-4">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <Checkbox
+                    checked={agreements[item.key]}
+                    onCheckedChange={(checked) =>
+                      setAgreements((prev) => ({ ...prev, [item.key]: checked === true }))
+                    }
+                  />
+                  <span className="body-regular-bold inline-flex items-center gap-1 text-zinc-950">
+                    <span className="text-error">필수</span>
+                    <span>{item.label}</span>
+                  </span>
+                </label>
+                <Link
+                  href={`/policy/${item.key}`}
+                  target="_blank"
+                  className="body-regular text-zinc-950 underline"
+                >
+                  보기
+                </Link>
+              </div>
+            ))}
+          </div>
+
+          <Button
+            type="button"
+            size="lg"
+            disabled={!allAgreed}
+            className="mt-8 w-full"
+            onClick={() => setStep("email")}
+          >
+            다음
+          </Button>
+        </div>
+      )}
+
       {step === "email" && (
         <>
-          <p className="body-regular mt-2 text-center text-zinc-950">
-            공무원 이메일 인증을 통해 계정을 생성합니다.
-          </p>
-
           <form
             className="mt-8 flex flex-col gap-5"
             onSubmit={(event) => {
@@ -88,7 +172,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
               type="email"
               required
               label="이메일"
-              placeholder="정부/공공기관 이메일"
+              placeholder="이메일주소(공무원)"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -102,10 +186,10 @@ export function SignupForm({ onComplete }: SignupFormProps) {
             <Button
               type="submit"
               size="lg"
-              disabled={requestCodeMutation.isPending}
+              disabled={!email || requestCodeMutation.isPending}
               className="w-full"
             >
-              {requestCodeMutation.isPending ? "발송 중..." : "인증코드 받기"}
+              {requestCodeMutation.isPending ? "발송 중..." : "인증요청"}
             </Button>
           </form>
         </>
@@ -133,14 +217,19 @@ export function SignupForm({ onComplete }: SignupFormProps) {
             value={code}
             onChange={(event) => setCode(event.target.value)}
             helperText={
-              remaining > 0
-                ? `남은 시간 ${formatRemaining(remaining)}`
-                : "인증번호가 만료되었습니다."
+              remaining > 0 ? (
+                <>
+                  남은 시간{" "}
+                  <span className="body-small-bold">{formatRemaining(remaining)}</span>
+                </>
+              ) : (
+                "인증번호가 만료되었습니다."
+              )
             }
+            helperTextClassName="body-small text-zinc-950"
             button={
               <Button
                 type="button"
-                variant="outline"
                 disabled={resendCodeMutation.isPending}
                 onClick={() => resendCodeMutation.mutate()}
               >
@@ -156,7 +245,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
           <Button
             type="submit"
             size="lg"
-            disabled={code.length !== 6 || confirmCodeMutation.isPending}
+            disabled={code.length !== 6 || remaining <= 0 || confirmCodeMutation.isPending}
             className="w-full"
           >
             {confirmCodeMutation.isPending ? "확인 중..." : "다음"}

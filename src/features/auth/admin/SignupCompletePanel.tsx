@@ -12,7 +12,7 @@ export function SignupCompletePanel() {
         </>
       }
       actionLabel="시작하기"
-      actionHref="/"
+      actionHref="/console"
     />
   );
 }
