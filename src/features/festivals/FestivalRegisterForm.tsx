@@ -1,6 +1,12 @@
 "use client";
 
-import { CheckIcon, Cross2Icon, MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import {
+  CheckIcon,
+  Cross2Icon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -253,7 +259,11 @@ export function FestivalRegisterForm() {
               ) : null}
 
               {location.roadAddress ? (
-                <Input disabled value={location.roadAddress} className="disabled:border-zinc-400!" />
+                <Input
+                  disabled
+                  value={location.roadAddress}
+                  className="disabled:border-zinc-400!"
+                />
               ) : (
                 <button
                   type="button"

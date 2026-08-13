@@ -10,9 +10,7 @@ import type {
 } from "./types";
 
 /** "축제 등록" 화면에서 축제명 일부로 기존 축제 시리즈를 검색한다. */
-export async function searchFestivalSeries(
-  keyword: string,
-): Promise<FestivalSeriesSearchResult[]> {
+export async function searchFestivalSeries(keyword: string): Promise<FestivalSeriesSearchResult[]> {
   const { data } = await adminApiClient.get<ApiResponse<FestivalSeriesSearchResult[]>>(
     "/festival-series/search",
     { params: { keyword } },

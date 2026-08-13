@@ -90,10 +90,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
 
   const toggleAll = (checked: boolean) => {
     setAgreements(
-      AGREEMENT_ITEMS.reduce(
-        (acc, item) => ({ ...acc, [item.key]: checked }),
-        {} as Agreements,
-      ),
+      AGREEMENT_ITEMS.reduce((acc, item) => ({ ...acc, [item.key]: checked }), {} as Agreements),
     );
   };
 
@@ -219,8 +216,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
             helperText={
               remaining > 0 ? (
                 <>
-                  남은 시간{" "}
-                  <span className="body-small-bold">{formatRemaining(remaining)}</span>
+                  남은 시간 <span className="body-small-bold">{formatRemaining(remaining)}</span>
                 </>
               ) : (
                 "인증번호가 만료되었습니다."
