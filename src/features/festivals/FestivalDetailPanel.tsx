@@ -72,7 +72,7 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
   return (
     <div className="col-span-3 flex flex-col gap-6">
       <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 px-8 py-6">
+        <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 bg-white px-8 py-6">
           <p className="body-large-bold text-zinc-950">축제 정보</p>
 
           <Input
@@ -87,7 +87,6 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
               rows={3}
               value={description ?? festival.description}
               onChange={(event) => setDescription(event.target.value)}
-              className="rounded-lg border-zinc-400 bg-white body-regular! text-zinc-950 focus-visible:border-primary focus-visible:ring-0"
             />
           </div>
 

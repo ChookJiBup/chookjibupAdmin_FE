@@ -39,7 +39,7 @@ export function VisitorCountForm({ dayCount, onSkip, onSubmit }: VisitorCountFor
       : "일자별로 입력하면 축제성과를 정확하게 분석할 수 있어요.";
 
   return (
-    <div className="flex w-[480px] flex-col gap-6 rounded-2xl border border-zinc-300 p-8">
+    <div className="flex w-[480px] flex-col gap-6 rounded-2xl border border-zinc-300 bg-white p-8">
       <div className="flex items-center justify-center gap-1.5">
         <h2 className="heading-small text-center text-zinc-950">축제 방문 인원</h2>
         <Tooltip>
