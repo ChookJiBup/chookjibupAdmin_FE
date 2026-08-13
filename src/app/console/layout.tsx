@@ -1,9 +1,11 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useParams, usePathname } from "next/navigation";
 import { AdminAuthGuard } from "@/components/auth/AdminAuthGuard";
 import { HeaderNav } from "@/components/layout/HeaderNav";
 import { Toaster } from "@/components/ui/sonner";
+import { getManagedFestival } from "@/features/festivals/api";
 import { cn } from "@/lib/utils";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
@@ -21,9 +23,12 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
   const params = useParams<{ festivalId?: string }>();
   const festivalId = params?.festivalId;
   const navItems = pathname && HOME_NAV_PATHS.includes(pathname) ? HOME_NAV_ITEMS : undefined;
-  // 축제 단건 조회 API가 아직 없어 축제명을 실제로 불러오지 못한다.
-  // API가 준비되면 festivalId로 실제 축제명을 조회해 이 값을 대체해야 한다.
-  const festivalName = festivalId ? "김천김밥축제" : undefined;
+  const festivalQuery = useQuery({
+    queryKey: ["managed-festival", festivalId],
+    queryFn: () => getManagedFestival(festivalId as string),
+    enabled: Boolean(festivalId),
+  });
+  const festivalName = festivalQuery.data?.festivalName;
 
   return (
     <AdminAuthGuard>
