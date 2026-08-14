@@ -3,6 +3,7 @@
 import { CalendarIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { FestivalOwnerBadge, OperatorBadge } from "@/components/ui/RoleBadge";
 import {
   Empty,
@@ -43,7 +44,7 @@ function formatFestivalDateRange(startDate: string, endDate: string) {
     const [year, month, day] = date.split("-").map(Number);
     return `${year}년 ${month}월 ${day}일`;
   };
-  return `${format(startDate)}- ${format(endDate)}`;
+  return `${format(startDate)} - ${format(endDate)}`;
 }
 
 /** 오늘부터 축제 시작일까지 남은 일수. 자정 기준 캘린더 일수 차이로 계산한다. */
@@ -86,7 +87,10 @@ function FestivalCard({ festival }: { festival: FestivalSummary }) {
           </p>
         </div>
         {festival.progressStatus === "UPCOMING" && (
-          <p className="body-small text-zinc-600">• {formatDday(festival.startDate)}</p>
+          <Badge className="body-caption h-auto gap-[10px] rounded-full bg-zinc-100 px-2 py-1 text-zinc-950 hover:bg-zinc-100">
+            <span className="size-[5px] shrink-0 rounded-full bg-zinc-950" />
+            {formatDday(festival.startDate)}
+          </Badge>
         )}
       </div>
     </Link>
