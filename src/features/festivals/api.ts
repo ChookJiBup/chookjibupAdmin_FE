@@ -32,6 +32,11 @@ export async function updateFestival(
   await adminApiClient.patch<ApiResponse<void>>(`/festivals/${festivalId}`, request);
 }
 
+/** 1관리자 권한으로 축제와 관련 데이터(배치도, 운영자, 스태프 등)를 함께 삭제한다. */
+export async function deleteFestival(festivalId: string): Promise<void> {
+  await adminApiClient.delete<ApiResponse<void>>(`/festivals/${festivalId}`);
+}
+
 export async function createFestival(
   request: CreateFestivalRequest,
 ): Promise<CreateFestivalResponse> {
