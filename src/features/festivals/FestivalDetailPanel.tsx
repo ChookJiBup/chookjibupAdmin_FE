@@ -2,18 +2,21 @@
 
 import { ImageIcon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { getManagedFestival, updateFestival } from "./api";
+import { deleteFestival, getManagedFestival, updateFestival } from "./api";
 import type { FestivalLocationRequest } from "./types";
 
 export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [detailAddress, setDetailAddress] = useState<string | null>(null);
@@ -60,6 +63,14 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
       setEndDate(null);
       queryClient.invalidateQueries({ queryKey: ["managed-festival", festivalId] });
       queryClient.invalidateQueries({ queryKey: ["managed-festivals"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteFestival(festivalId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["managed-festivals"] });
+      router.push("/console");
     },
   });
 
@@ -125,6 +136,9 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
       </div>
 
       <div className="flex justify-end gap-3">
+        <Button type="button" variant="outline" onClick={() => setDeleteDialogOpen(true)}>
+          삭제하기
+        </Button>
         <Button type="button" onClick={() => setEditDialogOpen(true)}>
           수정하기
         </Button>
@@ -141,6 +155,19 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
       />
       {updateMutation.isError ? (
         <p className="body-small text-error">{getApiErrorMessage(updateMutation.error)}</p>
+      ) : null}
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="축제를 삭제하시겠습니까?"
+        description="배치도, 운영자, 스태프 등 연관된 모든 데이터가 함께 삭제되며 되돌릴 수 없습니다."
+        confirmLabel="삭제"
+        confirmPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
+      />
+      {deleteMutation.isError ? (
+        <p className="body-small text-error">{getApiErrorMessage(deleteMutation.error)}</p>
       ) : null}
     </div>
   );
