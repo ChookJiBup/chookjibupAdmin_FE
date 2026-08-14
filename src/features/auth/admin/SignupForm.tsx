@@ -99,7 +99,10 @@ export function SignupForm({ onComplete }: SignupFormProps) {
       signupAdmin({
         email,
         name,
-        organization: [department, position].filter(Boolean).join(" "),
+        // 화면설계서에 "소속 기관" 입력이 따로 없어, 부서 값을 임시로 재사용한다.
+        organization: department,
+        department,
+        rank: position,
         password,
         passwordConfirm: password,
       }),

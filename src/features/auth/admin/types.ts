@@ -43,6 +43,8 @@ export interface AdminSignupRequest {
   email: string;
   name: string;
   organization: string;
+  department: string;
+  rank: string;
   password: string;
   passwordConfirm: string;
 }
