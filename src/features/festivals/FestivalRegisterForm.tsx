@@ -27,6 +27,7 @@ import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
 import { setCachedMapId } from "@/features/boothmap/mapIdCache";
+import { DATE_DISPLAY_PATTERN, formatDateInput, toDisplayDate, toIsoDate } from "./dateFormat";
 import {
   createFestival,
   createFestivalWithMap,
@@ -43,26 +44,8 @@ import {
 } from "./locationDraft";
 import { SearchDialog, type SearchDialogResult, type SearchDialogState } from "./SearchDialog";
 
-const DATE_DISPLAY_PATTERN = /^\d{4}\.\d{2}\.\d{2}$/;
-
-/** "yyyy-MM-dd"를 화면 표기 "YYYY.mm.dd"로 변환한다. */
-function toDisplayDate(isoDate: string) {
-  return isoDate.replaceAll("-", ".");
-}
-
-/** "YYYY.mm.dd" 화면 표기를 API가 요구하는 "yyyy-MM-dd"로 변환한다. */
-function toIsoDate(displayDate: string) {
-  return displayDate.replaceAll(".", "-");
-}
-
 function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/** 숫자만 입력받아 "YYYY.mm.dd" 형태로 자동 포맷팅한다. */
-function formatDateInput(raw: string) {
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join(".");
 }
 
 export function FestivalRegisterForm() {

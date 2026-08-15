@@ -16,7 +16,7 @@ const HOME_NAV_PATHS = ["/console", "/console/festivals/new", "/console/mypage"]
 
 export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const adminName = useAdminAuthStore((state) => state.session?.admin.name);
-  const adminRole = useAdminAuthStore((state) => state.session?.admin.role);
+  const accountRole = useAdminAuthStore((state) => state.session?.admin.role);
   const hideNav = useConsoleUiStore((state) => state.hideNav);
   const fullBleed = useConsoleUiStore((state) => state.fullBleed);
   const pathname = usePathname();
@@ -29,6 +29,10 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
     enabled: Boolean(festivalId),
   });
   const festivalName = festivalQuery.data?.festivalName;
+  // 로그인 시점 세션에는 축제별 권한이 없다(계정은 축제마다 역할이 다를 수 있음).
+  // 축제 범위 화면에서는 이 축제의 조회 응답에 담긴 role을 우선 쓰고,
+  // 축제 범위 밖(메인홈 등)에서만 계정 세션의 role로 대체한다.
+  const role = festivalId ? festivalQuery.data?.role : accountRole;
 
   return (
     <AdminAuthGuard>
@@ -37,7 +41,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           userName={adminName}
           navItems={navItems}
           festivalName={festivalName}
-          role={adminRole}
+          role={role}
           hideNav={hideNav}
         />
         <div className="relative flex-1">
