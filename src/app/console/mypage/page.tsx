@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -8,11 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
-import {
-  getAdminProfile,
-  requestAuthenticatedPasswordReset,
-  withdrawAdmin,
-} from "@/features/auth/admin/api";
+import { getAdminProfile, withdrawAdmin } from "@/features/auth/admin/api";
+import type { AdminAccountProfile } from "@/features/auth/admin/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 
@@ -20,9 +17,14 @@ type ConfirmKind = "logout" | "withdraw" | null;
 
 export default function MyPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const admin = useAdminAuthStore((state) => state.session?.admin);
   const clearSession = useAdminAuthStore((state) => state.clearSession);
+  const updateAdminProfile = useAdminAuthStore((state) => state.updateAdminProfile);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
+  const [name, setName] = useState(admin?.name ?? "");
+  const [department, setDepartment] = useState(admin?.department ?? "");
+  const [rank, setRank] = useState(admin?.rank ?? "");
 
   const profileQuery = useQuery({
     queryKey: ["admin-profile"],
@@ -37,33 +39,42 @@ export default function MyPage() {
     },
   });
 
-  const passwordResetMutation = useMutation({
-    mutationFn: requestAuthenticatedPasswordReset,
-    onSuccess: () => toast.success("비밀번호 변경 링크를 이메일로 전송했습니다."),
-  });
+  const profile = profileQuery.data;
 
   function handleLogout() {
     clearSession();
     router.replace("/login");
   }
 
+  function handleProfileUpdate() {
+    const nextProfile = { name: name.trim(), department: department.trim(), rank: rank.trim() };
+    updateAdminProfile(nextProfile);
+    queryClient.setQueryData<AdminAccountProfile>(["admin-profile"], (current) =>
+      current ? { ...current, ...nextProfile } : current,
+    );
+    toast.success("프로필이 수정되었습니다.");
+  }
+
   if (!admin) return null;
-  const profile = profileQuery.data;
 
   return (
     <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
       <FormSection label="프로필 설정">
         <Input label="이메일" disabled value={profile?.email ?? admin.email} />
-        <Input label="이름" disabled value={profile?.name ?? admin.name} />
-        <Input label="소속 기관" disabled value={profile?.organization ?? admin.organization} />
+        <Input label="이름" value={name} onChange={(event) => setName(event.target.value)} />
         <div className="flex gap-3">
           <Input
             label="부서"
             wrapperClassName="flex-1"
-            disabled
-            value={profile?.department ?? ""}
+            value={department}
+            onChange={(event) => setDepartment(event.target.value)}
           />
-          <Input label="직급" wrapperClassName="flex-1" disabled value={profile?.rank ?? ""} />
+          <Input
+            label="직급"
+            wrapperClassName="flex-1"
+            value={rank}
+            onChange={(event) => setRank(event.target.value)}
+          />
         </div>
         {profileQuery.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(profileQuery.error)}</p>
@@ -73,26 +84,21 @@ export default function MyPage() {
       <FormSection label="보안설정">
         <div className="flex items-center justify-between">
           <p className="body-regular text-zinc-950">비밀번호 변경</p>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={passwordResetMutation.isPending}
-            onClick={() => passwordResetMutation.mutate()}
-          >
-            변경 링크 받기
+          <Button variant="outline" onClick={() => router.push("/reset-password")}>
+            비밀번호 재설정
           </Button>
         </div>
 
         <div className="flex items-center justify-between">
           <p className="body-regular text-zinc-950">로그아웃</p>
-          <Button variant="outline" size="sm" onClick={() => setConfirmKind("logout")}>
+          <Button variant="outline" onClick={() => setConfirmKind("logout")}>
             로그아웃
           </Button>
         </div>
 
         <div className="flex items-center justify-between">
           <p className="body-regular text-zinc-950">계정 삭제</p>
-          <Button variant="destructive" size="sm" onClick={() => setConfirmKind("withdraw")}>
+          <Button variant="destructive" onClick={() => setConfirmKind("withdraw")}>
             탈퇴하기
           </Button>
         </div>
@@ -100,10 +106,16 @@ export default function MyPage() {
         {withdrawMutation.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(withdrawMutation.error)}</p>
         ) : null}
-        {passwordResetMutation.isError ? (
-          <p className="body-small text-error">{getApiErrorMessage(passwordResetMutation.error)}</p>
-        ) : null}
       </FormSection>
+
+      <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-end border-t border-zinc-200 bg-white px-10">
+        <Button
+          disabled={!name.trim() || !department.trim() || !rank.trim()}
+          onClick={handleProfileUpdate}
+        >
+          수정하기
+        </Button>
+      </div>
 
       <ConfirmDialog
         open={confirmKind === "logout"}

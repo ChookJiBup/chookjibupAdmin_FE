@@ -7,6 +7,8 @@ export interface AdminSummary {
   email: string;
   name: string;
   organization: string;
+  department: string;
+  rank: string;
   /** 축제 생성 전에는 null */
   role: AdminRole | null;
   canInviteSubAdmin: boolean;
