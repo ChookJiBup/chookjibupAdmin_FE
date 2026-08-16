@@ -29,12 +29,16 @@ export function ReportLoadingState({ totalDays, onDone }: ReportLoadingStateProp
   }, [day]);
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 py-24">
+    <div
+      className="flex h-full flex-col items-center justify-center gap-4"
+      role="status"
+      aria-live="polite"
+    >
       <p className="body-regular text-zinc-950">축제 결과를 분석하고 있어요</p>
       <div className="flex w-80 items-center gap-3">
-        <div className="h-px flex-1 animate-pulse bg-zinc-300" />
+        <div className="h-px flex-1 bg-zinc-400" />
         <p className="body-small shrink-0 text-zinc-500">{Math.min(day, totalDays)}일차 분석 중</p>
-        <div className="h-px flex-1 animate-pulse bg-zinc-300" />
+        <div className="h-px flex-1 bg-zinc-400" />
       </div>
     </div>
   );

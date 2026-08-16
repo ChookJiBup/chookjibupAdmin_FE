@@ -28,6 +28,10 @@ export function VisitorCountForm({ dayCount, onSkip, onSubmit }: VisitorCountFor
 
   const canSubmit = tab === "daily" ? dailyValid : aggregateValid;
 
+  function numbersOnly(value: string) {
+    return value.replace(/\D/g, "");
+  }
+
   function handleSubmit() {
     if (!canSubmit) return;
     onSubmit(tab === "daily" ? dailyTotal : Number(aggregateCount));
@@ -39,8 +43,8 @@ export function VisitorCountForm({ dayCount, onSkip, onSubmit }: VisitorCountFor
       : "일자별로 입력하면 축제성과를 정확하게 분석할 수 있어요.";
 
   return (
-    <div className="flex w-[480px] flex-col gap-6 rounded-2xl border border-zinc-300 bg-white p-8">
-      <div className="flex items-center justify-center gap-1.5">
+    <div className="w-[480px] overflow-hidden rounded-2xl border border-zinc-300 bg-white">
+      <div className="flex items-center justify-center gap-1.5 px-8 py-4">
         <h2 className="heading-small text-center text-zinc-950">축제 방문 인원</h2>
         <Tooltip>
           <TooltipTrigger aria-label="도움말">
@@ -50,54 +54,69 @@ export function VisitorCountForm({ dayCount, onSkip, onSubmit }: VisitorCountFor
         </Tooltip>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as "daily" | "aggregate")}
-        className="gap-6"
-      >
-        <TabsList className="w-full">
-          <TabsTrigger value="daily">일자별 입력</TabsTrigger>
-          <TabsTrigger value="aggregate">총합 입력</TabsTrigger>
-        </TabsList>
+      <div className="flex flex-col gap-6 border-t border-zinc-200 p-8">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as "daily" | "aggregate")}
+          className="gap-6"
+        >
+          <TabsList className="h-12 w-full">
+            <TabsTrigger value="daily" className="body-regular h-10">
+              일자별 입력
+            </TabsTrigger>
+            <TabsTrigger value="aggregate" className="body-regular h-10">
+              총합 입력
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="daily" className="flex flex-col gap-5">
-          {dailyCounts.map((value, index) => (
+          <TabsContent value="daily" className="flex flex-col gap-5">
+            {dailyCounts.map((value, index) => (
+              <Input
+                key={index}
+                label={`${index + 1}일차`}
+                inputMode="numeric"
+                placeholder="방문인원을 입력해 주세요"
+                value={value ? Number(value).toLocaleString() : ""}
+                onChange={(event) => {
+                  const next = [...dailyCounts];
+                  next[index] = numbersOnly(event.target.value);
+                  setDailyCounts(next);
+                }}
+              />
+            ))}
             <Input
-              key={index}
-              label={`${index + 1}일차`}
-              type="number"
-              min={0}
-              placeholder="방문인원을 입력해 주세요"
-              value={value}
-              onChange={(event) => {
-                const next = [...dailyCounts];
-                next[index] = event.target.value;
-                setDailyCounts(next);
-              }}
+              label="총합"
+              disabled
+              placeholder="자동 계산"
+              value={dailyValid ? dailyTotal.toLocaleString() : ""}
             />
-          ))}
-          <Input label="총합" disabled value={dailyTotal.toLocaleString()} />
-        </TabsContent>
+          </TabsContent>
 
-        <TabsContent value="aggregate">
-          <Input
-            label="총합"
-            type="number"
-            min={0}
-            placeholder="인원을 입력해 주세요"
-            value={aggregateCount}
-            onChange={(event) => setAggregateCount(event.target.value)}
-          />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="aggregate">
+            <Input
+              label="총합"
+              inputMode="numeric"
+              placeholder="인원을 입력해 주세요"
+              value={aggregateCount ? Number(aggregateCount).toLocaleString() : ""}
+              onChange={(event) => setAggregateCount(numbersOnly(event.target.value))}
+            />
+          </TabsContent>
+        </Tabs>
 
-      <div className="flex gap-3">
-        <Button type="button" variant="outline" className="flex-1" onClick={onSkip}>
-          건너뛰기
-        </Button>
-        <Button type="button" className="flex-1" disabled={!canSubmit} onClick={handleSubmit}>
-          입력하기
-        </Button>
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" size="lg" className="flex-1" onClick={onSkip}>
+            건너뛰기
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            className="flex-1"
+            disabled={!canSubmit}
+            onClick={handleSubmit}
+          >
+            입력하기
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { Cross2Icon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
-import { IconButton } from "@/components/ui/IconButton";
+import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { MapNoticeCard } from "@/components/map/MapNoticeCard";
 import { cn } from "@/lib/utils";
 import type { AiSuggestion } from "./types";
 
@@ -20,26 +20,13 @@ export function AiSuggestionPanel({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {suggestions.map((suggestion) => (
-        <div
+        <MapNoticeCard
           key={suggestion.id}
-          className="w-80 rounded-lg border border-zinc-200 bg-white p-3 shadow-md"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <p className="body-small-bold text-zinc-950">{suggestion.title}</p>
-            <IconButton
-              variant="ghost"
-              size="sm"
-              aria-label="AI 제안 닫기"
-              icon={<Cross2Icon />}
-              onClick={() => onDismiss(suggestion.id)}
-              className="-mt-1 -mr-1"
-            />
-          </div>
-          <div className="mt-1.5 flex items-start gap-1.5">
-            <ExclamationTriangleIcon className="text-point-600 mt-0.5 size-3.5 shrink-0" />
-            <p className="body-caption text-zinc-500">{suggestion.description}</p>
-          </div>
-        </div>
+          title={suggestion.title}
+          description={suggestion.description}
+          descriptionIcon={<ExclamationTriangleIcon className="size-4 text-zinc-950" />}
+          onClose={() => onDismiss(suggestion.id)}
+        />
       ))}
     </div>
   );

@@ -1,21 +1,49 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Pencil1Icon, PlusIcon, MinusIcon } from "@radix-ui/react-icons";
+import { Pencil1Icon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/ui/IconButton";
+import { CongestionBadge } from "@/components/ui/CongestionBadge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
-import { getFestivalDashboard } from "./api";
-import { MOCK_AI_SUGGESTIONS, MOCK_ZONES } from "./mockData";
+import { MOCK_AI_SUGGESTIONS, MOCK_SUMMARY, MOCK_ZONES } from "./mockData";
 import type { Booth } from "./types";
 
-const ALL_BOOTHS = MOCK_ZONES.flatMap((zone) => zone.booths);
+function DashboardMetric({
+  value,
+  label,
+  description,
+  valueClassName = "body-regular",
+  className = "",
+}: {
+  value: ReactNode;
+  label: string;
+  description: string;
+  valueClassName?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`flex shrink-0 flex-col gap-1 ${className}`}>
+      <div className={`${valueClassName} flex items-center text-zinc-950`}>{value}</div>
+      <div className="flex items-center gap-1 body-small text-zinc-500">
+        <span>{label}</span>
+        <Tooltip>
+          <TooltipTrigger aria-label={`${label} 도움말`}>
+            <QuestionMarkCircledIcon className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{description}</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
 
 export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const router = useRouter();
@@ -26,11 +54,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const activeSuggestions = MOCK_AI_SUGGESTIONS.filter(
     (suggestion) => !dismissedSuggestionIds.includes(suggestion.id),
   );
-  const dashboardQuery = useQuery({
-    queryKey: ["festival-dashboard", festivalId],
-    queryFn: () => getFestivalDashboard(festivalId),
-    refetchInterval: 30_000,
-  });
 
   // 지도가 네비바 바로 아래부터 화면 전체를 채우도록 콘솔 콘텐츠 영역의 여백을 없앤다(디자인 스펙).
   useEffect(() => {
@@ -41,7 +64,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <BoothMapView
-        booths={ALL_BOOTHS}
         selectedBooth={selectedBooth}
         onSelectBooth={setSelectedBooth}
         zoomStep={zoomStep}
@@ -52,81 +74,75 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         zones={MOCK_ZONES}
         selectedBoothId={selectedBooth?.boothId}
         onSelectBooth={setSelectedBooth}
-        className="absolute top-3 bottom-3 left-3 w-72"
+        className="absolute top-10 bottom-10 left-8 w-72"
       />
 
       <Button
         variant="primary"
-        size="sm"
         icon={<Pencil1Icon />}
-        className="absolute top-3 right-3 shadow-md"
+        className="absolute top-10 right-8 shadow-md"
         onClick={() => router.push(`/console/festivals/${festivalId}/boothmap`)}
       >
         수정하기
       </Button>
 
-      <div className="absolute right-3 bottom-20 flex flex-col gap-1">
-        <IconButton
-          size="lg"
-          aria-label="지도 확대"
-          icon={<PlusIcon />}
-          onClick={() => setZoomStep((step) => step - 1)}
-          className="shadow-md"
-        />
-        <IconButton
-          size="lg"
-          aria-label="지도 축소"
-          icon={<MinusIcon />}
-          onClick={() => setZoomStep((step) => step + 1)}
-          className="shadow-md"
-        />
-      </div>
+      <MapZoomControls
+        className="absolute right-8 bottom-[142px] [&_button]:shadow-md"
+        onZoomIn={() => setZoomStep((step) => step - 1)}
+        onZoomOut={() => setZoomStep((step) => step + 1)}
+      />
 
-      <div className="absolute right-3 bottom-3 left-[318px]">
+      <div className="absolute right-8 bottom-10 left-[340px]">
         {selectedBooth ? (
           <DashboardStatsBar selectedBooth={selectedBooth} />
         ) : (
-          <div className="flex items-center gap-8 rounded-lg border border-zinc-200 bg-white px-5 py-4">
-            {dashboardQuery.isLoading ? (
-              <p className="body-small text-zinc-500">운영 지표를 불러오는 중...</p>
-            ) : dashboardQuery.isError ? (
-              <p className="body-small text-error">운영 지표를 불러오지 못했습니다.</p>
-            ) : dashboardQuery.data ? (
-              <>
-                <div>
-                  <p className="body-regular-bold">{dashboardQuery.data.operatingStatus}</p>
-                  <p className="body-small text-zinc-500">운영 상태</p>
-                </div>
-                <div>
-                  <p className="body-regular-bold">
-                    {dashboardQuery.data.currentVisitorCount.toLocaleString()}명
-                  </p>
-                  <p className="body-small text-zinc-500">현재 방문자</p>
-                </div>
-                <div>
-                  <p className="body-regular-bold">
-                    {dashboardQuery.data.activeQueueCount.toLocaleString()}개
-                  </p>
-                  <p className="body-small text-zinc-500">활성 대기열</p>
-                </div>
-                <div>
-                  <p className="body-regular-bold">{dashboardQuery.data.averageWaitMinutes}분</p>
-                  <p className="body-small text-zinc-500">평균 대기시간</p>
-                </div>
-                {!dashboardQuery.data.dataAvailable ? (
-                  <p className="body-caption text-zinc-500">실시간 운영 지표 연결 대기 중</p>
-                ) : null}
-              </>
-            ) : null}
+          <div className="flex items-center gap-5 rounded-lg border border-zinc-200 bg-white px-5 py-4 shadow-md">
+            <DashboardMetric
+              value={<CongestionBadge level={MOCK_SUMMARY.overallCongestion} />}
+              label="혼잡도"
+              description="축제 전체의 현재 혼잡도입니다."
+            />
+            <DashboardMetric
+              value={`${MOCK_SUMMARY.estimatedWaitMinutes} 분`}
+              valueClassName="body-regular-bold"
+              label="예상 대기시간"
+              description="전체 부스의 평균 예상 대기시간입니다."
+            />
+            <DashboardMetric
+              className="border-r-[1.5px] border-zinc-300 pr-6"
+              value={
+                <>
+                  <span className="body-regular-bold mr-1 text-primary">1</span>
+                  {MOCK_SUMMARY.busiestBoothName.replace(/^1/, "")}
+                </>
+              }
+              label="가장 혼잡한 부스"
+              description="현재 대기시간이 가장 긴 부스입니다."
+            />
+            <DashboardMetric
+              className="ml-1"
+              value={`${MOCK_SUMMARY.dailyVisitorCount.toLocaleString()} 명`}
+              valueClassName="body-regular-bold"
+              label="일일 예상 방문자수"
+              description="오늘 방문할 것으로 예상되는 방문자수입니다."
+            />
+            <DashboardMetric
+              value={`${MOCK_SUMMARY.totalVisitorCount.toLocaleString()} 명`}
+              valueClassName="body-regular-bold"
+              label="누적 방문자수"
+              description="축제 기간 동안 집계된 누적 방문자수입니다."
+            />
           </div>
         )}
       </div>
 
-      <AiSuggestionPanel
-        suggestions={activeSuggestions}
-        onDismiss={(id) => setDismissedSuggestionIds((ids) => [...ids, id])}
-        className="absolute top-3 left-[318px]"
-      />
+      {!selectedBooth ? (
+        <AiSuggestionPanel
+          suggestions={activeSuggestions}
+          onDismiss={(id) => setDismissedSuggestionIds((ids) => [...ids, id])}
+          className="absolute top-10 left-[340px]"
+        />
+      ) : null}
     </div>
   );
 }

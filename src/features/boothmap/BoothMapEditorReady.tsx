@@ -9,14 +9,14 @@ import {
   DimensionsIcon,
   FileIcon,
   HamburgerMenuIcon,
-  MinusIcon,
-  PlusIcon,
   RadiobuttonIcon,
   ResetIcon,
   RulerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
+import { MapSidePanel } from "@/components/map/MapSidePanel";
+import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { BoothMapGuideBanner } from "./BoothMapGuideBanner";
 import { MapInfoPopover } from "./MapInfoPopover";
@@ -282,8 +282,8 @@ export function BoothMapEditorReady({
         </div>
       </div>
 
-      <div className="absolute top-3 left-3 flex items-start gap-3">
-        <div className="flex h-[calc(100%-1.5rem)] w-72 flex-col gap-3 overflow-y-auto rounded-lg border border-zinc-300 bg-white p-6">
+      <div className="absolute top-10 bottom-10 left-8 flex items-start gap-5">
+        <MapSidePanel>
           <p className="body-large-bold text-zinc-950">
             축제부스 <span className="text-primary">{boothShapes.length}</span>
           </p>
@@ -365,12 +365,12 @@ export function BoothMapEditorReady({
               선택 항목 그룹화
             </Button>
           ) : null}
-        </div>
+        </MapSidePanel>
 
         <BoothMapGuideBanner />
       </div>
 
-      <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+      <div className="absolute top-10 right-8 flex flex-col items-end gap-2">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span title={past.length === 0 ? "되돌릴 편집 내용이 없습니다." : undefined}>
@@ -379,14 +379,16 @@ export function BoothMapEditorReady({
                 aria-label="실행취소"
                 disabled={past.length === 0}
                 onClick={undo}
+                className={past.length === 0 ? "text-zinc-500" : "text-zinc-950"}
               />
             </span>
             <span title={future.length === 0 ? "다시 실행할 편집 내용이 없습니다." : undefined}>
               <IconButton
-                icon={<ResetIcon className="-scale-y-100" />}
+                icon={<ResetIcon className="-scale-x-100" />}
                 aria-label="다시실행"
                 disabled={future.length === 0}
                 onClick={redo}
+                className={future.length === 0 ? "text-zinc-500" : "text-zinc-950"}
               />
             </span>
           </div>
@@ -458,42 +460,39 @@ export function BoothMapEditorReady({
         ) : null}
       </div>
 
-      <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col items-center gap-8">
+      <div className="absolute right-8 bottom-10 flex flex-col items-center gap-5">
         <div className="flex flex-col gap-1">
           <IconButton
-            icon={<RadiobuttonIcon />}
+            icon={<RadiobuttonIcon className="size-5" />}
             aria-label="핀 추가"
             onClick={() => {
               setPendingBooth((prev) => !prev);
               setTool("select");
             }}
-            className={pendingBooth ? "bg-primary/10" : undefined}
+            className={pendingBooth ? "bg-primary/10 text-zinc-950" : "text-zinc-950"}
           />
           <span title="자유 폴리곤 그리기는 아직 지원하지 않아요 — 부스를 선택해 그룹화하면 구역이 자동으로 만들어져요.">
-            <IconButton icon={<DimensionsIcon />} aria-label="폴리곤 추가" disabled />
+            <IconButton
+              icon={<DimensionsIcon className="size-5" />}
+              aria-label="폴리곤 추가"
+              disabled
+              className="text-zinc-950"
+            />
           </span>
           <IconButton
-            icon={<RulerHorizontalIcon />}
+            icon={<RulerHorizontalIcon className="size-5" />}
             aria-label="라인 추가"
             onClick={() => {
               setPendingBooth(false);
               setTool(tool === "queue-line" ? "select" : "queue-line");
             }}
-            className={tool === "queue-line" ? "bg-primary/10" : undefined}
+            className={tool === "queue-line" ? "bg-primary/10 text-zinc-950" : "text-zinc-950"}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <IconButton
-            icon={<PlusIcon />}
-            aria-label="확대"
-            onClick={() => setZoom((z) => z + 0.1)}
-          />
-          <IconButton
-            icon={<MinusIcon />}
-            aria-label="축소"
-            onClick={() => setZoom((z) => z - 0.1)}
-          />
-        </div>
+        <MapZoomControls
+          onZoomIn={() => setZoom((z) => z + 0.1)}
+          onZoomOut={() => setZoom((z) => z - 0.1)}
+        />
       </div>
 
       {groupPopoverOpen

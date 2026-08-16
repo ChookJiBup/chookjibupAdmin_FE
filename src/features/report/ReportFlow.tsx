@@ -40,23 +40,33 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
 
   if (step === "form") {
     return (
-      <VisitorCountForm
-        dayCount={FESTIVAL_DAY_COUNT}
-        onSkip={() => {
-          markHandled();
-          setStep("loading");
-        }}
-        onSubmit={() => {
-          markHandled();
-          setStep("loading");
-        }}
-      />
+      <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 flex items-center justify-center bg-dimmed p-8">
+        <VisitorCountForm
+          dayCount={FESTIVAL_DAY_COUNT}
+          onSkip={() => {
+            markHandled();
+            setStep("loading");
+          }}
+          onSubmit={() => {
+            markHandled();
+            setStep("loading");
+          }}
+        />
+      </div>
     );
   }
 
   if (step === "loading") {
-    return <ReportLoadingState totalDays={FESTIVAL_DAY_COUNT} onDone={() => setStep("done")} />;
+    return (
+      <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 bg-white">
+        <ReportLoadingState totalDays={FESTIVAL_DAY_COUNT} onDone={() => setStep("done")} />
+      </div>
+    );
   }
 
-  return <ReportPanel festivalId={festivalId} />;
+  return (
+    <div className="col-span-3">
+      <ReportPanel festivalId={festivalId} />
+    </div>
+  );
 }
