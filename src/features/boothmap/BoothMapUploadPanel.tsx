@@ -133,5 +133,19 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
     );
   }
 
-  return <BoothMapEditorFileRegisteredState festivalId={festivalId} />;
+  if (isMockReadyPreview) {
+    return <BoothMapEditorFileRegisteredState festivalId={festivalId} />;
+  }
+
+  return (
+    <BoothMapEditor
+      festivalId={festivalId}
+      mapId={state.mapId}
+      onMapDeleted={() => {
+        clearCachedMapId(festivalId);
+        setOverride({ status: "no-map" });
+      }}
+      onImageReplaced={() => setOverride({ status: "polling", mapId: state.mapId, progress: null })}
+    />
+  );
 }

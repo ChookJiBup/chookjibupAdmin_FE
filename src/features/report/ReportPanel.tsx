@@ -5,6 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { getFestivalReportSummary } from "./api";
 
+// TODO(api/report-detail): 현재 결과리포트 API는 총 방문자 수, 최대 동시 방문자 수,
+// 평균 대기시간만 제공한다. 전년 대비 증감, 경제효과, 일자별 방문자, 시간대별 방문,
+// 구역별 혼잡도, 혼잡도 지속시간 데이터가 추가되면 아래 프리뷰 상수를 제거한다.
 const DAILY_VISITORS = [980, 790, 1120];
 const LAST_YEAR_VISITORS = [720, 860, 940];
 const CONGESTION_RANKING = [
@@ -127,7 +130,8 @@ export function ReportPanel({ festivalId }: { festivalId: string }) {
     queryKey: ["festival-report-summary", festivalId],
     queryFn: () => getFestivalReportSummary(festivalId),
   });
-  const report = reportQuery.data;
+  // 백엔드가 집계 소스 미연결을 명시하면 0을 실제 집계값처럼 노출하지 않는다.
+  const report = reportQuery.data?.dataAvailable ? reportQuery.data : null;
 
   return (
     <div id="festival-performance" className="flex flex-col gap-6">
