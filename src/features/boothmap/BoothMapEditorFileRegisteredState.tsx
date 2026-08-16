@@ -79,7 +79,10 @@ function centroidOf(members: MockBooth[]) {
   };
 }
 
-/** 실제 자동 매핑 API가 붙기 전까지 쓰는 더미 부스 목록. */
+/**
+ * TODO(api/map-preview): 자동 매핑된 부스의 지도 좌표/이름/신뢰도와 구역 관계를
+ * 조회하는 API가 없다. 이 데이터는 `?preview=ready` 개발 프리뷰에서만 사용한다.
+ */
 const MOCK_BOOTHS: MockBooth[] = [
   {
     id: "b1",

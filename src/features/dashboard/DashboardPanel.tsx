@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil1Icon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { CongestionBadge } from "@/components/ui/CongestionBadge";
@@ -10,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { AiSuggestionPanel } from "./AiSuggestionPanel";
+import { getFestivalDashboard } from "./api";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
@@ -51,6 +53,15 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const [zoomStep, setZoomStep] = useState(0);
   const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<string[]>([]);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
+  const dashboardQuery = useQuery({
+    queryKey: ["festival-dashboard", festivalId],
+    queryFn: () => getFestivalDashboard(festivalId),
+  });
+  const dashboard = dashboardQuery.data?.dataAvailable ? dashboardQuery.data : null;
+
+  // TODO(api/dashboard-detail): 현재 대시보드 API에는 존/부스 계층, 좌표, 부스별 혼잡도,
+  // 가장 혼잡한 부스, 일일·누적 방문자, AI 제안이 없다. 해당 필드가 추가되기 전까지
+  // 지도 시안 확인용 데이터는 mockData.ts에서만 관리한다.
   const activeSuggestions = MOCK_AI_SUGGESTIONS.filter(
     (suggestion) => !dismissedSuggestionIds.includes(suggestion.id),
   );
@@ -103,7 +114,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
               description="축제 전체의 현재 혼잡도입니다."
             />
             <DashboardMetric
-              value={`${MOCK_SUMMARY.estimatedWaitMinutes} 분`}
+              value={`${dashboard?.averageWaitMinutes ?? MOCK_SUMMARY.estimatedWaitMinutes} 분`}
               valueClassName="body-regular-bold"
               label="예상 대기시간"
               description="전체 부스의 평균 예상 대기시간입니다."
