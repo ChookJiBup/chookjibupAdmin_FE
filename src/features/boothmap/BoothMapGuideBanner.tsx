@@ -10,7 +10,7 @@ export function BoothMapGuideBanner() {
   if (!open) return null;
 
   return (
-    <div className="flex w-[282px] items-start justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-5 py-4 shadow-md">
+    <div className="flex w-[282px] items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-5 py-4 shadow-md">
       <div className="flex flex-col gap-1">
         <p className="body-small-bold text-zinc-950">축제부스지도 수정</p>
         <p className="body-small text-zinc-500">
@@ -23,7 +23,7 @@ export function BoothMapGuideBanner() {
         icon={<Cross1Icon />}
         aria-label="안내 닫기"
         onClick={() => setOpen(false)}
-        className="-mr-1 -mt-1 shrink-0"
+        className="-mr-1 shrink-0 text-zinc-500"
       />
     </div>
   );

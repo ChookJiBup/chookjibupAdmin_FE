@@ -77,12 +77,7 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
   }, [state.status === "polling" ? state.mapId : null]);
 
   if (state.status === "no-map") {
-    return (
-      <BoothMapEditorEmptyState
-        festivalId={festivalId}
-        onOpenMap={(mapId) => setOverride({ status: "polling", mapId, progress: null })}
-      />
-    );
+    return <BoothMapEditorEmptyState festivalId={festivalId} />;
   }
 
   if (state.status === "polling") {
