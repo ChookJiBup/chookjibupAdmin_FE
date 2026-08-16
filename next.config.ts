@@ -3,6 +3,15 @@ import type { NextConfig } from "next";
 const backendOrigin = process.env.BACKEND_ORIGIN ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/password-reset",
+        destination: "/reset-password",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       { source: "/api/admin/:path*", destination: `${backendOrigin}/api/admin/:path*` },
