@@ -84,7 +84,7 @@ export const MOCK_ZONES: BoothZone[] = [
       "local-premium-gimbap",
       "명품로컬김밥존",
       [
-        "1(주)대정 김밥공장",
+        "(주)대정 김밥공장",
         "김천 로컬푸드 김밥",
         "직지 명인김밥",
         "전통시장 김밥",
@@ -103,7 +103,7 @@ export const MOCK_ZONES: BoothZone[] = [
 export const MOCK_SUMMARY: DashboardSummary = {
   overallCongestion: "LOW",
   estimatedWaitMinutes: 5,
-  busiestBoothName: "1(주)대정 김밥공장",
+  busiestBoothName: "(주)대정 김밥공장",
   dailyVisitorCount: 328,
   totalVisitorCount: 4927,
 };
@@ -112,7 +112,7 @@ export const MOCK_AI_SUGGESTIONS: AiSuggestion[] = [
   {
     id: "ai-1",
     title: "프랜차이즈 김밥 구역이 혼잡합니다",
-    description: "인접한 이색김밥존으로 안내 표지판을 배치하는 것을 추천합니다.",
+    description: "AI 제안사항 설명",
     path: [
       { lat: FESTIVAL_MAP_CENTER.lat + 0.0025, lng: FESTIVAL_MAP_CENTER.lng - 0.0015 },
       { lat: FESTIVAL_MAP_CENTER.lat + 0.0025, lng: FESTIVAL_MAP_CENTER.lng + 0.0045 },

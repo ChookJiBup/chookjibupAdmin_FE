@@ -65,11 +65,7 @@ function BoothQueueUpdateBar({ booth }: { booth: Booth }) {
             ))}
           </SelectContent>
         </Select>
-        <Button
-          size="sm"
-          onClick={() => updateMutation.mutate()}
-          disabled={updateMutation.isPending}
-        >
+        <Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
           {updateMutation.isPending ? "갱신 중..." : "줄끝 갱신하기"}
         </Button>
       </div>
