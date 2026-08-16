@@ -4,19 +4,28 @@ import { PersonIcon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Bottombar } from "@/components/ui/Bottombar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { createFieldStaff, deleteFieldStaffBulk, getFieldStaffList } from "./api";
-import type { CreateFieldStaffResult } from "./types";
+
+function formatPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, -4)}-${digits.slice(-4)}`;
+}
 
 export function StaffsPanel({ festivalId }: { festivalId: string }) {
   const queryClient = useQueryClient();
+  const [loginId, setLoginId] = useState(() => `staff-${crypto.randomUUID().slice(0, 8)}`);
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [created, setCreated] = useState<CreateFieldStaffResult | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   // 근무부서를 저장하는 백엔드 필드가 없어, 이번 세션에서 직접 생성한 스태프에 한해 화면에서만 기억한다.
   const [departmentByStaffId, setDepartmentByStaffId] = useState<Record<string, string>>({});
 
@@ -26,19 +35,16 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
   });
   const staffList = staffListQuery.data ?? [];
 
-  // 아이디 발급 API가 없어, 현재 스태프 수를 기반으로 다음 아이디를 미리 보여준다.
-  const previewLoginId = `staff${staffList.length + 1}`;
-
   const createMutation = useMutation({
-    mutationFn: () => createFieldStaff(festivalId, { loginId: previewLoginId, name, phoneNumber }),
+    mutationFn: () => createFieldStaff(festivalId, { loginId, name, phoneNumber }),
     onSuccess: (result) => {
       if (department) {
         setDepartmentByStaffId((prev) => ({ ...prev, [result.staffId]: department }));
       }
-      setCreated(result);
       setName("");
       setDepartment("");
       setPhoneNumber("");
+      setLoginId(`staff-${crypto.randomUUID().slice(0, 8)}`);
       queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
     },
   });
@@ -47,6 +53,7 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
     mutationFn: (staffIds: string[]) => deleteFieldStaffBulk(festivalId, staffIds),
     onSuccess: () => {
       setSelectedIds(new Set());
+      setDeleteDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
     },
   });
@@ -70,30 +77,15 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
   }
 
   return (
-    <div className="col-span-3 flex flex-col gap-4">
-      <div className="grid grid-cols-3 items-start gap-6">
-        <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 bg-white p-6">
+    <div className="col-span-3">
+      <div className="grid min-h-[calc(100vh-250px)] grid-cols-3 items-stretch gap-6">
+        <section className="col-span-1 flex min-w-0 flex-col gap-4 rounded-lg border border-zinc-300 bg-white px-8 py-6">
           <p className="body-large-bold text-zinc-950">스태프 추가</p>
-
-          {created ? (
-            <div className="flex flex-col gap-1 rounded-lg bg-zinc-50 px-4 py-3">
-              <p className="body-small-bold text-zinc-950">
-                {created.name}({created.loginId}) 계정이 생성되었습니다.
-              </p>
-              <p className="body-small text-zinc-950">
-                임시 비밀번호: <span className="font-mono">{created.temporaryPassword}</span>
-              </p>
-              <p className="body-caption text-zinc-500">
-                임시 비밀번호는 지금만 확인할 수 있습니다. 스태프에게 바로 전달해주세요.
-              </p>
-            </div>
-          ) : null}
 
           <form
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              setCreated(null);
               createMutation.mutate();
             }}
           >
@@ -108,15 +100,8 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
             <Input
               label="아이디"
               disabled
-              value={previewLoginId}
+              value={loginId}
               helperText="아이디는 자동으로 생성됩니다"
-            />
-            <Input
-              label="비밀번호"
-              type="password"
-              disabled
-              value="0000"
-              helperText="기본 비밀번호는 0000입니다"
             />
             <Input
               label="근무부서"
@@ -129,8 +114,9 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
               label="전화번호"
               placeholder="전화번호"
               value={phoneNumber}
-              onChange={(event) => setPhoneNumber(event.target.value)}
+              onChange={(event) => setPhoneNumber(formatPhoneNumber(event.target.value))}
               required
+              maxLength={13}
               pattern="^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$"
               title="예: 010-1234-5678"
             />
@@ -145,49 +131,50 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
               </Button>
             </div>
           </form>
-        </div>
+        </section>
 
-        <div className="col-span-2 flex flex-col rounded-lg border border-zinc-300 bg-white">
-          <div className="flex items-center gap-3 border-b border-zinc-200 px-6 py-4">
+        <section className="col-span-2 flex min-w-0 flex-col rounded-lg border border-zinc-300 bg-white px-8 py-6">
+          <div className="flex items-center gap-2 pb-4">
             <Checkbox
+              className="border-zinc-200 data-[state=checked]:border-point-600 data-[state=checked]:bg-point-600"
               checked={allSelected}
               onCheckedChange={toggleAll}
               disabled={staffList.length === 0}
             />
-            <p className="body-regular-bold text-zinc-950">
+            <p className="body-large-bold text-zinc-950">
               전체 <span className="text-primary">{staffList.length}</span>
             </p>
           </div>
 
           {staffListQuery.isLoading ? (
-            <p className="body-regular p-6 text-zinc-500">불러오는 중...</p>
+            <p className="body-regular py-4 text-zinc-500">불러오는 중...</p>
           ) : null}
 
           {staffListQuery.isError ? (
-            <p className="body-small p-6 text-error">{getApiErrorMessage(staffListQuery.error)}</p>
+            <p className="body-small py-4 text-error">{getApiErrorMessage(staffListQuery.error)}</p>
           ) : null}
 
           {!staffListQuery.isLoading && staffList.length === 0 ? (
-            <p className="body-regular p-6 text-zinc-500">등록된 스태프가 없습니다.</p>
+            <p className="body-regular py-4 text-zinc-500">등록된 스태프가 없습니다.</p>
           ) : null}
 
           {staffList.length > 0 ? (
             <div className="flex flex-col divide-y divide-zinc-200">
               {staffList.map((staff) => (
-                <label
-                  key={staff.staffId}
-                  className="flex cursor-pointer items-center gap-3 px-6 py-4"
-                >
+                <label key={staff.staffId} className="flex cursor-pointer items-start gap-2 py-4">
                   <Checkbox
+                    className="mt-1 border-zinc-200 data-[state=checked]:border-point-600 data-[state=checked]:bg-point-600"
                     checked={selectedIds.has(staff.staffId)}
                     onCheckedChange={() => toggleOne(staff.staffId)}
                   />
-                  <PersonIcon className="size-4 shrink-0 text-zinc-400" />
-                  <div className="flex flex-col gap-0.5">
-                    <p className="body-regular-bold text-zinc-950">
-                      {staff.name}({staff.phoneNumber})
-                    </p>
-                    <p className="body-caption text-zinc-500">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1">
+                      <PersonIcon className="size-4 shrink-0 text-point-600" />
+                      <p className="body-regular text-zinc-950">
+                        {staff.name}({formatPhoneNumber(staff.phoneNumber)})
+                      </p>
+                    </div>
+                    <p className="body-small pl-4 text-zinc-500">
                       {departmentByStaffId[staff.staffId] ?? "-"} · {staff.loginId}
                     </p>
                   </div>
@@ -195,24 +182,26 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
               ))}
             </div>
           ) : null}
-        </div>
+        </section>
       </div>
 
       {selectedIds.size > 0 ? (
-        <div className="flex items-center justify-between border-t border-zinc-200 pt-4">
-          <p className="body-small text-zinc-950">
-            <span className="body-small-bold text-primary">{selectedIds.size}</span>개 선택됨
-          </p>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate([...selectedIds])}
-          >
-            삭제하기
-          </Button>
-        </div>
+        <Bottombar
+          type="selected"
+          count={selectedIds.size}
+          deleteDisabled={deleteMutation.isPending}
+          onDelete={() => setDeleteDialogOpen(true)}
+        />
       ) : null}
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="선택한 스태프를 삭제하시겠습니까?"
+        description="삭제한 스태프 계정으로는 더 이상 로그인할 수 없습니다."
+        onConfirm={() => deleteMutation.mutate([...selectedIds])}
+        confirmPending={deleteMutation.isPending}
+      />
     </div>
   );
 }
