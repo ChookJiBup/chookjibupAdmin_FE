@@ -7,8 +7,6 @@ import {
   Cross2Icon,
   DimensionsIcon,
   FileIcon,
-  MinusIcon,
-  PlusIcon,
   RadiobuttonIcon,
   ResetIcon,
   RulerHorizontalIcon,
@@ -17,6 +15,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
+import { MapSidePanel } from "@/components/map/MapSidePanel";
+import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { FESTIVAL_MAP_CENTER } from "@/features/dashboard/mockData";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 
@@ -49,16 +49,6 @@ export function BoothMapEditorEmptyState({ festivalId }: { festivalId: string })
     };
   }, [setHideNav, setFullBleed]);
 
-  useEffect(() => {
-    const id = toast("축제부스지도 수정", {
-      description: "우측 리스트/지도상의 핀/모달을 선택해 상세 정보를 편집할 수 있습니다.",
-      duration: Infinity,
-    });
-    return () => {
-      toast.dismiss(id);
-    };
-  }, []);
-
   // React의 합성 onWheel은 passive 리스너로 등록돼 preventDefault가 무시된다 —
   // 트랙패드 핀치(ctrl+wheel로 인식됨)가 카카오맵을 그대로 통과해 브라우저 자체
   // 페이지 확대로 새는 걸 막으려면 네이티브 리스너를 non-passive로 직접 달아야 한다.
@@ -88,7 +78,7 @@ export function BoothMapEditorEmptyState({ festivalId }: { festivalId: string })
       ) : null}
 
       <div className="absolute top-10 bottom-10 left-8 flex items-start gap-5">
-        <div className="flex h-full w-72 flex-col gap-3 overflow-y-auto rounded-lg border border-zinc-300 bg-white p-6">
+        <MapSidePanel>
           <p className="body-large-bold text-zinc-950">축제부스</p>
           <button
             type="button"
@@ -100,7 +90,7 @@ export function BoothMapEditorEmptyState({ festivalId }: { festivalId: string })
               축제부스지도 파일을 업로드하거나 부스를 추가해 축제부스지도를 만들어 보세요.
             </p>
           </button>
-        </div>
+        </MapSidePanel>
       </div>
 
       <input
@@ -186,20 +176,10 @@ export function BoothMapEditorEmptyState({ festivalId }: { festivalId: string })
             />
           </span>
         </div>
-        <div className="flex flex-col gap-1">
-          <IconButton
-            icon={<PlusIcon className="size-5" />}
-            aria-label="확대"
-            className="text-zinc-950"
-            onClick={() => setZoomStep((step) => Math.max(step - 1, -2))}
-          />
-          <IconButton
-            icon={<MinusIcon className="size-5" />}
-            aria-label="축소"
-            className="text-zinc-950"
-            onClick={() => setZoomStep((step) => Math.min(step + 1, 4))}
-          />
-        </div>
+        <MapZoomControls
+          onZoomIn={() => setZoomStep((step) => Math.max(step - 1, -2))}
+          onZoomOut={() => setZoomStep((step) => Math.min(step + 1, 4))}
+        />
       </div>
 
       <ConfirmDialog

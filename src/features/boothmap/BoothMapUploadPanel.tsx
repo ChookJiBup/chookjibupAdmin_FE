@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { useSearchParams } from "next/navigation";
 import { BoothMapEditor } from "./BoothMapEditor";
 import { BoothMapEditorEmptyState } from "./BoothMapEditorEmptyState";
+import { BoothMapEditorFileRegisteredState } from "./BoothMapEditorFileRegisteredState";
 import { pollMapAnalysis } from "./analysisPolling";
 import { clearCachedMapId, getCachedMapId } from "./mapIdCache";
 import type { MapAnalysisStatusResponse } from "./types";
@@ -32,12 +34,16 @@ function useCachedMapId(festivalId: string) {
 export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
   const cachedMapId = useCachedMapId(festivalId);
   const [override, setOverride] = useState<PanelState | null>(null);
+  // 자동 매핑 결과(있는 경우) 화면을 실제 분석 없이 바로 보고 싶을 때 쓰는 임시 개발용
+  // 우회 진입로. 백엔드 자동 매핑이 붙으면 지운다.
+  const isMockReadyPreview = useSearchParams().get("preview") === "ready";
 
-  const state: PanelState =
-    override ??
-    (cachedMapId
-      ? { status: "polling", mapId: cachedMapId, progress: null }
-      : { status: "no-map" });
+  const state: PanelState = isMockReadyPreview
+    ? { status: "ready", mapId: "mock-preview" }
+    : (override ??
+      (cachedMapId
+        ? { status: "polling", mapId: cachedMapId, progress: null }
+        : { status: "no-map" }));
 
   useEffect(() => {
     if (state.status !== "polling") return;
@@ -127,15 +133,5 @@ export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
     );
   }
 
-  return (
-    <BoothMapEditor
-      festivalId={festivalId}
-      mapId={state.mapId}
-      onMapDeleted={() => {
-        clearCachedMapId(festivalId);
-        setOverride({ status: "no-map" });
-      }}
-      onImageReplaced={() => setOverride({ status: "polling", mapId: state.mapId, progress: null })}
-    />
-  );
+  return <BoothMapEditorFileRegisteredState festivalId={festivalId} />;
 }

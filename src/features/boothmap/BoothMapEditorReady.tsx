@@ -9,14 +9,14 @@ import {
   DimensionsIcon,
   FileIcon,
   HamburgerMenuIcon,
-  MinusIcon,
-  PlusIcon,
   RadiobuttonIcon,
   ResetIcon,
   RulerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
+import { MapSidePanel } from "@/components/map/MapSidePanel";
+import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { BoothMapGuideBanner } from "./BoothMapGuideBanner";
 import { MapInfoPopover } from "./MapInfoPopover";
@@ -283,7 +283,7 @@ export function BoothMapEditorReady({
       </div>
 
       <div className="absolute top-10 bottom-10 left-8 flex items-start gap-5">
-        <div className="flex h-full w-72 flex-col gap-3 overflow-y-auto rounded-lg border border-zinc-300 bg-white p-6">
+        <MapSidePanel>
           <p className="body-large-bold text-zinc-950">
             축제부스 <span className="text-primary">{boothShapes.length}</span>
           </p>
@@ -365,7 +365,7 @@ export function BoothMapEditorReady({
               선택 항목 그룹화
             </Button>
           ) : null}
-        </div>
+        </MapSidePanel>
 
         <BoothMapGuideBanner />
       </div>
@@ -489,20 +489,10 @@ export function BoothMapEditorReady({
             className={tool === "queue-line" ? "bg-primary/10 text-zinc-950" : "text-zinc-950"}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <IconButton
-            icon={<PlusIcon className="size-5" />}
-            aria-label="확대"
-            className="text-zinc-950"
-            onClick={() => setZoom((z) => z + 0.1)}
-          />
-          <IconButton
-            icon={<MinusIcon className="size-5" />}
-            aria-label="축소"
-            className="text-zinc-950"
-            onClick={() => setZoom((z) => z - 0.1)}
-          />
-        </div>
+        <MapZoomControls
+          onZoomIn={() => setZoom((z) => z + 0.1)}
+          onZoomOut={() => setZoom((z) => z - 0.1)}
+        />
       </div>
 
       {groupPopoverOpen

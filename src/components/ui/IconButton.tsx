@@ -35,6 +35,8 @@ export type IconButtonProps = Omit<
   icon: ReactNode;
   variant?: IconButtonVariant;
   size?: IconButtonSize;
+  /** 내부 아이콘 wrapper에 추가로 적용할 클래스. */
+  iconClassName?: string;
   /** 필수 — 아이콘만 있는 버튼이라 보이는 텍스트 라벨이 없다. */
   "aria-label": string;
 };
@@ -44,6 +46,7 @@ export function IconButton({
   variant = "default",
   size = "default",
   className,
+  iconClassName,
   "aria-label": ariaLabel,
   ...rest
 }: IconButtonProps) {
@@ -54,7 +57,9 @@ export function IconButton({
       className={`inline-flex shrink-0 items-center justify-center rounded-full p-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 disabled:pointer-events-none disabled:opacity-50 ${SIZE_CLASSES[size]} ${VARIANT_CLASSES[variant]} ${className ?? ""}`}
       {...rest}
     >
-      <span className={`inline-flex items-center justify-center ${ICON_SIZE_CLASSES[size]}`}>
+      <span
+        className={`inline-flex items-center justify-center ${iconClassName ?? ICON_SIZE_CLASSES[size]}`}
+      >
         {icon}
       </span>
     </button>
