@@ -27,11 +27,7 @@ import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { cn } from "@/lib/utils";
 import { ensureCoordinateMap, getMapEditor, saveMapEditor } from "./api";
-import {
-  boothMapPinsToNodeChanges,
-  nodeToLocalBooth,
-  type LocalBoothPin,
-} from "./geometryWgs84";
+import { boothMapPinsToNodeChanges, nodeToLocalBooth, type LocalBoothPin } from "./geometryWgs84";
 import { MapInfoPopover } from "./MapInfoPopover";
 import { primaryFestivalCenter } from "./mapCenter";
 
@@ -284,10 +280,8 @@ export function BoothMapEditorFileRegisteredState({
     },
   });
 
-  useEffect(() => {
-    if (seedMockBooths || !editorQuery.data || editorInitialized) {
-      return;
-    }
+  // 편집기 데이터가 처음 도착하면 로컬 상태를 한 번만 채운다(렌더 중 조정 — effect가 아니다).
+  if (!seedMockBooths && editorQuery.data && !editorInitialized) {
     setBooths(
       editorQuery.data.nodes
         .map(nodeToLocalBooth)
@@ -295,7 +289,7 @@ export function BoothMapEditorFileRegisteredState({
     );
     setEditRevision(editorQuery.data.editRevision);
     setEditorInitialized(true);
-  }, [editorQuery.data, editorInitialized, seedMockBooths]);
+  }
 
   function addBoothAt(lat: number, lng: number) {
     const id = `booth-${Date.now()}`;

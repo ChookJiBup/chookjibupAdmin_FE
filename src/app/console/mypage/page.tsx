@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -82,13 +82,13 @@ export default function MyPage() {
 
   const profile = profileQuery.data;
 
-  useEffect(() => {
-    if (!profile || formReady) return;
+  // 프로필 조회가 끝나자마자 폼 초기값을 한 번만 채운다(렌더 중 조정 — effect가 아니다).
+  if (profile && !formReady) {
     setName(profile.name);
     setOrganization(profile.organization);
     setRank(profile.rank);
     setFormReady(true);
-  }, [profile, formReady]);
+  }
 
   async function handleLogout() {
     try {
@@ -167,9 +167,7 @@ export default function MyPage() {
           </Button>
         </div>
         {passwordResetMutation.isError ? (
-          <p className="body-small text-error">
-            {getApiErrorMessage(passwordResetMutation.error)}
-          </p>
+          <p className="body-small text-error">{getApiErrorMessage(passwordResetMutation.error)}</p>
         ) : null}
 
         <div className="flex items-center justify-between">
