@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import {
   getAdminProfile,
   logoutAdmin,
+  requestAuthenticatedPasswordReset,
   updateAdminProfile as updateAdminProfileApi,
   withdrawAdmin,
 } from "@/features/auth/admin/api";
@@ -27,9 +28,10 @@ export default function MyPage() {
   const clearSession = useAdminAuthStore((state) => state.clearSession);
   const updateAdminProfile = useAdminAuthStore((state) => state.updateAdminProfile);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
-  const [name, setName] = useState(admin?.name ?? "");
-  const [organization, setOrganization] = useState(admin?.organization ?? "");
-  const [rank, setRank] = useState(admin?.rank ?? "");
+  const [name, setName] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [rank, setRank] = useState("");
+  const [formReady, setFormReady] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["admin-profile"],
@@ -38,9 +40,21 @@ export default function MyPage() {
 
   const withdrawMutation = useMutation({
     mutationFn: withdrawAdmin,
+    onSuccess: async () => {
+      try {
+        await logoutAdmin();
+      } finally {
+        clearSession();
+        window.localStorage.removeItem("chookjibup-admin-auth");
+        router.replace("/login");
+      }
+    },
+  });
+
+  const passwordResetMutation = useMutation({
+    mutationFn: requestAuthenticatedPasswordReset,
     onSuccess: () => {
-      clearSession();
-      router.replace("/login");
+      toast.success("입력한 이메일로 재설정 링크를 보냈습니다.");
     },
   });
 
@@ -69,11 +83,12 @@ export default function MyPage() {
   const profile = profileQuery.data;
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || formReady) return;
     setName(profile.name);
     setOrganization(profile.organization);
     setRank(profile.rank);
-  }, [profile]);
+    setFormReady(true);
+  }, [profile, formReady]);
 
   async function handleLogout() {
     try {
@@ -95,15 +110,29 @@ export default function MyPage() {
 
   if (!admin) return null;
 
+  if (profileQuery.isLoading) {
+    return <p className="body-regular text-zinc-500">불러오는 중...</p>;
+  }
+
   return (
     <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
       <FormSection label="프로필 설정">
         <Input label="이메일" disabled value={profile?.email ?? admin.email} />
-        <Input label="이름" value={name} onChange={(event) => setName(event.target.value)} />
+        <Input
+          label="이름"
+          required
+          minLength={2}
+          maxLength={100}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
         <div className="flex gap-3">
           <Input
             label="과·팀"
             placeholder="예: 토목과"
+            required
+            minLength={2}
+            maxLength={255}
             wrapperClassName="flex-1"
             value={organization}
             onChange={(event) => setOrganization(event.target.value)}
@@ -111,6 +140,8 @@ export default function MyPage() {
           <Input
             label="직급"
             placeholder="예: 과장"
+            required
+            maxLength={50}
             wrapperClassName="flex-1"
             value={rank}
             onChange={(event) => setRank(event.target.value)}
@@ -127,10 +158,19 @@ export default function MyPage() {
       <FormSection label="보안설정">
         <div className="flex items-center justify-between">
           <p className="body-regular text-zinc-950">비밀번호 변경</p>
-          <Button variant="outline" onClick={() => router.push("/reset-password")}>
+          <Button
+            variant="outline"
+            disabled={passwordResetMutation.isPending}
+            onClick={() => passwordResetMutation.mutate()}
+          >
             비밀번호 재설정
           </Button>
         </div>
+        {passwordResetMutation.isError ? (
+          <p className="body-small text-error">
+            {getApiErrorMessage(passwordResetMutation.error)}
+          </p>
+        ) : null}
 
         <div className="flex items-center justify-between">
           <p className="body-regular text-zinc-950">로그아웃</p>
@@ -154,11 +194,15 @@ export default function MyPage() {
       <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-end border-t border-zinc-200 bg-white px-10">
         <Button
           disabled={
-            !name.trim() || !organization.trim() || !rank.trim() || profileUpdateMutation.isPending
+            !formReady ||
+            !name.trim() ||
+            !organization.trim() ||
+            !rank.trim() ||
+            profileUpdateMutation.isPending
           }
           onClick={handleProfileUpdate}
         >
-          수정하기
+          {profileUpdateMutation.isPending ? "수정 중..." : "수정하기"}
         </Button>
       </div>
 

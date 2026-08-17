@@ -61,6 +61,7 @@ export interface AdminSignupResponse {
   email: string;
   name: string;
   organization: string;
+  rank: string;
   role: AdminRole | null;
   status: AdminStatus;
 }
