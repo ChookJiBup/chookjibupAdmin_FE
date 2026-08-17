@@ -9,16 +9,18 @@ import { Button } from "@/components/ui/Button";
 import { CongestionBadge } from "@/components/ui/CongestionBadge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
-import { getManagedFestival } from "@/features/festivals/api";
+import { ensureCoordinateMap, getMapEditor } from "@/features/boothmap/api";
+import { nodeToLocalBooth } from "@/features/boothmap/geometryWgs84";
 import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
+import { getManagedFestival } from "@/features/festivals/api";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { getFestivalDashboard } from "./api";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
-import { MOCK_AI_SUGGESTIONS, MOCK_SUMMARY, MOCK_ZONES } from "./mockData";
-import type { Booth } from "./types";
+import { MOCK_AI_SUGGESTIONS, MOCK_SUMMARY } from "./mockData";
+import type { Booth, BoothZone } from "./types";
 
 function DashboardMetric({
   value,
@@ -63,6 +65,39 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     () => primaryFestivalCenter(festivalQuery.data?.locations),
     [festivalQuery.data?.locations],
   );
+  const mapDataQuery = useQuery({
+    queryKey: ["dashboard-map", festivalId],
+    queryFn: async () => {
+      const map = await ensureCoordinateMap(festivalId);
+      const editor = await getMapEditor(festivalId, map.mapId);
+      return { map, editor };
+    },
+  });
+  const mapBooths = useMemo((): Booth[] => {
+    return (mapDataQuery.data?.editor.nodes ?? [])
+      .map(nodeToLocalBooth)
+      .filter((pin): pin is NonNullable<typeof pin> => pin !== null)
+      .map((pin) => ({
+        boothId: pin.nodeId ?? pin.id,
+        name: pin.name,
+        zoneId: "map",
+        lat: pin.lat,
+        lng: pin.lng,
+        congestionLevel: "LOW" as const,
+        waitMinutes: 0,
+        updatedMinutesAgo: 0,
+        lastQueueUpdater: { name: "-", role: "OPERATOR" as const },
+        queueZones: [],
+      }));
+  }, [mapDataQuery.data?.editor.nodes]);
+  const mapZones = useMemo((): BoothZone[] => {
+    if (mapBooths.length === 0) {
+      return [];
+    }
+    return [{ zoneId: "map", name: "부스", booths: mapBooths }];
+  }, [mapBooths]);
+  const dashboardMapCenter =
+    mapDataQuery.data?.editor.center ?? mapDataQuery.data?.map.center ?? mapCenter;
   const dashboardQuery = useQuery({
     queryKey: ["festival-dashboard", festivalId],
     queryFn: () => getFestivalDashboard(festivalId),
@@ -85,16 +120,16 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <BoothMapView
-        booths={MOCK_ZONES.flatMap((zone) => zone.booths)}
+        booths={mapBooths}
         selectedBooth={selectedBooth}
         onSelectBooth={setSelectedBooth}
         zoomStep={zoomStep}
         suggestions={activeSuggestions}
-        center={mapCenter}
+        center={dashboardMapCenter}
       />
 
       <BoothTreeSidebar
-        zones={MOCK_ZONES}
+        zones={mapZones}
         selectedBoothId={selectedBooth?.boothId}
         onSelectBooth={setSelectedBooth}
         className="absolute top-10 bottom-10 left-8 w-72"

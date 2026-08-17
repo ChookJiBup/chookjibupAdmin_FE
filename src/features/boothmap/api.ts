@@ -1,6 +1,9 @@
 import { adminApiClient } from "@/lib/api/adminApiClient";
 import type { ApiResponse } from "@/lib/api/types";
+import { isAxiosError } from "axios";
 import type {
+  CreateCoordinateMapRequest,
+  CreateCoordinateMapResponse,
   FestivalMapReadUrlResponse,
   FestivalMapSummary,
   MapAnalysisStatusResponse,
@@ -8,6 +11,39 @@ import type {
   SaveRoadmapDraftRequest,
   SaveRoadmapDraftResponse,
 } from "./types";
+
+export async function createCoordinateMap(
+  festivalId: string,
+  request: CreateCoordinateMapRequest,
+): Promise<CreateCoordinateMapResponse> {
+  const { data } = await adminApiClient.post<ApiResponse<CreateCoordinateMapResponse>>(
+    `/festivals/${festivalId}/maps`,
+    request,
+  );
+  return data.data;
+}
+
+export async function getCurrentMap(festivalId: string): Promise<CreateCoordinateMapResponse> {
+  const { data } = await adminApiClient.get<ApiResponse<CreateCoordinateMapResponse>>(
+    `/festivals/${festivalId}/maps/current`,
+  );
+  return data.data;
+}
+
+/** 현재 map이 있으면 조회하고, 없으면 좌표 전용 map을 준비한다. */
+export async function ensureCoordinateMap(
+  festivalId: string,
+  mapName = "본행사 배치",
+): Promise<CreateCoordinateMapResponse> {
+  try {
+    return await getCurrentMap(festivalId);
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return createCoordinateMap(festivalId, { mapName });
+    }
+    throw error;
+  }
+}
 
 export async function getMapAnalysisStatus(
   festivalId: string,

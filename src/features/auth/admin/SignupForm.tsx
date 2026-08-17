@@ -311,13 +311,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
           <Button
             type="submit"
             size="lg"
-            disabled={
-              !name ||
-              !organization ||
-              !rank ||
-              !password ||
-              signupMutation.isPending
-            }
+            disabled={!name || !organization || !rank || !password || signupMutation.isPending}
             className="w-full"
           >
             {signupMutation.isPending ? "가입 중..." : "가입하기"}

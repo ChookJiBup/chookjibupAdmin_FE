@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomOverlayMap, Map as KakaoMap, Polygon, useKakaoLoader } from "react-kakao-maps-sdk";
 import {
   ChevronDownIcon,
@@ -22,8 +22,12 @@ import { IconButton } from "@/components/ui/IconButton";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getManagedFestival } from "@/features/festivals/api";
+import { FESTIVAL_MAP_CENTER } from "@/features/dashboard/mockData";
+import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { cn } from "@/lib/utils";
+import { ensureCoordinateMap, getMapEditor, saveMapEditor } from "./api";
+import { boothMapPinsToNodeChanges, nodeToLocalBooth, type LocalBoothPin } from "./geometryWgs84";
 import { MapInfoPopover } from "./MapInfoPopover";
 import { primaryFestivalCenter } from "./mapCenter";
 
@@ -38,15 +42,6 @@ function getEmptyDragImage(): HTMLImageElement {
   return cachedEmptyDragImage;
 }
 
-interface MockBooth {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  /** 자동 매핑 신뢰도가 낮아 확인이 필요한 항목 — 마커를 secondary 색상으로 표시한다. */
-  uncertain?: boolean;
-}
-
 interface LocalZone {
   id: string;
   name: string;
@@ -58,7 +53,7 @@ function createZoneId() {
 }
 
 /** 구역 멤버 부스들의 좌표를 감싸는 사각 폴리곤 좌표를 만든다(약간의 여백 포함). */
-function zonePolygonPath(members: MockBooth[]) {
+function zonePolygonPath(members: LocalBoothPin[]) {
   const pad = 0.0006;
   const lats = members.map((booth) => booth.lat);
   const lngs = members.map((booth) => booth.lng);
@@ -74,7 +69,7 @@ function zonePolygonPath(members: MockBooth[]) {
   ];
 }
 
-function centroidOf(members: MockBooth[]) {
+function centroidOf(members: LocalBoothPin[]) {
   return {
     lat: members.reduce((sum, booth) => sum + booth.lat, 0) / members.length,
     lng: members.reduce((sum, booth) => sum + booth.lng, 0) / members.length,
@@ -85,15 +80,17 @@ function centroidOf(members: MockBooth[]) {
  * TODO(api/map-preview): 자동 매핑된 부스의 지도 좌표/이름/신뢰도와 구역 관계를
  * 조회하는 API가 없다. 이 데이터는 `?preview=ready` 개발 프리뷰에서만 사용한다.
  */
-const MOCK_BOOTHS: MockBooth[] = [
+const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b1",
+    nodeId: null,
     name: "CU편의점",
     lat: FESTIVAL_MAP_CENTER.lat + 0.0032,
     lng: FESTIVAL_MAP_CENTER.lng - 0.0004,
   },
   {
     id: "b2",
+    nodeId: null,
     name: "(주)대정 김밥공장",
     lat: FESTIVAL_MAP_CENTER.lat + 0.0016,
     lng: FESTIVAL_MAP_CENTER.lng - 0.0022,
@@ -101,13 +98,21 @@ const MOCK_BOOTHS: MockBooth[] = [
   },
   {
     id: "b3",
+    nodeId: null,
     name: "김천특산품 홍보관",
     lat: FESTIVAL_MAP_CENTER.lat + 0.0018,
     lng: FESTIVAL_MAP_CENTER.lng + 0.0028,
   },
-  { id: "b4", name: "메인무대", lat: FESTIVAL_MAP_CENTER.lat, lng: FESTIVAL_MAP_CENTER.lng },
+  {
+    id: "b4",
+    nodeId: null,
+    name: "메인무대",
+    lat: FESTIVAL_MAP_CENTER.lat,
+    lng: FESTIVAL_MAP_CENTER.lng,
+  },
   {
     id: "b5",
+    nodeId: null,
     name: "명품로컬김밥판매존",
     lat: FESTIVAL_MAP_CENTER.lat - 0.0016,
     lng: FESTIVAL_MAP_CENTER.lng - 0.0012,
@@ -115,6 +120,7 @@ const MOCK_BOOTHS: MockBooth[] = [
   },
   {
     id: "b6",
+    nodeId: null,
     name: "플리마켓",
     lat: FESTIVAL_MAP_CENTER.lat - 0.0008,
     lng: FESTIVAL_MAP_CENTER.lng + 0.0018,
@@ -134,6 +140,7 @@ export function BoothMapEditorFileRegisteredState({
   seedMockBooths?: boolean;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const [zoomStep, setZoomStep] = useState(0);
@@ -149,12 +156,25 @@ export function BoothMapEditorFileRegisteredState({
     queryFn: () => getManagedFestival(festivalId),
     enabled: festivalId !== "demo" && festivalId !== "mock-preview",
   });
+  const mapQuery = useQuery({
+    queryKey: ["coordinate-map", festivalId],
+    queryFn: () => ensureCoordinateMap(festivalId),
+    enabled: !seedMockBooths && festivalId !== "demo" && festivalId !== "mock-preview",
+  });
+  const editorQuery = useQuery({
+    queryKey: ["map-editor", festivalId, mapQuery.data?.mapId],
+    queryFn: () => getMapEditor(festivalId, mapQuery.data!.mapId),
+    enabled: !!mapQuery.data?.mapId,
+  });
   const festivalCenter = useMemo(
     () => primaryFestivalCenter(festivalQuery.data?.locations),
     [festivalQuery.data?.locations],
   );
 
-  const [booths, setBooths] = useState(() => (seedMockBooths ? MOCK_BOOTHS : []));
+  const [booths, setBooths] = useState<LocalBoothPin[]>(() => (seedMockBooths ? MOCK_BOOTHS : []));
+  const [editRevision, setEditRevision] = useState(0);
+  const [deletedNodeIds, setDeletedNodeIds] = useState<string[]>([]);
+  const [editorInitialized, setEditorInitialized] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [zones, setZones] = useState<LocalZone[]>([]);
   const [groupPopoverOpen, setGroupPopoverOpen] = useState(false);
@@ -211,7 +231,65 @@ export function BoothMapEditorFileRegisteredState({
     () => (selectedZone ? booths.filter((booth) => selectedZone.boothIds.includes(booth.id)) : []),
     [selectedZone, booths],
   );
-  const mapCenter = festivalCenter;
+  const mapCenter = editorQuery.data?.center ?? mapQuery.data?.center ?? festivalCenter;
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!mapQuery.data?.mapId) {
+        throw new Error("지도 정보를 불러오지 못했습니다.");
+      }
+      if (booths.length === 0) {
+        throw new Error("저장할 부스가 없습니다.");
+      }
+      return saveMapEditor(festivalId, mapQuery.data.mapId, {
+        baseRevision: editRevision,
+        nodes: boothMapPinsToNodeChanges(booths, deletedNodeIds),
+      });
+    },
+    onSuccess: async (response) => {
+      setEditRevision(response.editRevision);
+      setDeletedNodeIds([]);
+      await queryClient.invalidateQueries({ queryKey: ["map-editor", festivalId] });
+      const editor = await getMapEditor(festivalId, mapQuery.data!.mapId);
+      setBooths(
+        editor.nodes
+          .map(nodeToLocalBooth)
+          .filter((booth): booth is LocalBoothPin => booth !== null),
+      );
+      toast.success("부스맵이 저장되었습니다.");
+    },
+    onError: async (error) => {
+      if (getApiErrorCode(error) === 40910) {
+        toast.error("다른 곳에서 수정되었습니다.", {
+          description: "최신 데이터를 다시 불러옵니다.",
+        });
+        await queryClient.invalidateQueries({ queryKey: ["map-editor", festivalId] });
+        if (mapQuery.data?.mapId) {
+          const editor = await getMapEditor(festivalId, mapQuery.data.mapId);
+          setEditRevision(editor.editRevision);
+          setBooths(
+            editor.nodes
+              .map(nodeToLocalBooth)
+              .filter((booth): booth is LocalBoothPin => booth !== null),
+          );
+          setDeletedNodeIds([]);
+        }
+        return;
+      }
+      toast.error(getApiErrorMessage(error, "부스맵 저장에 실패했습니다."));
+    },
+  });
+
+  // 편집기 데이터가 처음 도착하면 로컬 상태를 한 번만 채운다(렌더 중 조정 — effect가 아니다).
+  if (!seedMockBooths && editorQuery.data && !editorInitialized) {
+    setBooths(
+      editorQuery.data.nodes
+        .map(nodeToLocalBooth)
+        .filter((booth): booth is LocalBoothPin => booth !== null),
+    );
+    setEditRevision(editorQuery.data.editRevision);
+    setEditorInitialized(true);
+  }
 
   function addBoothAt(lat: number, lng: number) {
     const id = `booth-${Date.now()}`;
@@ -219,6 +297,7 @@ export function BoothMapEditorFileRegisteredState({
       ...prev,
       {
         id,
+        nodeId: null,
         name: `새 부스 ${prev.length + 1}`,
         lat,
         lng,
@@ -273,7 +352,7 @@ export function BoothMapEditorFileRegisteredState({
     return () => wrapper.removeEventListener("wheel", handleWheel);
   }, [mapLoading, mapError]);
 
-  function renderBoothRow(booth: MockBooth, { indent }: { indent: boolean }) {
+  function renderBoothRow(booth: LocalBoothPin, { indent }: { indent: boolean }) {
     return (
       <div
         key={booth.id}
@@ -439,6 +518,9 @@ export function BoothMapEditorFileRegisteredState({
                   }}
                   onCancel={() => setCheckedIds(new Set())}
                   onDelete={() => {
+                    if (selectedBooth.nodeId) {
+                      setDeletedNodeIds((prev) => [...prev, selectedBooth.nodeId!]);
+                    }
                     setBooths((prev) => prev.filter((booth) => booth.id !== selectedBooth.id));
                     setCheckedIds(new Set());
                   }}
@@ -664,9 +746,7 @@ export function BoothMapEditorFileRegisteredState({
         confirmVariant="primary"
         onConfirm={() => {
           setSaveDialogOpen(false);
-          toast.info("저장 기능은 아직 서버 위경도 계약과 연결되지 않았습니다", {
-            description: "지금 찍은 핀은 이 화면에만 있습니다. 새로고침하면 사라집니다.",
-          });
+          saveMutation.mutate();
         }}
       />
       <ConfirmDialog
