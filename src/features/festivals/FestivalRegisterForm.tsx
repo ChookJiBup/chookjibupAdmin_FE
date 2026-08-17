@@ -146,6 +146,14 @@ export function FestivalRegisterForm() {
   });
 
   function handleSubmitClick() {
+    if (name.trim().length === 0) {
+      setFormError("축제명을 입력해 주세요.");
+      return;
+    }
+    if (description.trim().length === 0) {
+      setFormError("축제 설명을 입력해 주세요.");
+      return;
+    }
     if (!DATE_DISPLAY_PATTERN.test(startDate) || !DATE_DISPLAY_PATTERN.test(endDate)) {
       setFormError("날짜는 YYYY.mm.dd 형식으로 입력해 주세요.");
       return;
