@@ -28,7 +28,7 @@ export type NodeSource = "AI" | "ADMIN";
 
 export type MapAnalysisJobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
-/** geometry는 이미지 가로/세로 대비 0~1 정규화 값이다(MapGeometryValidator 기준). */
+/** IMAGE map(schema 1.0): geometry는 이미지 대비 0~1 정규화 값이다. */
 export type RectangleGeometry = {
   x: number;
   y: number;
@@ -37,7 +37,9 @@ export type RectangleGeometry = {
   rotation?: number;
 };
 export type PointGeometry = { x: number; y: number };
+export type PointGeometryWgs84 = { lat: number; lng: number };
 export type PolyGeometry = { points: { x: number; y: number }[] };
+export type PolyGeometryWgs84 = { points: { lat: number; lng: number }[] };
 export type NodeGeometry = RectangleGeometry | PointGeometry | PolyGeometry;
 
 export interface NodeResponse {
@@ -51,6 +53,7 @@ export interface NodeResponse {
   source: NodeSource;
   reviewStatus: NodeReviewStatus;
   sortOrder: number;
+  geometrySchemaVersion?: string;
 }
 
 export interface MapAnalysisStatusResponse {
@@ -68,14 +71,27 @@ export interface MapAnalysisStatusResponse {
 
 export interface MapEditorResponse {
   mapId: string;
-  displayImageUrl: string;
-  displayImageUrlExpiresAt: string;
-  imageWidth: number;
-  imageHeight: number;
+  displayImageUrl?: string | null;
+  displayImageUrlExpiresAt?: string | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
   editRevision: number;
   roadmapStatus: RoadmapStatus;
-  analysis: MapAnalysisStatusResponse;
+  analysis?: MapAnalysisStatusResponse | null;
   nodes: NodeResponse[];
+  center?: { lat: number; lng: number } | null;
+}
+
+export interface CreateCoordinateMapResponse {
+  mapId: string;
+  mapName: string;
+  editRevision: number;
+  roadmapStatus: RoadmapStatus;
+  center: { lat: number; lng: number };
+}
+
+export interface CreateCoordinateMapRequest {
+  mapName: string;
 }
 
 export interface NodeChangeRequest {
