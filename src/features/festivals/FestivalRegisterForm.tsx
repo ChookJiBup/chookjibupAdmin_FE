@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  MagnifyingGlassIcon,
-  PlusIcon,
-  TrashIcon,
-} from "@radix-ui/react-icons";
+import { MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

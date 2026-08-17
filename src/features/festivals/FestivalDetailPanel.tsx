@@ -15,7 +15,11 @@ import { getApiErrorMessage } from "@/lib/api/httpError";
 import { deleteFestival, getManagedFestival, searchFestivalSeries, updateFestival } from "./api";
 import { DATE_DISPLAY_PATTERN, formatDateInput, toDisplayDate, toIsoDate } from "./dateFormat";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
-import type { FestivalLocationRequest, FestivalLocationResponse, FestivalSeriesSearchResult } from "./types";
+import type {
+  FestivalLocationRequest,
+  FestivalLocationResponse,
+  FestivalSeriesSearchResult,
+} from "./types";
 
 export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
   const router = useRouter();

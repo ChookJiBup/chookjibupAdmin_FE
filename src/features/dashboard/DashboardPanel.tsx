@@ -96,7 +96,8 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     }
     return [{ zoneId: "map", name: "부스", booths: mapBooths }];
   }, [mapBooths]);
-  const dashboardMapCenter = mapDataQuery.data?.editor.center ?? mapDataQuery.data?.map.center ?? mapCenter;
+  const dashboardMapCenter =
+    mapDataQuery.data?.editor.center ?? mapDataQuery.data?.map.center ?? mapCenter;
   const dashboardQuery = useQuery({
     queryKey: ["festival-dashboard", festivalId],
     queryFn: () => getFestivalDashboard(festivalId),
