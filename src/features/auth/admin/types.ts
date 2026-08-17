@@ -30,7 +30,7 @@ export interface AdminLoginResponse {
 
 export interface UpdateAdminProfileRequest {
   name: string;
-  department: string;
+  organization: string;
   rank: string;
 }
 

@@ -49,7 +49,7 @@ export default function MyPage() {
     onSuccess: (_, nextProfile) => {
       updateAdminProfile({
         name: nextProfile.name,
-        organization: nextProfile.department,
+        organization: nextProfile.organization,
         rank: nextProfile.rank,
       });
       queryClient.setQueryData<AdminAccountProfile>(["admin-profile"], (current) =>
@@ -57,7 +57,7 @@ export default function MyPage() {
           ? {
               ...current,
               name: nextProfile.name,
-              organization: nextProfile.department,
+              organization: nextProfile.organization,
               rank: nextProfile.rank,
             }
           : current,
@@ -88,7 +88,7 @@ export default function MyPage() {
   function handleProfileUpdate() {
     profileUpdateMutation.mutate({
       name: name.trim(),
-      department: organization.trim(),
+      organization: organization.trim(),
       rank: rank.trim(),
     });
   }
