@@ -34,10 +34,10 @@ jobs:
             --parameters '{"commands":[
               "cd /home/ec2-user/app/chookjibupAdmin_FE",
               "sudo -u ec2-user git fetch origin",
-            "sudo -u ec2-user git reset --hard origin/main",
-            "sudo -u ec2-user env HOME=/home/ec2-user pnpm install --frozen-lockfile",
-            "if [ -d .next ]; then chown -R ec2-user:ec2-user .next; fi",
-            "sudo -u ec2-user env HOME=/home/ec2-user pnpm build",
+              "sudo -u ec2-user git reset --hard origin/main",
+              "sudo -u ec2-user env HOME=/home/ec2-user pnpm install --frozen-lockfile",
+              "if [ -d .next ]; then chown -R ec2-user:ec2-user .next; fi",
+              "sudo -u ec2-user env HOME=/home/ec2-user pnpm build",
               "systemctl restart chookjibup-admin-fe",
               "sleep 8",
               "systemctl is-active chookjibup-admin-fe"
