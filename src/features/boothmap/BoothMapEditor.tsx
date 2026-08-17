@@ -49,7 +49,12 @@ export function BoothMapEditor({
   // 편집 도중 objects가 바뀌어도 이 effect가 다시 돌아 덮어쓰지 않도록 dataUpdatedAt만 의존한다.
   useEffect(() => {
     if (!editorQuery.data) return;
-    const { imageWidth, imageHeight, nodes } = editorQuery.data;
+    const { imageWidth: rawWidth, imageHeight: rawHeight, nodes } = editorQuery.data;
+    const imageWidth = rawWidth ?? 0;
+    const imageHeight = rawHeight ?? 0;
+    if (imageWidth <= 0 || imageHeight <= 0) {
+      return;
+    }
     const loaded = nodes
       .map((node) => nodeToBoothMapObject(node, imageWidth, imageHeight))
       .filter((object) => object !== null);
@@ -64,8 +69,8 @@ export function BoothMapEditor({
       const nodes = boothMapObjectsToNodeChanges(
         objects,
         deletedNodeIds,
-        editorQuery.data.imageWidth,
-        editorQuery.data.imageHeight,
+        editorQuery.data.imageWidth ?? 0,
+        editorQuery.data.imageHeight ?? 0,
       );
       return saveMapEditor(festivalId, mapId, {
         baseRevision: editorQuery.data.editRevision,
@@ -106,7 +111,17 @@ export function BoothMapEditor({
     );
   }
 
-  const { imageWidth, imageHeight, displayImageUrl } = editorQuery.data;
+  const { imageWidth: rawWidth, imageHeight: rawHeight, displayImageUrl } = editorQuery.data;
+  const imageWidth = rawWidth ?? 0;
+  const imageHeight = rawHeight ?? 0;
+
+  if (!displayImageUrl || imageWidth <= 0 || imageHeight <= 0) {
+    return (
+      <p className="body-regular text-zinc-500">
+        이 지도는 이미지 배치도가 아닙니다. 카카오맵 부스맵 편집 화면을 이용하세요.
+      </p>
+    );
+  }
 
   return (
     <>
