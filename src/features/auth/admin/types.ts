@@ -24,10 +24,14 @@ export interface AdminLoginRequest {
 }
 
 export interface AdminLoginResponse {
-  accessToken: string;
-  tokenType: string;
   expiresIn: number;
   admin: AdminSummary;
+}
+
+export interface UpdateAdminProfileRequest {
+  name: string;
+  department: string;
+  rank: string;
 }
 
 export type AdminStatus = "ACTIVE" | "SUSPENDED" | "DELETED";
