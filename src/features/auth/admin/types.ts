@@ -6,8 +6,9 @@ export interface AdminSummary {
   festivalId: string | null;
   email: string;
   name: string;
+  /** 과·팀 (예: 토목과) */
   organization: string;
-  department: string;
+  /** 직급 (예: 과장) */
   rank: string;
   /** 축제 생성 전에는 null */
   role: AdminRole | null;
@@ -45,7 +46,6 @@ export interface AdminSignupRequest {
   email: string;
   name: string;
   organization: string;
-  department: string;
   rank: string;
   password: string;
   passwordConfirm: string;
@@ -66,7 +66,6 @@ export interface AdminAccountProfile {
   email: string;
   name: string;
   organization: string;
-  department: string;
   rank: string;
   status: AdminStatus;
 }

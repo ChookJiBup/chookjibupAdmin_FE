@@ -51,8 +51,8 @@ export function SignupForm({ onComplete }: SignupFormProps) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [department, setDepartment] = useState("");
-  const [position, setPosition] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [rank, setRank] = useState("");
   const [password, setPassword] = useState("");
   const [remaining, setRemaining] = useState(CODE_TIMER_SECONDS);
 
@@ -99,10 +99,8 @@ export function SignupForm({ onComplete }: SignupFormProps) {
       signupAdmin({
         email,
         name,
-        // 화면설계서에 "소속 기관" 입력이 따로 없어, 부서 값을 임시로 재사용한다.
-        organization: department,
-        department,
-        rank: position,
+        organization,
+        rank,
         password,
         passwordConfirm: password,
       }),
@@ -286,18 +284,23 @@ export function SignupForm({ onComplete }: SignupFormProps) {
             <Input
               type="text"
               required
-              label="부서"
-              placeholder="부서"
-              value={department}
-              onChange={(event) => setDepartment(event.target.value)}
+              minLength={2}
+              maxLength={255}
+              label="과·팀"
+              placeholder="예: 토목과"
+              wrapperClassName="flex-1"
+              value={organization}
+              onChange={(event) => setOrganization(event.target.value)}
             />
             <Input
               type="text"
               required
+              maxLength={50}
               label="직급"
-              placeholder="직급"
-              value={position}
-              onChange={(event) => setPosition(event.target.value)}
+              placeholder="예: 과장"
+              wrapperClassName="flex-1"
+              value={rank}
+              onChange={(event) => setRank(event.target.value)}
             />
           </div>
 
@@ -308,7 +311,13 @@ export function SignupForm({ onComplete }: SignupFormProps) {
           <Button
             type="submit"
             size="lg"
-            disabled={!name || !department || !position || !password || signupMutation.isPending}
+            disabled={
+              !name ||
+              !organization ||
+              !rank ||
+              !password ||
+              signupMutation.isPending
+            }
             className="w-full"
           >
             {signupMutation.isPending ? "가입 중..." : "가입하기"}
