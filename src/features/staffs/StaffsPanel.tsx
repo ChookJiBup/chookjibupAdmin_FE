@@ -22,12 +22,9 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
   const queryClient = useQueryClient();
   const [loginId, setLoginId] = useState(() => `staff-${crypto.randomUUID().slice(0, 8)}`);
   const [name, setName] = useState("");
-  const [department, setDepartment] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  // 근무부서를 저장하는 백엔드 필드가 없어, 이번 세션에서 직접 생성한 스태프에 한해 화면에서만 기억한다.
-  const [departmentByStaffId, setDepartmentByStaffId] = useState<Record<string, string>>({});
 
   const staffListQuery = useQuery({
     queryKey: ["field-staff", festivalId],
@@ -37,12 +34,8 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
 
   const createMutation = useMutation({
     mutationFn: () => createFieldStaff(festivalId, { loginId, name, phoneNumber }),
-    onSuccess: (result) => {
-      if (department) {
-        setDepartmentByStaffId((prev) => ({ ...prev, [result.staffId]: department }));
-      }
+    onSuccess: () => {
       setName("");
-      setDepartment("");
       setPhoneNumber("");
       setLoginId(`staff-${crypto.randomUUID().slice(0, 8)}`);
       queryClient.invalidateQueries({ queryKey: ["field-staff", festivalId] });
@@ -102,13 +95,6 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
               disabled
               value={loginId}
               helperText="아이디는 자동으로 생성됩니다"
-            />
-            <Input
-              label="근무부서"
-              placeholder="근무부서"
-              value={department}
-              onChange={(event) => setDepartment(event.target.value)}
-              required
             />
             <Input
               label="전화번호"
@@ -174,9 +160,7 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
                         {staff.name}({formatPhoneNumber(staff.phoneNumber)})
                       </p>
                     </div>
-                    <p className="body-small pl-4 text-zinc-500">
-                      {departmentByStaffId[staff.staffId] ?? "-"} · {staff.loginId}
-                    </p>
+                    <p className="body-small pl-4 text-zinc-500">{staff.loginId}</p>
                   </div>
                 </label>
               ))}
