@@ -57,17 +57,21 @@ function BoothPopup({ booth, onClose }: { booth: Booth; onClose: () => void }) {
 }
 
 export function BoothMapView({
+  booths,
   selectedBooth,
   onSelectBooth,
   zoomStep = 0,
   suggestions = [],
+  center = FESTIVAL_MAP_CENTER,
 }: {
+  booths: Booth[];
   selectedBooth: Booth | null;
   onSelectBooth: (booth: Booth | null) => void;
   /** 기본 확대 수준(4)에 대한 상대값. 낮을수록 확대된다. */
   zoomStep?: number;
   /** 경로선(path)이 있는 AI 제안을 지도 위에 함께 그린다. */
   suggestions?: AiSuggestion[];
+  center?: { lat: number; lng: number };
 }) {
   const [loading, error] = useKakaoLoader({
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
@@ -99,7 +103,8 @@ export function BoothMapView({
 
   return (
     <Map
-      center={FESTIVAL_MAP_CENTER}
+      center={center}
+      isPanto={false}
       level={4 + zoomStep}
       scrollwheel={false}
       className="absolute inset-0 isolate"
@@ -125,11 +130,40 @@ export function BoothMapView({
         ) : null,
       )}
 
+      {booths.map((booth) => {
+        const isSelected = selectedBooth?.boothId === booth.boothId;
+        return (
+          <CustomOverlayMap
+            key={booth.boothId}
+            position={{ lat: booth.lat, lng: booth.lng }}
+            clickable
+            zIndex={isSelected ? 20 : 10}
+          >
+            <button
+              type="button"
+              title={booth.name}
+              aria-label={booth.name}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectBooth(isSelected ? null : booth);
+              }}
+              className={`relative flex items-center justify-center ${
+                isSelected ? "size-8" : "size-3"
+              }`}
+            >
+              {isSelected ? (
+                <span className="absolute size-8 rounded-full bg-primary opacity-25" />
+              ) : null}
+              <span className="relative size-3 rounded-full border-2 border-white bg-primary shadow" />
+            </button>
+          </CustomOverlayMap>
+        );
+      })}
       {selectedBooth ? (
         <CustomOverlayMap
           position={{ lat: selectedBooth.lat, lng: selectedBooth.lng }}
           yAnchor={1}
-          zIndex={10}
+          zIndex={30}
         >
           <BoothPopup booth={selectedBooth} onClose={() => onSelectBooth(null)} />
         </CustomOverlayMap>

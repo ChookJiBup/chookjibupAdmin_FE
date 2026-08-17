@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { CustomOverlayMap, Map as KakaoMap, Polygon, useKakaoLoader } from "react-kakao-maps-sdk";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   Cross2Icon,
   DimensionsIcon,
-  FileIcon,
   HamburgerMenuIcon,
   RadiobuttonIcon,
   ResetIcon,
@@ -21,9 +21,11 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
-import { FESTIVAL_MAP_CENTER } from "@/features/dashboard/mockData";
+import { getManagedFestival } from "@/features/festivals/api";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
+import { cn } from "@/lib/utils";
 import { MapInfoPopover } from "./MapInfoPopover";
+import { primaryFestivalCenter } from "./mapCenter";
 
 let cachedEmptyDragImage: HTMLImageElement | null = null;
 /** 드래그 고스트를 숨기는 데 쓰는 1x1 투명 GIF — data URI라 동기적으로 디코딩된다. */
@@ -120,26 +122,39 @@ const MOCK_BOOTHS: MockBooth[] = [
 ];
 
 /**
- * "축제부스지도 - 등록된 파일이 있는 경우" 화면.
- * [[BoothMapEditorEmptyState]]와 동일한 레이아웃(카카오맵 배경 + 좌측 카드 +
- * 우측 상단 툴바 + 우측 하단 도구)을 그대로 쓰되, 파일이 이미 등록된 상태를
- * 반영한 1차 버전이다. 부스 목록/마커는 더미 데이터이고, 실제 자동 매핑
- * 결과 연동·구역 저장은 아직 붙이지 않았다.
+ * 카카오맵에서 부스 핀을 찍고 구역을 묶는 편집 화면.
+ * 배치도 사진 업로드/OpenAI 분석은 1차 경로가 아니다.
  */
-export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: string }) {
+export function BoothMapEditorFileRegisteredState({
+  festivalId,
+  seedMockBooths = false,
+}: {
+  festivalId: string;
+  /** `?preview=ready` 개발 프리뷰에서만 더미 부스를 넣는다. */
+  seedMockBooths?: boolean;
+}) {
   const router = useRouter();
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const [zoomStep, setZoomStep] = useState(0);
+  const [drawTool, setDrawTool] = useState<"select" | "pin">("pin");
   const [mapLoading, mapError] = useKakaoLoader({
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
   });
   const mapWrapperRef = useRef<HTMLDivElement>(null);
-  const replaceInputRef = useRef<HTMLInputElement>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const festivalQuery = useQuery({
+    queryKey: ["managed-festival", festivalId],
+    queryFn: () => getManagedFestival(festivalId),
+    enabled: festivalId !== "demo" && festivalId !== "mock-preview",
+  });
+  const festivalCenter = useMemo(
+    () => primaryFestivalCenter(festivalQuery.data?.locations),
+    [festivalQuery.data?.locations],
+  );
 
-  const [booths, setBooths] = useState(MOCK_BOOTHS);
+  const [booths, setBooths] = useState(() => (seedMockBooths ? MOCK_BOOTHS : []));
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [zones, setZones] = useState<LocalZone[]>([]);
   const [groupPopoverOpen, setGroupPopoverOpen] = useState(false);
@@ -196,9 +211,22 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     () => (selectedZone ? booths.filter((booth) => selectedZone.boothIds.includes(booth.id)) : []),
     [selectedZone, booths],
   );
-  const mapCenter = selectedBooth
-    ? { lat: selectedBooth.lat, lng: selectedBooth.lng }
-    : FESTIVAL_MAP_CENTER;
+  const mapCenter = festivalCenter;
+
+  function addBoothAt(lat: number, lng: number) {
+    const id = `booth-${Date.now()}`;
+    setBooths((prev) => [
+      ...prev,
+      {
+        id,
+        name: `새 부스 ${prev.length + 1}`,
+        lat,
+        lng,
+      },
+    ]);
+    setSelectedZoneId(null);
+    setCheckedIds(new Set([id]));
+  }
 
   function toggleChecked(id: string) {
     setSelectedZoneId(null);
@@ -243,7 +271,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     const handleWheel = (event: WheelEvent) => event.preventDefault();
     wrapper.addEventListener("wheel", handleWheel, { passive: false });
     return () => wrapper.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [mapLoading, mapError]);
 
   function renderBoothRow(booth: MockBooth, { indent }: { indent: boolean }) {
     return (
@@ -299,10 +327,24 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-zinc-300">
-      {process.env.NEXT_PUBLIC_KAKAO_MAP_KEY && !mapError && !mapLoading ? (
-        <div ref={mapWrapperRef} className="absolute inset-0 isolate">
+      {!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY || mapError || mapLoading ? (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="body-small text-zinc-600">
+            {!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY
+              ? "NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다."
+              : mapError
+                ? "카카오맵을 불러오지 못했습니다."
+                : "지도를 불러오는 중..."}
+          </p>
+        </div>
+      ) : (
+        <div
+          ref={mapWrapperRef}
+          className={cn("absolute inset-0 isolate", drawTool === "pin" && "cursor-crosshair")}
+        >
           <KakaoMap
             center={mapCenter}
+            isPanto={false}
             level={4 + zoomStep}
             scrollwheel={false}
             className="h-full w-full"
@@ -310,13 +352,19 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               map.setMinLevel(2);
               map.setMaxLevel(8);
             }}
+            onClick={(_target, mouseEvent) => {
+              if (drawTool !== "pin") return;
+              const latLng = mouseEvent.latLng;
+              if (!latLng) return;
+              addBoothAt(latLng.getLat(), latLng.getLng());
+            }}
           >
             {zones.map((zone) => {
               const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
               if (members.length === 0) return null;
               const path = zonePolygonPath(members);
               return (
-                <div key={zone.id}>
+                <Fragment key={zone.id}>
                   <Polygon
                     path={path}
                     fillColor="#236cf6"
@@ -326,13 +374,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     strokeOpacity={0.8}
                     onClick={() => selectZone(zone.id)}
                   />
-                  {/* 네이버지도 면적 계산 도구 참고 — 폴리곤 꼭짓점에 핸들을 표시한다(현재는 표시만, 드래그 편집은 아직 없음). */}
                   {path.map((point, index) => (
-                    <CustomOverlayMap key={index} position={point} zIndex={15}>
+                    <CustomOverlayMap key={`${zone.id}-${index}`} position={point} zIndex={15}>
                       <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
                     </CustomOverlayMap>
                   ))}
-                </div>
+                </Fragment>
               );
             })}
             {visibleBooths.map((booth) => {
@@ -353,7 +400,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     type="button"
                     title={booth.name}
                     aria-label={booth.name}
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.stopPropagation();
                       setSelectedZoneId(null);
                       setCheckedIds(new Set([booth.id]));
                     }}
@@ -459,17 +507,21 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             ) : null}
           </KakaoMap>
         </div>
-      ) : null}
+      )}
 
-      <div className="absolute top-10 bottom-10 left-8 flex items-start gap-5">
-        <MapSidePanel>
+      <div className="absolute top-10 bottom-10 left-8 w-72">
+        <MapSidePanel className="h-full">
           <p className="body-large-bold text-zinc-950">
             축제부스 <span className="text-primary">{booths.length}</span>
           </p>
           <div className="flex flex-col gap-2 rounded-md bg-zinc-100 px-4 py-3 text-left">
-            <p className="body-small-bold text-zinc-950">자동 매핑 결과입니다.</p>
+            <p className="body-small-bold text-zinc-950">
+              {booths.length === 0 ? "아직 찍은 부스가 없습니다." : "지도에서 부스를 편집하세요."}
+            </p>
             <p className="body-caption text-zinc-950">
-              이미지 분석으로 축제 구역과 시설을 추출했어요. 수정이 필요한 항목을 선택하세요.
+              {booths.length === 0
+                ? "오른쪽 핀 도구를 켠 뒤 지도를 클릭해 부스를 추가하세요."
+                : "핀을 선택해 이름을 바꾸고, 여러 개를 골라 구역으로 묶을 수 있습니다."}
             </p>
           </div>
 
@@ -540,22 +592,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         </MapSidePanel>
       </div>
 
-      <input
-        ref={replaceInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            toast.error("아직 재업로드할 수 없어요", {
-              description: "등록된 배치도를 교체하는 API가 아직 연결되지 않았습니다.",
-            });
-          }
-          if (replaceInputRef.current) replaceInputRef.current.value = "";
-        }}
-      />
-
       <div className="absolute top-10 right-8 flex items-center gap-4">
         <div className="flex items-center gap-2">
           <span title="편집 내용이 없어 실행취소할 수 없습니다.">
@@ -576,14 +612,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            icon={<FileIcon />}
-            onClick={() => replaceInputRef.current?.click()}
-          >
-            파일 재업로드
-          </Button>
           <Button type="button" variant="primary" onClick={() => setSaveDialogOpen(true)}>
             저장하기
           </Button>
@@ -601,9 +629,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           <IconButton
             icon={<RadiobuttonIcon className="size-5" />}
             aria-label="핀 추가"
-            className="text-zinc-950"
+            aria-pressed={drawTool === "pin"}
+            className={cn("text-zinc-950", drawTool === "pin" && "ring-2 ring-primary")}
+            onClick={() => setDrawTool((tool) => (tool === "pin" ? "select" : "pin"))}
           />
-          <span title="자유 폴리곤 그리기는 아직 지원하지 않아요.">
+          <span title="1차는 핀만 지원합니다.">
             <IconButton
               icon={<DimensionsIcon className="size-5" />}
               aria-label="폴리곤 추가"
@@ -611,11 +641,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               className="text-zinc-950"
             />
           </span>
-          <IconButton
-            icon={<RulerHorizontalIcon className="size-5" />}
-            aria-label="라인 추가"
-            className="text-zinc-950"
-          />
+          <span title="1차는 핀만 지원합니다.">
+            <IconButton
+              icon={<RulerHorizontalIcon className="size-5" />}
+              aria-label="라인 추가"
+              disabled
+              className="text-zinc-950"
+            />
+          </span>
         </div>
         <MapZoomControls
           onZoomIn={() => setZoomStep((step) => Math.max(step - 1, -2))}
@@ -631,8 +664,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         confirmVariant="primary"
         onConfirm={() => {
           setSaveDialogOpen(false);
-          toast.info("저장 기능은 아직 연결되지 않았습니다", {
-            description: "화면 레이아웃만 우선 구현된 상태입니다.",
+          toast.info("저장 기능은 아직 서버 위경도 계약과 연결되지 않았습니다", {
+            description: "지금 찍은 핀은 이 화면에만 있습니다. 새로고침하면 사라집니다.",
           });
         }}
       />

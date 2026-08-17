@@ -1,19 +1,21 @@
 "use client";
 
-import { ImageIcon } from "@radix-ui/react-icons";
+import { Pencil1Icon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Map, MapMarker, useKakaoLoader } from "react-kakao-maps-sdk";
 import { Bottombar } from "@/components/ui/Bottombar";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
+import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { deleteFestival, getManagedFestival, searchFestivalSeries, updateFestival } from "./api";
 import { DATE_DISPLAY_PATTERN, formatDateInput, toDisplayDate, toIsoDate } from "./dateFormat";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
-import type { FestivalLocationRequest, FestivalSeriesSearchResult } from "./types";
+import type { FestivalLocationRequest, FestivalLocationResponse, FestivalSeriesSearchResult } from "./types";
 
 export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
   const router = useRouter();
@@ -191,8 +193,17 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
           {dateError ? <p className="body-caption text-error">{dateError}</p> : null}
         </div>
 
-        <div className="col-span-2 flex min-h-[calc(100vh-252px)] items-center justify-center rounded-lg bg-zinc-100">
-          <ImageIcon className="size-16 text-zinc-400" />
+        <div className="relative col-span-2 min-h-[calc(100vh-252px)] overflow-hidden rounded-lg bg-zinc-100">
+          <FestivalLocationMap locations={festival?.locations} />
+          <Button
+            type="button"
+            variant="primary"
+            icon={<Pencil1Icon />}
+            className="absolute top-4 right-4 shadow-md"
+            onClick={() => router.push(`/console/festivals/${festivalId}/boothmap`)}
+          >
+            부스지도 수정
+          </Button>
         </div>
       </div>
 
@@ -258,5 +269,35 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
         <p className="body-small text-error">{getApiErrorMessage(deleteMutation.error)}</p>
       ) : null}
     </div>
+  );
+}
+
+function FestivalLocationMap({ locations }: { locations: FestivalLocationResponse[] | undefined }) {
+  const [loading, error] = useKakaoLoader({
+    appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
+  });
+  const center = useMemo(() => primaryFestivalCenter(locations), [locations]);
+  const hasCoordinates = locations?.some(
+    (location) => location.latitude != null && location.longitude != null,
+  );
+
+  if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY || error || loading) {
+    return (
+      <div className="flex h-full min-h-[calc(100vh-252px)] items-center justify-center">
+        <p className="body-small text-zinc-500">
+          {!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY
+            ? "NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다."
+            : error
+              ? "카카오맵을 불러오지 못했습니다."
+              : "지도를 불러오는 중..."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Map center={center} isPanto={false} level={4} className="absolute inset-0">
+      {hasCoordinates ? <MapMarker position={center} /> : null}
+    </Map>
   );
 }

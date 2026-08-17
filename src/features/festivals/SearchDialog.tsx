@@ -12,6 +12,8 @@ export interface SearchDialogResult {
   id: string;
   label: string;
   description?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface SearchDialogProps {

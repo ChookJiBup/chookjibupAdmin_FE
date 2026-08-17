@@ -1,38 +1,22 @@
 "use client";
 
 import {
-  CheckIcon,
-  Cross2Icon,
   MagnifyingGlassIcon,
   PlusIcon,
   TrashIcon,
 } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useKakaoLoader } from "react-kakao-maps-sdk";
-import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@/components/ui/attachment";
 import { Bottombar } from "@/components/ui/Bottombar";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import { setCachedMapId } from "@/features/boothmap/mapIdCache";
 import { DATE_DISPLAY_PATTERN, formatDateInput, toDisplayDate, toIsoDate } from "./dateFormat";
-import {
-  createFestival,
-  createFestivalWithMap,
-  searchFestivalSeries,
-} from "@/features/festivals/api";
+import { createFestival, searchFestivalSeries } from "@/features/festivals/api";
 import type { FestivalSeriesSearchResult } from "@/features/festivals/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import {
@@ -44,13 +28,8 @@ import {
 } from "./locationDraft";
 import { SearchDialog, type SearchDialogResult, type SearchDialogState } from "./SearchDialog";
 
-function formatFileSize(bytes: number) {
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 export function FestivalRegisterForm() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -58,7 +37,6 @@ export function FestivalRegisterForm() {
   const [primaryKey, setPrimaryKey] = useState(() => locations[0].key);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [boothMapFile, setBoothMapFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
@@ -121,6 +99,8 @@ export function FestivalRegisterForm() {
           id: `${item.address_name}-${index}`,
           label: item.road_address?.address_name ?? item.address_name,
           description: item.address_name,
+          latitude: Number(item.y),
+          longitude: Number(item.x),
         })),
       );
       setAddressSearchState("result");
@@ -161,23 +141,11 @@ export function FestivalRegisterForm() {
         operationEndTime: "18:00:00",
       };
 
-      // 배치도 이미지를 첨부했으면 축제 생성과 동시에 배치도도 만든다 — 배치도는
-      // 이 API에서만 만들 수 있어(나중에 따로 붙이는 API가 없다), 여기서 놓치면
-      // 이 축제는 앞으로도 배치도를 가질 방법이 없다.
-      if (boothMapFile) {
-        const { festival, map } = await createFestivalWithMap(request, boothMapFile);
-        setCachedMapId(festival.festivalId, map.mapId);
-        return { festival, hasMap: true };
-      }
       const festival = await createFestival(request);
-      return { festival, hasMap: false };
+      return festival;
     },
-    onSuccess: ({ festival, hasMap }) => {
-      router.push(
-        hasMap
-          ? `/console/festivals/${festival.festivalId}/boothmap`
-          : `/console/festivals/${festival.festivalId}`,
-      );
+    onSuccess: (festival) => {
+      router.push(`/console/festivals/${festival.festivalId}/boothmap`);
     },
   });
 
@@ -304,44 +272,6 @@ export function FestivalRegisterForm() {
         {formError ? <p className="body-caption text-error">{formError}</p> : null}
       </FormSection>
 
-      <FormSection label="축제부스지도 첨부">
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={(event) => setBoothMapFile(event.target.files?.[0] ?? null)}
-        />
-        <Button type="button" className="w-full" onClick={() => fileInputRef.current?.click()}>
-          파일 첨부하기
-        </Button>
-        {boothMapFile ? (
-          <Attachment className="border-zinc-200 bg-white has-data-[slot=attachment-content]:px-4 has-data-[slot=attachment-content]:py-2">
-            <AttachmentMedia className="size-8 rounded-full bg-zinc-100">
-              <CheckIcon className="size-4 text-zinc-950" />
-            </AttachmentMedia>
-            <AttachmentContent className="flex-none">
-              <AttachmentTitle className="body-small-bold! text-zinc-950">
-                {boothMapFile.name}
-              </AttachmentTitle>
-              <AttachmentDescription className="body-caption! text-zinc-500">
-                업로드 · {formatFileSize(boothMapFile.size)}
-              </AttachmentDescription>
-            </AttachmentContent>
-            <AttachmentActions className="ml-10">
-              <AttachmentAction
-                className="hover:bg-zinc-100"
-                onClick={() => {
-                  setBoothMapFile(null);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-              >
-                <Cross2Icon className="size-3 text-zinc-500" />
-              </AttachmentAction>
-            </AttachmentActions>
-          </Attachment>
-        ) : null}
-      </FormSection>
-
       {createMutation.isError ? (
         <p className="body-small text-error">{getApiErrorMessage(createMutation.error)}</p>
       ) : null}
@@ -399,7 +329,11 @@ export function FestivalRegisterForm() {
         noResultSubtext="하단의 직접 입력을 눌러 주소를 등록해 주세요"
         onSelectResult={(result) => {
           if (addressSearchTargetKey)
-            updateLocation(addressSearchTargetKey, { roadAddress: result.label });
+            updateLocation(addressSearchTargetKey, {
+              roadAddress: result.label,
+              latitude: result.latitude,
+              longitude: result.longitude,
+            });
           setAddressSearchTargetKey(null);
         }}
         onManualInput={(value) => {

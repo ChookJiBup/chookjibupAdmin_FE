@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil1Icon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { CongestionBadge } from "@/components/ui/CongestionBadge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
+import { getManagedFestival } from "@/features/festivals/api";
+import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { getFestivalDashboard } from "./api";
@@ -53,6 +55,14 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const [zoomStep, setZoomStep] = useState(0);
   const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<string[]>([]);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
+  const festivalQuery = useQuery({
+    queryKey: ["managed-festival", festivalId],
+    queryFn: () => getManagedFestival(festivalId),
+  });
+  const mapCenter = useMemo(
+    () => primaryFestivalCenter(festivalQuery.data?.locations),
+    [festivalQuery.data?.locations],
+  );
   const dashboardQuery = useQuery({
     queryKey: ["festival-dashboard", festivalId],
     queryFn: () => getFestivalDashboard(festivalId),
@@ -75,10 +85,12 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <BoothMapView
+        booths={MOCK_ZONES.flatMap((zone) => zone.booths)}
         selectedBooth={selectedBooth}
         onSelectBooth={setSelectedBooth}
         zoomStep={zoomStep}
         suggestions={activeSuggestions}
+        center={mapCenter}
       />
 
       <BoothTreeSidebar

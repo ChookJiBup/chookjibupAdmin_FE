@@ -7,6 +7,8 @@ export interface LocationDraft {
   locationName: string;
   roadAddress: string;
   detailAddress: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 function createDraftKey() {
@@ -23,6 +25,8 @@ export function createLocationDraft(
     locationName,
     roadAddress: "",
     detailAddress: "",
+    latitude: undefined,
+    longitude: undefined,
   };
 }
 
@@ -34,6 +38,8 @@ export function createInitialLocationDrafts(): LocationDraft[] {
       locationName: "메인 행사장",
       roadAddress: "",
       detailAddress: "",
+      latitude: undefined,
+      longitude: undefined,
     },
   ];
 }
@@ -52,6 +58,8 @@ export function toFestivalLocationRequests(
     locationName: draft.locationName,
     roadAddress: draft.roadAddress,
     detailAddress: draft.detailAddress || undefined,
+    latitude: draft.latitude,
+    longitude: draft.longitude,
     primary: draft.key === primaryKey,
     sortOrder: index,
   }));
