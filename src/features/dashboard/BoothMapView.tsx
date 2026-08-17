@@ -1,67 +1,102 @@
 "use client";
 
 import { Map, CustomOverlayMap, Polyline, useKakaoLoader } from "react-kakao-maps-sdk";
-import { Cross2Icon, ReloadIcon } from "@radix-ui/react-icons";
+import { Cross2Icon, UpdateIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { IconButton } from "@/components/ui/IconButton";
 import { Button } from "@/components/ui/Button";
-import { CongestionBadge } from "@/components/ui/CongestionBadge";
+import { CongestionText } from "@/components/ui/CongestionBadge";
 import { StaffBadge, OperatorBadge } from "@/components/ui/RoleBadge";
-import { MapOverlayCard } from "@/components/map/MapOverlayCard";
 import { FESTIVAL_MAP_CENTER } from "./mockData";
 import type { AiSuggestion, Booth } from "./types";
 
+function BoothMarker({
+  booth,
+  selected,
+  onClick,
+}: {
+  booth: Booth;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <CustomOverlayMap position={{ lat: booth.lat, lng: booth.lng }} zIndex={selected ? 10 : 1}>
+      <button
+        type="button"
+        aria-label={booth.name}
+        onClick={onClick}
+        className="flex size-3 items-center justify-center"
+      >
+        {selected ? (
+          <span className="flex size-3 items-center justify-center rounded-full bg-point-300">
+            <span className="size-1 rounded-full bg-point-600" />
+          </span>
+        ) : (
+          <span className="size-3 rounded-full bg-point-600 shadow-sm" />
+        )}
+      </button>
+    </CustomOverlayMap>
+  );
+}
+
+/** 지도 마커 위에 뜨는 부스 상세정보 말풍선. 아래쪽 중앙에서 마커를 향해 뾰족한 꼬리가 이어진다. */
 function BoothPopup({ booth, onClose }: { booth: Booth; onClose: () => void }) {
   const [updatedMinutesAgo, setUpdatedMinutesAgo] = useState(booth.updatedMinutesAgo);
 
   return (
-    <MapOverlayCard className="mb-3 shadow-lg">
-      <div className="flex items-center justify-between">
-        <p className="body-regular-bold text-zinc-950">{booth.name}</p>
-        <IconButton
-          variant="ghost"
-          aria-label="닫기"
-          icon={<Cross2Icon />}
-          onClick={onClose}
-          className="-mr-1"
-        />
-      </div>
+    <div className="mb-2.5 flex flex-col items-center">
+      <div className="w-72 rounded-2xl bg-white p-5">
+        <div className="relative flex items-center justify-center border-b border-zinc-200 pb-3">
+          <p className="body-large-bold text-center text-zinc-950">{booth.name}</p>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label="닫기"
+            icon={<Cross2Icon />}
+            onClick={onClose}
+            className="absolute right-0"
+          />
+        </div>
 
-      <div className="mt-3 flex items-center justify-between">
-        <p className="body-small text-zinc-500">실시간 혼잡도정보</p>
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<ReloadIcon />}
-          className="text-zinc-400 hover:text-zinc-600"
-          onClick={() => setUpdatedMinutesAgo(0)}
-        >
-          {updatedMinutesAgo === 0 ? "방금 전" : `${updatedMinutesAgo}분 전`}
-        </Button>
-      </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="body-caption text-zinc-500">실시간 혼잡도정보</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<UpdateIcon className="size-3 text-zinc-950" />}
+            className="body-caption text-zinc-500 hover:text-zinc-600"
+            onClick={() => setUpdatedMinutesAgo(0)}
+          >
+            {updatedMinutesAgo === 0 ? "방금 전" : `${updatedMinutesAgo}분 전`}
+          </Button>
+        </div>
 
-      <div className="mt-2 flex items-center justify-between">
-        <p className="body-small text-zinc-500">혼잡도</p>
-        <CongestionBadge level={booth.congestionLevel} />
-      </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="body-small text-zinc-950">혼잡도</p>
+          <CongestionText level={booth.congestionLevel} />
+        </div>
 
-      <div className="mt-2 flex items-center justify-between">
-        <p className="body-small text-zinc-500">마지막 줄끝갱신자</p>
-        <div className="flex items-center gap-1">
-          <span className="body-small text-zinc-950">{booth.lastQueueUpdater.name}</span>
-          {booth.lastQueueUpdater.role === "STAFF" ? <StaffBadge /> : <OperatorBadge />}
+        <div className="mt-2 flex items-center justify-between">
+          <p className="body-small text-zinc-950">마지막 줄끝갱신자</p>
+          <div className="flex items-center gap-1.5">
+            <span className="body-small-bold text-zinc-950">{booth.lastQueueUpdater.name}</span>
+            {booth.lastQueueUpdater.role === "STAFF" ? <StaffBadge /> : <OperatorBadge />}
+          </div>
         </div>
       </div>
-    </MapOverlayCard>
+      <div className="-mt-2.5 size-5 rotate-45 bg-white" />
+    </div>
   );
 }
 
 export function BoothMapView({
+  booths,
   selectedBooth,
   onSelectBooth,
   zoomStep = 0,
   suggestions = [],
 }: {
+  booths: Booth[];
   selectedBooth: Booth | null;
   onSelectBooth: (booth: Booth | null) => void;
   /** 기본 확대 수준(4)에 대한 상대값. 낮을수록 확대된다. */
@@ -124,6 +159,15 @@ export function BoothMapView({
           />
         ) : null,
       )}
+
+      {booths.map((booth) => (
+        <BoothMarker
+          key={booth.boothId}
+          booth={booth}
+          selected={selectedBooth?.boothId === booth.boothId}
+          onClick={() => onSelectBooth(booth)}
+        />
+      ))}
 
       {selectedBooth ? (
         <CustomOverlayMap

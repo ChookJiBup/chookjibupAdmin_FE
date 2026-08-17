@@ -18,6 +18,8 @@ import { DashboardStatsBar } from "./DashboardStatsBar";
 import { MOCK_AI_SUGGESTIONS, MOCK_SUMMARY, MOCK_ZONES } from "./mockData";
 import type { Booth } from "./types";
 
+const ALL_BOOTHS = MOCK_ZONES.flatMap((zone) => zone.booths);
+
 function DashboardMetric({
   value,
   label,
@@ -75,6 +77,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <BoothMapView
+        booths={ALL_BOOTHS}
         selectedBooth={selectedBooth}
         onSelectBooth={setSelectedBooth}
         zoomStep={zoomStep}
