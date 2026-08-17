@@ -5,14 +5,7 @@ import { useAdminAuthStore } from "@/store/adminAuthStore";
 // baseURL은 공통 루트로 두고, 각 API 함수가 나머지 경로를 명시한다.
 export const adminApiClient = axios.create({
   baseURL: "/api",
-});
-
-adminApiClient.interceptors.request.use((config) => {
-  const session = useAdminAuthStore.getState().session;
-  if (session) {
-    config.headers.Authorization = `${session.tokenType} ${session.accessToken}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 adminApiClient.interceptors.response.use(

@@ -3,9 +3,11 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AdminSummary } from "@/features/auth/admin/types";
 
+if (typeof window !== "undefined") {
+  window.localStorage.removeItem("chookjibup-admin-auth");
+}
+
 interface AdminSession {
-  accessToken: string;
-  tokenType: string;
   /** 토큰 만료 시각 (epoch ms) */
   expiresAt: number;
   admin: AdminSummary;
@@ -13,13 +15,7 @@ interface AdminSession {
 
 interface AdminAuthState {
   session: AdminSession | null;
-  setSession: (
-    accessToken: string,
-    tokenType: string,
-    expiresIn: number,
-    admin: AdminSummary,
-  ) => void;
-  /** 프로필 수정 API가 아직 없어, 이 브라우저의 세션에만 반영한다(서버 미반영). */
+  setSession: (expiresIn: number, admin: AdminSummary) => void;
   updateAdminProfile: (patch: Partial<AdminSummary>) => void;
   clearSession: () => void;
   isSessionValid: () => boolean;
@@ -29,11 +25,9 @@ export const useAdminAuthStore = create<AdminAuthState>()(
   persist(
     (set, get) => ({
       session: null,
-      setSession: (accessToken, tokenType, expiresIn, admin) =>
+      setSession: (expiresIn, admin) =>
         set({
           session: {
-            accessToken,
-            tokenType,
             expiresAt: Date.now() + expiresIn * 1000,
             admin,
           },
@@ -49,7 +43,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
         return session !== null && session.expiresAt > Date.now();
       },
     }),
-    { name: "chookjibup-admin-auth" },
+    { name: "chookjibup-admin-session" },
   ),
 );
 

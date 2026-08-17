@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
-import { getAdminProfile, withdrawAdmin } from "@/features/auth/admin/api";
+import {
+  getAdminProfile,
+  logoutAdmin,
+  updateAdminProfile as updateAdminProfileApi,
+  withdrawAdmin,
+} from "@/features/auth/admin/api";
 import type { AdminAccountProfile } from "@/features/auth/admin/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
@@ -39,20 +44,32 @@ export default function MyPage() {
     },
   });
 
+  const profileUpdateMutation = useMutation({
+    mutationFn: updateAdminProfileApi,
+    onSuccess: (_, nextProfile) => {
+      updateAdminProfile(nextProfile);
+      queryClient.setQueryData<AdminAccountProfile>(["admin-profile"], (current) =>
+        current ? { ...current, ...nextProfile } : current,
+      );
+      toast.success("프로필이 수정되었습니다.");
+    },
+  });
+
   const profile = profileQuery.data;
 
-  function handleLogout() {
-    clearSession();
-    router.replace("/login");
+  async function handleLogout() {
+    try {
+      await logoutAdmin();
+    } finally {
+      clearSession();
+      window.localStorage.removeItem("chookjibup-admin-auth");
+      router.replace("/login");
+    }
   }
 
   function handleProfileUpdate() {
     const nextProfile = { name: name.trim(), department: department.trim(), rank: rank.trim() };
-    updateAdminProfile(nextProfile);
-    queryClient.setQueryData<AdminAccountProfile>(["admin-profile"], (current) =>
-      current ? { ...current, ...nextProfile } : current,
-    );
-    toast.success("프로필이 수정되었습니다.");
+    profileUpdateMutation.mutate(nextProfile);
   }
 
   if (!admin) return null;
@@ -78,6 +95,9 @@ export default function MyPage() {
         </div>
         {profileQuery.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(profileQuery.error)}</p>
+        ) : null}
+        {profileUpdateMutation.isError ? (
+          <p className="body-small text-error">{getApiErrorMessage(profileUpdateMutation.error)}</p>
         ) : null}
       </FormSection>
 
@@ -110,7 +130,9 @@ export default function MyPage() {
 
       <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-end border-t border-zinc-200 bg-white px-10">
         <Button
-          disabled={!name.trim() || !department.trim() || !rank.trim()}
+          disabled={
+            !name.trim() || !department.trim() || !rank.trim() || profileUpdateMutation.isPending
+          }
           onClick={handleProfileUpdate}
         >
           수정하기

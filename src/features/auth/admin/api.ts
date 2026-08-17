@@ -9,6 +9,7 @@ import type {
   AdminPasswordResetConfirmRequest,
   AdminSignupRequest,
   AdminSignupResponse,
+  UpdateAdminProfileRequest,
 } from "./types";
 
 export async function getAdminProfile(): Promise<AdminAccountProfile> {
@@ -36,6 +37,14 @@ export async function loginAdmin(request: AdminLoginRequest): Promise<AdminLogin
     request,
   );
   return data.data;
+}
+
+export async function logoutAdmin(): Promise<void> {
+  await adminApiClient.post<ApiResponse<void>>("/admin/auth/logout");
+}
+
+export async function updateAdminProfile(request: UpdateAdminProfileRequest): Promise<void> {
+  await adminApiClient.patch<ApiResponse<void>>("/admin/me", request);
 }
 
 export async function requestEmailVerification(
