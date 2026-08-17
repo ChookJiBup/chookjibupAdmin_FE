@@ -16,6 +16,12 @@ const CONGESTION_CLASSES: Record<CongestionLevel, string> = {
   HIGH: "bg-red-600 text-white hover:bg-red-600",
 };
 
+const CONGESTION_TEXT_CLASSES: Record<CongestionLevel, string> = {
+  LOW: "text-secondary-600",
+  MEDIUM: "text-point-500",
+  HIGH: "text-red-600",
+};
+
 export function CongestionBadge({
   level,
   className,
@@ -27,5 +33,20 @@ export function CongestionBadge({
     <Badge className={cn(CONGESTION_BADGE_BASE_CLASSES, CONGESTION_CLASSES[level], className)}>
       {CONGESTION_LABEL[level]}
     </Badge>
+  );
+}
+
+/** 배지(pill) 없이 혼잡도 라벨만 색상 텍스트로 보여준다 (지도 팝업 등 배경이 이미 카드인 곳에서 사용). */
+export function CongestionText({
+  level,
+  className,
+}: {
+  level: CongestionLevel;
+  className?: string;
+}) {
+  return (
+    <span className={cn("body-small-bold", CONGESTION_TEXT_CLASSES[level], className)}>
+      {CONGESTION_LABEL[level]}
+    </span>
   );
 }
