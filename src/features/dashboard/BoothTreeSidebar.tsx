@@ -91,7 +91,7 @@ function ZoneSection({
                 </button>
 
                 {representativeOpen ? (
-                  <ul className="mt-1 flex flex-col gap-1 pl-6">
+                  <ul className="flex flex-col gap-1 pl-6">
                     {booths.map((booth) => {
                       const isSelected = selectedBoothId === booth.boothId;
                       return (
