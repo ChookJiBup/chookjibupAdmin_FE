@@ -3,7 +3,7 @@
 import { MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useKakaoLoader } from "react-kakao-maps-sdk";
 import { Bottombar } from "@/components/ui/Bottombar";
 import { Button } from "@/components/ui/Button";
@@ -23,9 +23,17 @@ import {
   type LocationDraft,
 } from "./locationDraft";
 import { SearchDialog, type SearchDialogResult, type SearchDialogState } from "./SearchDialog";
+import { canCreateFestival } from "@/features/auth/admin/types";
+import { useAdminAuthStore } from "@/store/adminAuthStore";
 
 export function FestivalRegisterForm() {
   const router = useRouter();
+  const accountKind = useAdminAuthStore((state) => state.session?.admin.accountKind);
+  const allowedToCreate = canCreateFestival(accountKind);
+
+  useEffect(() => {
+    if (!allowedToCreate) router.replace("/console");
+  }, [allowedToCreate, router]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

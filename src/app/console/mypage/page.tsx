@@ -86,7 +86,7 @@ export default function MyPage() {
   if (profile && !formReady) {
     setName(profile.name);
     setOrganization(profile.organization);
-    setRank(profile.rank);
+    setRank(profile.rank ?? "");
     setFormReady(true);
   }
 
@@ -101,10 +101,11 @@ export default function MyPage() {
   }
 
   function handleProfileUpdate() {
+    const accountKind = profile?.accountKind ?? admin?.accountKind;
     profileUpdateMutation.mutate({
       name: name.trim(),
       organization: organization.trim(),
-      rank: rank.trim(),
+      rank: accountKind === "CONTRACTOR" ? null : rank.trim(),
     });
   }
 
@@ -113,6 +114,9 @@ export default function MyPage() {
   if (profileQuery.isLoading) {
     return <p className="body-regular text-zinc-500">불러오는 중...</p>;
   }
+
+  const accountKind = profile?.accountKind ?? admin.accountKind;
+  const isContractor = accountKind === "CONTRACTOR";
 
   return (
     <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
@@ -128,8 +132,8 @@ export default function MyPage() {
         />
         <div className="flex gap-3">
           <Input
-            label="과·팀"
-            placeholder="예: 토목과"
+            label={isContractor ? "업체명" : "과·팀"}
+            placeholder={isContractor ? "예: 축제기획(주)" : "예: 토목과"}
             required
             minLength={2}
             maxLength={255}
@@ -137,15 +141,17 @@ export default function MyPage() {
             value={organization}
             onChange={(event) => setOrganization(event.target.value)}
           />
-          <Input
-            label="직급"
-            placeholder="예: 과장"
-            required
-            maxLength={50}
-            wrapperClassName="flex-1"
-            value={rank}
-            onChange={(event) => setRank(event.target.value)}
-          />
+          {!isContractor ? (
+            <Input
+              label="직급"
+              placeholder="예: 과장"
+              required
+              maxLength={50}
+              wrapperClassName="flex-1"
+              value={rank}
+              onChange={(event) => setRank(event.target.value)}
+            />
+          ) : null}
         </div>
         {profileQuery.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(profileQuery.error)}</p>
@@ -195,7 +201,7 @@ export default function MyPage() {
             !formReady ||
             !name.trim() ||
             !organization.trim() ||
-            !rank.trim() ||
+            (!isContractor && !rank.trim()) ||
             profileUpdateMutation.isPending
           }
           onClick={handleProfileUpdate}

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import type { AdminRole } from "@/features/auth/admin/types";
+import type { AccountKind, AdminRole } from "@/features/auth/admin/types";
+import { canCreateFestival } from "@/features/auth/admin/types";
 
 /**
  * 콘솔 상단 네비게이션. 축제 범위·역할에 따라 다른 탭 목록을 가로로 나열한다.
@@ -28,20 +29,27 @@ export interface NavProps {
   festivalId?: string;
   /** 로그인한 관리자의 현재 축제 역할. 총괄관리자/운영자에 따라 노출되는 탭이 다르다. */
   role?: AdminRole | null;
+  /** 계정 종류. 축제 미선택 화면에서 축제등록 노출 여부를 결정한다. */
+  accountKind?: AccountKind | null;
 }
 
 function buildDefaultItems(
   festivalId: string | undefined,
   role: AdminRole | null | undefined,
+  accountKind: AccountKind | null | undefined,
 ): NavItem[] {
   if (!festivalId) {
-    return [
-      { label: "축제등록", href: "/console/festivals/new" },
+    const items: NavItem[] = [];
+    if (canCreateFestival(accountKind)) {
+      items.push({ label: "축제등록", href: "/console/festivals/new" });
+    }
+    items.push(
       { label: "축제관리", href: "/console/festivals" },
       { label: "대시보드", href: "/console/festivals/dashboard" },
       { label: "운영자관리", href: "/console/festivals/operators" },
       { label: "스태프관리", href: "/console/festivals/staffs" },
-    ];
+    );
+    return items;
   }
 
   const festivalBase = `/console/festivals/${festivalId}`;
@@ -61,10 +69,10 @@ function buildDefaultItems(
   ];
 }
 
-export function Nav({ items, festivalId, role }: NavProps) {
+export function Nav({ items, festivalId, role, accountKind }: NavProps) {
   const pathname = usePathname();
   const params = useParams<{ festivalId?: string }>();
-  const navItems = items ?? buildDefaultItems(festivalId ?? params?.festivalId, role);
+  const navItems = items ?? buildDefaultItems(festivalId ?? params?.festivalId, role, accountKind);
 
   // "축제관리"처럼 다른 탭 href의 상위 경로가 되는 항목이 있을 수 있어,
   // 가장 구체적으로(가장 길게) 일치하는 항목 하나만 active로 표시한다.

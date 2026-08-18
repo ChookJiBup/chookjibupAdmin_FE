@@ -15,7 +15,7 @@ export function ForgotPasswordForm() {
   return (
     <AuthCard title="비밀번호 찾기">
       <p className="body-regular mt-2 text-center text-zinc-950">
-        가입한 이메일 주소를 입력해 주세요.
+        공무원·외부업자 모두 가입한 이메일을 입력해 주세요.
         <br />
         비밀번호 재설정 링크를 보내드립니다.
       </p>
