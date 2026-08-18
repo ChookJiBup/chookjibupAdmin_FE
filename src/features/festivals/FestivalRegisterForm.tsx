@@ -9,7 +9,7 @@ import {
 } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useKakaoLoader } from "react-kakao-maps-sdk";
 import {
   Attachment,
@@ -43,6 +43,8 @@ import {
   type LocationDraft,
 } from "./locationDraft";
 import { SearchDialog, type SearchDialogResult, type SearchDialogState } from "./SearchDialog";
+import { canCreateFestival } from "@/features/auth/admin/types";
+import { useAdminAuthStore } from "@/store/adminAuthStore";
 
 function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -51,6 +53,14 @@ function formatFileSize(bytes: number) {
 export function FestivalRegisterForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const accountKind = useAdminAuthStore((state) => state.session?.admin.accountKind);
+  const allowedToCreate = canCreateFestival(accountKind);
+
+  useEffect(() => {
+    if (!allowedToCreate) {
+      router.replace("/console");
+    }
+  }, [allowedToCreate, router]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -199,6 +209,10 @@ export function FestivalRegisterForm() {
   }
 
   const addressSearchTarget = locations.find((loc) => loc.key === addressSearchTargetKey) ?? null;
+
+  if (!allowedToCreate) {
+    return null;
+  }
 
   return (
     <div className="col-span-2 flex min-w-0 flex-col gap-6 pb-24">

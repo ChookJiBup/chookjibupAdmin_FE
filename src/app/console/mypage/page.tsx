@@ -49,22 +49,22 @@ export default function MyPage() {
 
   if (!admin) return null;
   const profile = profileQuery.data;
+  const accountKind = profile?.accountKind ?? admin.accountKind;
+  const organizationLabel = accountKind === "CONTRACTOR" ? "업체명" : "과·팀";
 
   return (
     <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
       <FormSection label="프로필 설정">
         <Input label="이메일" disabled value={profile?.email ?? admin.email} />
         <Input label="이름" disabled value={profile?.name ?? admin.name} />
-        <Input label="소속 기관" disabled value={profile?.organization ?? admin.organization} />
-        <div className="flex gap-3">
-          <Input
-            label="부서"
-            wrapperClassName="flex-1"
-            disabled
-            value={profile?.department ?? ""}
-          />
-          <Input label="직급" wrapperClassName="flex-1" disabled value={profile?.rank ?? ""} />
-        </div>
+        <Input
+          label={organizationLabel}
+          disabled
+          value={profile?.organization ?? admin.organization}
+        />
+        {accountKind !== "CONTRACTOR" ? (
+          <Input label="직급" disabled value={profile?.rank ?? admin.rank ?? ""} />
+        ) : null}
         {profileQuery.isError ? (
           <p className="body-small text-error">{getApiErrorMessage(profileQuery.error)}</p>
         ) : null}

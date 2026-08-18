@@ -1,3 +1,4 @@
+import { FestivalOwnerGuard } from "@/components/auth/FestivalOwnerGuard";
 import { OperatorsPanel } from "@/features/operators/OperatorsPanel";
 
 export default async function OperatorManagePage({
@@ -6,5 +7,9 @@ export default async function OperatorManagePage({
   params: Promise<{ festivalId: string }>;
 }) {
   const { festivalId } = await params;
-  return <OperatorsPanel festivalId={festivalId} />;
+  return (
+    <FestivalOwnerGuard festivalId={festivalId}>
+      <OperatorsPanel festivalId={festivalId} />
+    </FestivalOwnerGuard>
+  );
 }

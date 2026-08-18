@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { confirmEmailVerification, requestEmailVerification, signupAdmin } from "./api";
+import { confirmEmailVerification, requestEmailVerification, signupAdmin, signupContractor } from "./api";
 import type { PolicySlug } from "./policyContent";
+import type { AccountKind } from "./types";
 
 type Step = "agree" | "email" | "code" | "profile";
 
@@ -35,6 +36,7 @@ const INITIAL_AGREEMENTS: Agreements = {
 };
 
 interface SignupFormProps {
+  accountKind: AccountKind;
   /** 회원가입이 성공적으로 완료됐을 때 호출된다. */
   onComplete: () => void;
 }
@@ -45,14 +47,15 @@ function formatRemaining(seconds: number) {
   return `${mm}:${ss}`;
 }
 
-export function SignupForm({ onComplete }: SignupFormProps) {
+export function SignupForm({ accountKind, onComplete }: SignupFormProps) {
+  const isGovernment = accountKind === "GOVERNMENT";
   const [step, setStep] = useState<Step>("agree");
   const [agreements, setAgreements] = useState<Agreements>(INITIAL_AGREEMENTS);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [department, setDepartment] = useState("");
-  const [position, setPosition] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [rank, setRank] = useState("");
   const [password, setPassword] = useState("");
   const [remaining, setRemaining] = useState(CODE_TIMER_SECONDS);
 
@@ -69,7 +72,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
   }, [step, remaining]);
 
   const requestCodeMutation = useMutation({
-    mutationFn: () => requestEmailVerification({ email }),
+    mutationFn: () => requestEmailVerification({ email, accountKind }),
     onSuccess: () => {
       setStep("code");
       setRemaining(CODE_TIMER_SECONDS);
@@ -77,7 +80,7 @@ export function SignupForm({ onComplete }: SignupFormProps) {
   });
 
   const resendCodeMutation = useMutation({
-    mutationFn: () => requestEmailVerification({ email }),
+    mutationFn: () => requestEmailVerification({ email, accountKind }),
     onSuccess: () => setRemaining(CODE_TIMER_SECONDS),
   });
 
@@ -96,21 +99,31 @@ export function SignupForm({ onComplete }: SignupFormProps) {
 
   const signupMutation = useMutation({
     mutationFn: () =>
-      signupAdmin({
-        email,
-        name,
-        // 화면설계서에 "소속 기관" 입력이 따로 없어, 부서 값을 임시로 재사용한다.
-        organization: department,
-        department,
-        rank: position,
-        password,
-        passwordConfirm: password,
-      }),
+      isGovernment
+        ? signupAdmin({
+            email,
+            name,
+            organization,
+            rank,
+            password,
+            passwordConfirm: password,
+          })
+        : signupContractor({
+            email,
+            name,
+            companyName: organization,
+            password,
+            passwordConfirm: password,
+          }),
     onSuccess: onComplete,
   });
 
+  const profileReady = Boolean(
+    name && organization && password && (!isGovernment || rank),
+  );
+
   return (
-    <AuthCard title="회원가입">
+    <AuthCard title={isGovernment ? "공무원 회원가입" : "외부업자 회원가입"}>
       {step === "agree" && (
         <div className="mt-8 flex flex-col">
           <label className="flex cursor-pointer items-center gap-2 py-2">
@@ -160,39 +173,40 @@ export function SignupForm({ onComplete }: SignupFormProps) {
       )}
 
       {step === "email" && (
-        <>
-          <form
-            className="mt-8 flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              requestCodeMutation.mutate();
-            }}
+        <form
+          className="mt-8 flex flex-col gap-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            requestCodeMutation.mutate();
+          }}
+        >
+          <Input
+            type="email"
+            required
+            label="이메일"
+            placeholder={isGovernment ? "이메일주소(공무원)" : "이메일 주소"}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            helperText={
+              isGovernment
+                ? "공무원 공식 이메일(.go.kr, korea.kr)만 사용할 수 있습니다."
+                : "일반 이메일을 입력해 주세요. 공무원 공식 이메일은 사용할 수 없습니다."
+            }
+          />
+
+          {requestCodeMutation.isError && (
+            <p className="body-small text-error">{getApiErrorMessage(requestCodeMutation.error)}</p>
+          )}
+
+          <Button
+            type="submit"
+            size="lg"
+            disabled={!email || requestCodeMutation.isPending}
+            className="w-full"
           >
-            <Input
-              type="email"
-              required
-              label="이메일"
-              placeholder="이메일주소(공무원)"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-
-            {requestCodeMutation.isError && (
-              <p className="body-small text-error">
-                {getApiErrorMessage(requestCodeMutation.error)}
-              </p>
-            )}
-
-            <Button
-              type="submit"
-              size="lg"
-              disabled={!email || requestCodeMutation.isPending}
-              className="w-full"
-            >
-              {requestCodeMutation.isPending ? "발송 중..." : "인증요청"}
-            </Button>
-          </form>
-        </>
+            {requestCodeMutation.isPending ? "발송 중..." : "인증요청"}
+          </Button>
+        </form>
       )}
 
       {step === "code" && (
@@ -282,35 +296,43 @@ export function SignupForm({ onComplete }: SignupFormProps) {
             onChange={(event) => setName(event.target.value)}
           />
 
-          <div className="flex gap-3">
+          {isGovernment ? (
+            <div className="flex gap-3">
+              <Input
+                type="text"
+                required
+                label="과·팀"
+                placeholder="과·팀"
+                value={organization}
+                onChange={(event) => setOrganization(event.target.value)}
+              />
+              <Input
+                type="text"
+                required
+                label="직급"
+                placeholder="직급"
+                value={rank}
+                onChange={(event) => setRank(event.target.value)}
+              />
+            </div>
+          ) : (
             <Input
               type="text"
               required
-              label="부서"
-              placeholder="부서"
-              value={department}
-              onChange={(event) => setDepartment(event.target.value)}
+              minLength={2}
+              maxLength={255}
+              label="업체명"
+              placeholder="업체명"
+              value={organization}
+              onChange={(event) => setOrganization(event.target.value)}
             />
-            <Input
-              type="text"
-              required
-              label="직급"
-              placeholder="직급"
-              value={position}
-              onChange={(event) => setPosition(event.target.value)}
-            />
-          </div>
+          )}
 
           {signupMutation.isError && (
             <p className="body-small text-error">{getApiErrorMessage(signupMutation.error)}</p>
           )}
 
-          <Button
-            type="submit"
-            size="lg"
-            disabled={!name || !department || !position || !password || signupMutation.isPending}
-            className="w-full"
-          >
+          <Button type="submit" size="lg" disabled={!profileReady || signupMutation.isPending} className="w-full">
             {signupMutation.isPending ? "가입 중..." : "가입하기"}
           </Button>
         </form>
