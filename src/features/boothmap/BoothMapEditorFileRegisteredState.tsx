@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomOverlayMap, Map as KakaoMap, Polygon, useKakaoLoader } from "react-kakao-maps-sdk";
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
   Cross2Icon,
+  Crosshair2Icon,
   DimensionsIcon,
+  FaceIcon,
+  FileIcon,
   HamburgerMenuIcon,
+  HomeIcon,
   RadiobuttonIcon,
   ResetIcon,
   RulerHorizontalIcon,
@@ -26,10 +28,12 @@ import { FESTIVAL_MAP_CENTER } from "@/features/dashboard/mockData";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { cn } from "@/lib/utils";
-import { ensureCoordinateMap, getMapEditor, saveMapEditor } from "./api";
+import { ensureCoordinateMap, getMapEditor, replaceFestivalMap, saveMapEditor } from "./api";
 import { boothMapPinsToNodeChanges, nodeToLocalBooth, type LocalBoothPin } from "./geometryWgs84";
 import { MapInfoPopover } from "./MapInfoPopover";
 import { primaryFestivalCenter } from "./mapCenter";
+import type { NodeType } from "./types";
+import { ZoneListItem } from "./ZoneListItem";
 
 let cachedEmptyDragImage: HTMLImageElement | null = null;
 /** 드래그 고스트를 숨기는 데 쓰는 1x1 투명 GIF — data URI라 동기적으로 디코딩된다. */
@@ -49,24 +53,56 @@ interface LocalZone {
 }
 
 function createZoneId() {
-  return `zone-${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
-/** 구역 멤버 부스들의 좌표를 감싸는 사각 폴리곤 좌표를 만든다(약간의 여백 포함). */
+const NODE_TYPE_LABEL: Partial<Record<NodeType, string>> = {
+  OTHER: "시설",
+  BOOTH: "부스",
+  ENTRANCE: "입구",
+  EXIT: "출구",
+  RESTROOM: "화장실",
+};
+
+/** 구역 멤버를 감싸는 최소 볼록 다각형에 여백을 더해 구역 경계를 만든다. */
 function zonePolygonPath(members: LocalBoothPin[]) {
   const pad = 0.0006;
-  const lats = members.map((booth) => booth.lat);
-  const lngs = members.map((booth) => booth.lng);
-  const minLat = Math.min(...lats) - pad;
-  const maxLat = Math.max(...lats) + pad;
-  const minLng = Math.min(...lngs) - pad;
-  const maxLng = Math.max(...lngs) + pad;
-  return [
-    { lat: maxLat, lng: minLng },
-    { lat: maxLat, lng: maxLng },
-    { lat: minLat, lng: maxLng },
-    { lat: minLat, lng: minLng },
-  ];
+  const points = members
+    .map(({ lat, lng }) => ({ lat, lng }))
+    .sort((a, b) => a.lng - b.lng || a.lat - b.lat);
+
+  if (points.length < 3) {
+    const lats = points.map((point) => point.lat);
+    const lngs = points.map((point) => point.lng);
+    return [
+      { lat: Math.max(...lats) + pad, lng: Math.min(...lngs) - pad },
+      { lat: Math.max(...lats) + pad, lng: Math.max(...lngs) + pad },
+      { lat: Math.min(...lats) - pad, lng: Math.max(...lngs) + pad },
+      { lat: Math.min(...lats) - pad, lng: Math.min(...lngs) - pad },
+    ];
+  }
+
+  const cross = (
+    origin: (typeof points)[number],
+    a: (typeof points)[number],
+    b: (typeof points)[number],
+  ) => (a.lng - origin.lng) * (b.lat - origin.lat) - (a.lat - origin.lat) * (b.lng - origin.lng);
+  const halfHull = (source: typeof points) => {
+    const hull: typeof points = [];
+    source.forEach((point) => {
+      while (hull.length >= 2 && cross(hull[hull.length - 2], hull[hull.length - 1], point) <= 0) {
+        hull.pop();
+      }
+      hull.push(point);
+    });
+    return hull;
+  };
+  const hull = [...halfHull(points).slice(0, -1), ...halfHull([...points].reverse()).slice(0, -1)];
+  const center = centroidOf(members);
+  return hull.map((point) => ({
+    lat: point.lat + (point.lat >= center.lat ? pad : -pad),
+    lng: point.lng + (point.lng >= center.lng ? pad : -pad),
+  }));
 }
 
 function centroidOf(members: LocalBoothPin[]) {
@@ -76,6 +112,8 @@ function centroidOf(members: LocalBoothPin[]) {
   };
 }
 
+const POPOVER_ANCHORS = { xAnchor: 0.5, yAnchor: 1 } as const;
+
 /**
  * TODO(api/map-preview): 자동 매핑된 부스의 지도 좌표/이름/신뢰도와 구역 관계를
  * 조회하는 API가 없다. 이 데이터는 `?preview=ready` 개발 프리뷰에서만 사용한다.
@@ -84,6 +122,7 @@ const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b1",
     nodeId: null,
+    nodeType: "BOOTH",
     name: "CU편의점",
     lat: FESTIVAL_MAP_CENTER.lat + 0.0032,
     lng: FESTIVAL_MAP_CENTER.lng - 0.0004,
@@ -91,6 +130,7 @@ const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b2",
     nodeId: null,
+    nodeType: "BOOTH",
     name: "(주)대정 김밥공장",
     lat: FESTIVAL_MAP_CENTER.lat + 0.0016,
     lng: FESTIVAL_MAP_CENTER.lng - 0.0022,
@@ -99,6 +139,7 @@ const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b3",
     nodeId: null,
+    nodeType: "BOOTH",
     name: "김천특산품 홍보관",
     lat: FESTIVAL_MAP_CENTER.lat + 0.0018,
     lng: FESTIVAL_MAP_CENTER.lng + 0.0028,
@@ -106,6 +147,7 @@ const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b4",
     nodeId: null,
+    nodeType: "STAGE",
     name: "메인무대",
     lat: FESTIVAL_MAP_CENTER.lat,
     lng: FESTIVAL_MAP_CENTER.lng,
@@ -113,6 +155,7 @@ const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b5",
     nodeId: null,
+    nodeType: "BOOTH",
     name: "명품로컬김밥판매존",
     lat: FESTIVAL_MAP_CENTER.lat - 0.0016,
     lng: FESTIVAL_MAP_CENTER.lng - 0.0012,
@@ -121,6 +164,7 @@ const MOCK_BOOTHS: LocalBoothPin[] = [
   {
     id: "b6",
     nodeId: null,
+    nodeType: "BOOTH",
     name: "플리마켓",
     lat: FESTIVAL_MAP_CENTER.lat - 0.0008,
     lng: FESTIVAL_MAP_CENTER.lng + 0.0018,
@@ -144,11 +188,15 @@ export function BoothMapEditorFileRegisteredState({
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const [zoomStep, setZoomStep] = useState(0);
-  const [drawTool, setDrawTool] = useState<"select" | "pin">("pin");
+  const [drawTool, setDrawTool] = useState<"select" | "pin">("select");
+  const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
+  const [pinTypeMenuOpen, setPinTypeMenuOpen] = useState(false);
   const [mapLoading, mapError] = useKakaoLoader({
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
   });
   const mapWrapperRef = useRef<HTMLDivElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+  const kakaoMapRef = useRef<kakao.maps.Map | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const festivalQuery = useQuery({
@@ -176,6 +224,7 @@ export function BoothMapEditorFileRegisteredState({
   const [deletedNodeIds, setDeletedNodeIds] = useState<string[]>([]);
   const [editorInitialized, setEditorInitialized] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [editingBoothId, setEditingBoothId] = useState<string | null>(null);
   const [zones, setZones] = useState<LocalZone[]>([]);
   const [groupPopoverOpen, setGroupPopoverOpen] = useState(false);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -218,10 +267,17 @@ export function BoothMapEditorFileRegisteredState({
 
   // 체크박스 1개만 선택되면 해당 마커로 시선 이동 + 편집 모달 노출.
   // 2개 이상이면 모달 대신 "선택 항목 그룹화" 버튼을 보여준다.
-  const selectedId = checkedIds.size === 1 ? Array.from(checkedIds)[0] : null;
+  const selectedId = editingBoothId;
   const selectedBooth = useMemo(
     () => booths.find((booth) => booth.id === selectedId) ?? null,
     [booths, selectedId],
+  );
+  const selectedBoothZone = useMemo(
+    () =>
+      selectedBooth
+        ? (zones.find((zone) => zone.boothIds.includes(selectedBooth.id)) ?? null)
+        : null,
+    [selectedBooth, zones],
   );
   const selectedZone = useMemo(
     () => zones.find((zone) => zone.id === selectedZoneId) ?? null,
@@ -230,6 +286,15 @@ export function BoothMapEditorFileRegisteredState({
   const selectedZoneMembers = useMemo(
     () => (selectedZone ? booths.filter((booth) => selectedZone.boothIds.includes(booth.id)) : []),
     [selectedZone, booths],
+  );
+
+  useEffect(() => {
+    if (!selectedBooth || !kakaoMapRef.current || !window.kakao?.maps) return;
+    kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(selectedBooth.lat, selectedBooth.lng));
+  }, [selectedBooth]);
+  const pendingGroupMembers = useMemo(
+    () => (groupPopoverOpen ? booths.filter((booth) => checkedIds.has(booth.id)) : []),
+    [booths, checkedIds, groupPopoverOpen],
   );
   const mapCenter = editorQuery.data?.center ?? mapQuery.data?.center ?? festivalCenter;
 
@@ -244,6 +309,15 @@ export function BoothMapEditorFileRegisteredState({
       return saveMapEditor(festivalId, mapQuery.data.mapId, {
         baseRevision: editRevision,
         nodes: boothMapPinsToNodeChanges(booths, deletedNodeIds),
+        zones: zones.map((zone, sortOrder) => ({
+          zoneId: zone.id,
+          name: zone.name,
+          sortOrder,
+          boothNodeIds: zone.boothIds.map((boothId) => {
+            const booth = booths.find((item) => item.id === boothId);
+            return booth?.nodeId ?? boothId;
+          }),
+        })),
       });
     },
     onSuccess: async (response) => {
@@ -255,6 +329,17 @@ export function BoothMapEditorFileRegisteredState({
         editor.nodes
           .map(nodeToLocalBooth)
           .filter((booth): booth is LocalBoothPin => booth !== null),
+      );
+      setZones(
+        (editor.zones ?? []).map((zone) => ({
+          id: zone.zoneId,
+          name: zone.name,
+          boothIds: zone.boothNodeIds
+            .map((nodeId) =>
+              editor.nodes.find((node) => node.nodeId === nodeId) ? `node-${nodeId}` : null,
+            )
+            .filter((id): id is string => id !== null),
+        })),
       );
       toast.success("부스맵이 저장되었습니다.");
     },
@@ -279,6 +364,19 @@ export function BoothMapEditorFileRegisteredState({
       toast.error(getApiErrorMessage(error, "부스맵 저장에 실패했습니다."));
     },
   });
+  const replaceMutation = useMutation({
+    mutationFn: (file: File) => {
+      if (!mapQuery.data?.mapId) throw new Error("지도 정보를 불러오지 못했습니다.");
+      return replaceFestivalMap(festivalId, mapQuery.data.mapId, file);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["map-editor", festivalId] });
+      toast.success("파일을 재업로드했습니다.", {
+        description: "새 파일 분석이 시작됩니다.",
+      });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "파일 재업로드에 실패했습니다.")),
+  });
 
   // 편집기 데이터가 처음 도착하면 로컬 상태를 한 번만 채운다(렌더 중 조정 — effect가 아니다).
   if (!seedMockBooths && editorQuery.data && !editorInitialized) {
@@ -288,27 +386,45 @@ export function BoothMapEditorFileRegisteredState({
         .filter((booth): booth is LocalBoothPin => booth !== null),
     );
     setEditRevision(editorQuery.data.editRevision);
+    setZones(
+      (editorQuery.data.zones ?? []).map((zone) => ({
+        id: zone.zoneId,
+        name: zone.name,
+        boothIds: zone.boothNodeIds.map((nodeId) => `node-${nodeId}`),
+      })),
+    );
     setEditorInitialized(true);
   }
 
   function addBoothAt(lat: number, lng: number) {
-    const id = `booth-${Date.now()}`;
+    const id = crypto.randomUUID();
     setBooths((prev) => [
       ...prev,
       {
         id,
         nodeId: null,
-        name: `새 부스 ${prev.length + 1}`,
+        nodeType: pendingPinType,
+        name: `${NODE_TYPE_LABEL[pendingPinType] ?? "시설"}명 ${prev.length + 1}`,
         lat,
         lng,
+        isNew: true,
       },
     ]);
-    setSelectedZoneId(null);
+    if (selectedZoneId) {
+      setZones((prev) =>
+        prev.map((zone) =>
+          zone.id === selectedZoneId ? { ...zone, boothIds: [...zone.boothIds, id] } : zone,
+        ),
+      );
+    }
     setCheckedIds(new Set([id]));
+    setEditingBoothId(id);
+    setDrawTool("select");
+    setPinTypeMenuOpen(false);
   }
 
   function toggleChecked(id: string) {
-    setSelectedZoneId(null);
+    setEditingBoothId(null);
     setCheckedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -385,14 +501,22 @@ export function BoothMapEditorFileRegisteredState({
           onCheckedChange={() => toggleChecked(booth.id)}
           className="border-zinc-200"
         />
-        <span className="flex min-w-0 flex-1 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedZoneId(zoneIdByBoothId.get(booth.id) ?? null);
+            setCheckedIds(new Set([booth.id]));
+            setEditingBoothId(booth.id);
+          }}
+          className="flex min-w-0 flex-1 items-center gap-1"
+        >
           <span
             className={`size-4 shrink-0 ${booth.uncertain ? "text-secondary-600" : "text-primary"}`}
           >
             <RadiobuttonIcon />
           </span>
           <span className="body-regular truncate text-left text-zinc-950">{booth.name}</span>
-        </span>
+        </button>
         <span
           onMouseDown={() => setDraggableRowId(booth.id)}
           onMouseUp={() => setDraggableRowId(null)}
@@ -428,6 +552,7 @@ export function BoothMapEditorFileRegisteredState({
             scrollwheel={false}
             className="h-full w-full"
             onCreate={(map) => {
+              kakaoMapRef.current = map;
               map.setMinLevel(2);
               map.setMaxLevel(8);
             }}
@@ -438,36 +563,50 @@ export function BoothMapEditorFileRegisteredState({
               addBoothAt(latLng.getLat(), latLng.getLng());
             }}
           >
-            {zones.map((zone) => {
-              const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
-              if (members.length === 0) return null;
-              const path = zonePolygonPath(members);
-              return (
-                <Fragment key={zone.id}>
-                  <Polygon
-                    path={path}
-                    fillColor="#236cf6"
-                    fillOpacity={0.1}
-                    strokeColor="#236cf6"
-                    strokeWeight={2}
-                    strokeOpacity={0.8}
-                    onClick={() => selectZone(zone.id)}
-                  />
-                  {path.map((point, index) => (
-                    <CustomOverlayMap key={`${zone.id}-${index}`} position={point} zIndex={15}>
-                      <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
-                    </CustomOverlayMap>
-                  ))}
-                </Fragment>
-              );
-            })}
+            {pendingGroupMembers.length >= 2 ? (
+              <>
+                <Polygon
+                  path={zonePolygonPath(pendingGroupMembers)}
+                  fillColor="#236cf6"
+                  fillOpacity={0.1}
+                  strokeColor="#236cf6"
+                  strokeWeight={2}
+                  strokeOpacity={0.8}
+                />
+                {zonePolygonPath(pendingGroupMembers).map((point, index) => (
+                  <CustomOverlayMap key={`pending-group-${index}`} position={point} zIndex={15}>
+                    <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
+                  </CustomOverlayMap>
+                ))}
+              </>
+            ) : null}
+            {zones
+              .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
+              .map((zone) => {
+                const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
+                if (members.length === 0) return null;
+                const path = zonePolygonPath(members);
+                return (
+                  <Fragment key={zone.id}>
+                    <Polygon
+                      path={path}
+                      fillColor="#236cf6"
+                      fillOpacity={0.1}
+                      strokeColor="#236cf6"
+                      strokeWeight={2}
+                      strokeOpacity={0.8}
+                      onClick={() => selectZone(zone.id)}
+                    />
+                    {path.map((point, index) => (
+                      <CustomOverlayMap key={`${zone.id}-${index}`} position={point} zIndex={15}>
+                        <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
+                      </CustomOverlayMap>
+                    ))}
+                  </Fragment>
+                );
+              })}
             {visibleBooths.map((booth) => {
               const isSelected = booth.id === selectedId;
-              const dotColor = isSelected
-                ? "bg-primary"
-                : booth.uncertain
-                  ? "bg-secondary-600"
-                  : "bg-point-600";
               return (
                 <CustomOverlayMap
                   key={booth.id}
@@ -481,18 +620,19 @@ export function BoothMapEditorFileRegisteredState({
                     aria-label={booth.name}
                     onClick={(event) => {
                       event.stopPropagation();
-                      setSelectedZoneId(null);
+                      setSelectedZoneId(zoneIdByBoothId.get(booth.id) ?? null);
                       setCheckedIds(new Set([booth.id]));
+                      setEditingBoothId(booth.id);
                     }}
-                    className={`relative flex items-center justify-center ${
-                      isSelected ? "size-8" : "size-3"
-                    }`}
+                    className="relative flex size-3 items-center justify-center"
                   >
                     {isSelected ? (
-                      <span className={`absolute size-8 rounded-full opacity-25 ${dotColor}`} />
+                      <span className="absolute size-3 rounded-full bg-point-600/25" />
                     ) : null}
                     <span
-                      className={`relative size-3 rounded-full border-2 border-white shadow ${dotColor}`}
+                      className={`relative rounded-full ${
+                        isSelected ? "size-1 bg-point-600" : "size-3 bg-point-600 shadow-sm"
+                      }`}
                     />
                   </button>
                 </CustomOverlayMap>
@@ -501,42 +641,71 @@ export function BoothMapEditorFileRegisteredState({
             {selectedBooth ? (
               <CustomOverlayMap
                 position={{ lat: selectedBooth.lat, lng: selectedBooth.lng }}
-                yAnchor={1.15}
+                {...POPOVER_ANCHORS}
                 zIndex={30}
               >
                 <MapInfoPopover
                   mode="booth-edit"
                   style={{ position: "static" }}
                   initialName={selectedBooth.name}
+                  typeLabel={NODE_TYPE_LABEL[selectedBooth.nodeType] ?? "시설"}
+                  parentZoneName={selectedBoothZone?.name ?? ""}
+                  confirmLabel={selectedBooth.isNew ? "등록" : "수정"}
+                  hideCancel
+                  onChangeType={(type) =>
+                    toast.info(
+                      `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
+                    )
+                  }
+                  onChangeNodeType={(nodeType) =>
+                    setBooths((prev) =>
+                      prev.map((booth) =>
+                        booth.id === selectedBooth.id ? { ...booth, nodeType } : booth,
+                      ),
+                    )
+                  }
                   onConfirm={(name) => {
                     setBooths((prev) =>
                       prev.map((booth) =>
-                        booth.id === selectedBooth.id ? { ...booth, name } : booth,
+                        booth.id === selectedBooth.id ? { ...booth, name, isNew: false } : booth,
                       ),
                     );
                     setCheckedIds(new Set());
+                    setEditingBoothId(null);
+                    setSelectedZoneId(null);
                   }}
-                  onCancel={() => setCheckedIds(new Set())}
+                  onCancel={() => {
+                    setCheckedIds(new Set());
+                    setEditingBoothId(null);
+                    setSelectedZoneId(null);
+                  }}
                   onDelete={() => {
                     if (selectedBooth.nodeId) {
                       setDeletedNodeIds((prev) => [...prev, selectedBooth.nodeId!]);
                     }
                     setBooths((prev) => prev.filter((booth) => booth.id !== selectedBooth.id));
                     setCheckedIds(new Set());
+                    setEditingBoothId(null);
+                    setSelectedZoneId(null);
                   }}
                 />
               </CustomOverlayMap>
             ) : null}
             {groupPopoverOpen
               ? (() => {
-                  const members = booths.filter((booth) => checkedIds.has(booth.id));
-                  if (members.length === 0) return null;
+                  if (pendingGroupMembers.length < 2) return null;
                   return (
-                    <CustomOverlayMap position={centroidOf(members)} yAnchor={1.15} zIndex={30}>
+                    <CustomOverlayMap
+                      position={centroidOf(pendingGroupMembers)}
+                      {...POPOVER_ANCHORS}
+                      zIndex={30}
+                    >
                       <MapInfoPopover
                         mode="group-create"
                         style={{ position: "static" }}
                         initialName="새 구역"
+                        confirmLabel="등록"
+                        hideCancel
                         onConfirm={(name) => {
                           const zone: LocalZone = {
                             id: createZoneId(),
@@ -550,22 +719,31 @@ export function BoothMapEditorFileRegisteredState({
                           setGroupPopoverOpen(false);
                         }}
                         onCancel={() => setGroupPopoverOpen(false)}
+                        onDelete={() => setGroupPopoverOpen(false)}
+                        onChangeType={(type) =>
+                          toast.info(
+                            `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
+                          )
+                        }
                       />
                     </CustomOverlayMap>
                   );
                 })()
               : null}
-            {selectedZone && selectedZoneMembers.length > 0 ? (
+            {selectedZone &&
+            !selectedBooth &&
+            checkedIds.size === 0 &&
+            selectedZoneMembers.length > 0 ? (
               <CustomOverlayMap
                 position={centroidOf(selectedZoneMembers)}
-                yAnchor={1.15}
+                {...POPOVER_ANCHORS}
                 zIndex={30}
               >
                 <MapInfoPopover
                   mode="zone-edit"
                   style={{ position: "static" }}
                   initialName={selectedZone.name}
-                  confirmLabel="등록"
+                  confirmLabel="수정"
                   hideCancel
                   onChangeType={(type) =>
                     toast.info(
@@ -612,50 +790,21 @@ export function BoothMapEditorFileRegisteredState({
               const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
               const expanded = expandedZoneIds.has(zone.id);
               return (
-                <div key={zone.id} className="flex flex-col">
-                  <div
-                    className={`flex items-center gap-2 rounded-md py-2 pl-1 ${
-                      selectedZoneId === zone.id ? "bg-primary/10" : ""
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      aria-label={expanded ? "구역 접기" : "구역 펼치기"}
-                      onClick={() => toggleZoneExpanded(zone.id)}
-                      className="shrink-0 text-zinc-500"
-                    >
-                      {expanded ? (
-                        <ChevronUpIcon className="size-4" />
-                      ) : (
-                        <ChevronDownIcon className="size-4" />
-                      )}
-                    </button>
-                    <Checkbox
-                      checked={selectedZoneId === zone.id}
-                      onCheckedChange={(checked) =>
-                        checked ? selectZone(zone.id) : setSelectedZoneId(null)
-                      }
-                      className="border-zinc-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => selectZone(zone.id)}
-                      className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                    >
-                      <span className="size-4 shrink-0 text-primary">
-                        <DimensionsIcon />
-                      </span>
-                      <span className="body-regular truncate text-zinc-950">{zone.name}</span>
-                      <span className="body-small text-primary">{members.length}</span>
-                    </button>
-                    <span className="shrink-0 cursor-grab touch-none text-zinc-400">
-                      <HamburgerMenuIcon />
-                    </span>
-                  </div>
-                  {expanded
-                    ? members.map((booth) => renderBoothRow(booth, { indent: true }))
-                    : null}
-                </div>
+                <ZoneListItem
+                  key={zone.id}
+                  name={zone.name}
+                  count={members.length}
+                  expanded={expanded}
+                  checked={selectedZoneId === zone.id}
+                  selected={selectedZoneId === zone.id}
+                  onToggleExpanded={() => toggleZoneExpanded(zone.id)}
+                  onCheckedChange={(checked) =>
+                    checked ? selectZone(zone.id) : setSelectedZoneId(null)
+                  }
+                  onSelect={() => selectZone(zone.id)}
+                >
+                  {members.map((booth) => renderBoothRow(booth, { indent: true }))}
+                </ZoneListItem>
               );
             })}
             {ungroupedBooths.map((booth) => renderBoothRow(booth, { indent: false }))}
@@ -694,6 +843,26 @@ export function BoothMapEditorFileRegisteredState({
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <input
+            ref={replaceFileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) replaceMutation.mutate(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            icon={<FileIcon />}
+            disabled={replaceMutation.isPending}
+            onClick={() => replaceFileInputRef.current?.click()}
+          >
+            {replaceMutation.isPending ? "재업로드 중..." : "파일 재업로드"}
+          </Button>
           <Button type="button" variant="primary" onClick={() => setSaveDialogOpen(true)}>
             저장하기
           </Button>
@@ -713,8 +882,33 @@ export function BoothMapEditorFileRegisteredState({
             aria-label="핀 추가"
             aria-pressed={drawTool === "pin"}
             className={cn("text-zinc-950", drawTool === "pin" && "ring-2 ring-primary")}
-            onClick={() => setDrawTool((tool) => (tool === "pin" ? "select" : "pin"))}
+            onClick={() => setPinTypeMenuOpen((open) => !open)}
           />
+          {pinTypeMenuOpen ? (
+            <div className="absolute right-full bottom-20 mr-2 w-25 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
+              {[
+                { type: "OTHER" as const, label: "시설", icon: <RadiobuttonIcon /> },
+                { type: "BOOTH" as const, label: "부스", icon: <Crosshair2Icon /> },
+                { type: "ENTRANCE" as const, label: "입구", icon: <HomeIcon /> },
+                { type: "EXIT" as const, label: "출구", icon: <HomeIcon /> },
+                { type: "RESTROOM" as const, label: "화장실", icon: <FaceIcon /> },
+              ].map((option) => (
+                <button
+                  key={option.type}
+                  type="button"
+                  onClick={() => {
+                    setPendingPinType(option.type);
+                    setDrawTool("pin");
+                    setPinTypeMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
+                >
+                  <span className="size-4 shrink-0 text-primary [&_svg]:size-4">{option.icon}</span>
+                  <span className="body-small text-zinc-950">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <span title="1차는 핀만 지원합니다.">
             <IconButton
               icon={<DimensionsIcon className="size-5" />}

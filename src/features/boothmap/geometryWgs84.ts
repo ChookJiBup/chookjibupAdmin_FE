@@ -1,13 +1,15 @@
-import type { NodeChangeRequest, NodeResponse } from "./types";
+import type { NodeChangeRequest, NodeResponse, NodeType } from "./types";
 
 /** 카카오맵 위에 표시하는 부스 핀(로컬 UI 상태). */
 export interface LocalBoothPin {
   id: string;
   nodeId: string | null;
   name: string;
+  nodeType: NodeType;
   lat: number;
   lng: number;
   uncertain?: boolean;
+  isNew?: boolean;
 }
 
 /** schema 2.0 POINT 노드만 카카오 핀으로 변환한다. 1.0(이미지 정규화)은 null. */
@@ -27,9 +29,11 @@ export function nodeToLocalBooth(node: NodeResponse): LocalBoothPin | null {
     id: `node-${node.nodeId}`,
     nodeId: node.nodeId,
     name: node.name,
+    nodeType: node.nodeType,
     lat,
     lng,
     uncertain: node.reviewStatus === "REVIEW_REQUIRED",
+    isNew: false,
   };
 }
 
@@ -39,7 +43,8 @@ export function boothMapPinsToNodeChanges(
 ): NodeChangeRequest[] {
   const changes: NodeChangeRequest[] = booths.map((booth, index) => ({
     nodeId: booth.nodeId,
-    nodeType: "BOOTH",
+    clientNodeId: booth.nodeId ? null : booth.id,
+    nodeType: booth.nodeType,
     name: booth.name,
     geometryType: "POINT",
     geometry: { lat: booth.lat, lng: booth.lng },

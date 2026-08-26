@@ -4,7 +4,7 @@ import { Pencil1Icon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Map, MapMarker, useKakaoLoader } from "react-kakao-maps-sdk";
+import { CustomOverlayMap, Map, useKakaoLoader } from "react-kakao-maps-sdk";
 import { Bottombar } from "@/components/ui/Bottombar";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -301,7 +301,14 @@ function FestivalLocationMap({ locations }: { locations: FestivalLocationRespons
 
   return (
     <Map center={center} isPanto={false} level={4} className="absolute inset-0">
-      {hasCoordinates ? <MapMarker position={center} /> : null}
+      {hasCoordinates ? (
+        <CustomOverlayMap position={center}>
+          <span
+            aria-label="축제 위치"
+            className="block size-3 rounded-full bg-point-600 shadow-sm"
+          />
+        </CustomOverlayMap>
+      ) : null}
     </Map>
   );
 }

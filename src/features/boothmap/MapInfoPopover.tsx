@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Cross1Icon,
+  Crosshair2Icon,
+  CornersIcon,
   DimensionsIcon,
+  FaceIcon,
+  GridIcon,
+  HomeIcon,
   Pencil2Icon,
   RadiobuttonIcon,
   RulerHorizontalIcon,
@@ -13,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { MapOverlayCard } from "@/components/map/MapOverlayCard";
+import type { NodeType } from "./types";
 
 export type MapInfoPopoverMode = "group-create" | "zone-edit" | "booth-edit";
 export type MapObjectTypeCategory = "pin" | "polygon" | "line";
@@ -29,6 +35,23 @@ const TYPE_CATEGORY_OPTIONS: { value: MapObjectTypeCategory; label: string; icon
   { value: "line", label: "라인", icon: <RulerHorizontalIcon /> },
 ];
 
+const PIN_TYPE_OPTIONS: { value: NodeType; label: string; icon: ReactNode }[] = [
+  { value: "OTHER", label: "시설", icon: <RadiobuttonIcon /> },
+  { value: "BOOTH", label: "부스", icon: <Crosshair2Icon /> },
+  { value: "ENTRANCE", label: "입구", icon: <HomeIcon /> },
+  { value: "EXIT", label: "출구", icon: <HomeIcon /> },
+  { value: "RESTROOM", label: "화장실", icon: <FaceIcon /> },
+];
+
+const POLYGON_TYPE_OPTIONS: { value: NodeType; label: string; icon: ReactNode }[] = [
+  { value: "OPEN_SPACE", label: "구역", icon: <CornersIcon /> },
+  { value: "PARKING", label: "주차장", icon: <GridIcon /> },
+];
+
+const LINE_TYPE_OPTIONS: { value: NodeType; label: string; icon: ReactNode }[] = [
+  { value: "PATH", label: "통로", icon: <RulerHorizontalIcon /> },
+];
+
 /**
  * 지도 위 핀/구역을 클릭했을 때 뜨는 말풍선 팝오버 — 그룹(구역) 생성, 구역 이름
  * 수정, 개별 부스 이름 수정 3가지 모드를 하나의 컴포넌트로 처리한다.
@@ -42,8 +65,11 @@ export function MapInfoPopover({
   onCancel,
   onDelete,
   onChangeType,
+  onChangeNodeType,
   confirmLabel = "확인",
   hideCancel = false,
+  typeLabel,
+  parentZoneName = "-",
 }: {
   mode: MapInfoPopoverMode;
   initialName: string;
@@ -53,6 +79,7 @@ export function MapInfoPopover({
   onDelete?: () => void;
   /** 전달하면 유형 행 아래에 "유형 변경하기" 버튼을 노출한다(핀/폴리곤/라인 대분류 변경용). */
   onChangeType?: (type: MapObjectTypeCategory) => void;
+  onChangeNodeType?: (type: NodeType) => void;
   /** 확인 버튼 라벨. 그룹(구역) 생성 직후 재편집 흐름에서는 "등록"으로 쓴다. */
   confirmLabel?: string;
   /**
@@ -60,23 +87,51 @@ export function MapInfoPopover({
    * 삭제/확인 클릭 시 바로 실행하지 않고 확인 모달을 한 번 더 띄운다(구역 재편집 흐름).
    */
   hideCancel?: boolean;
+  /** API 객체 유형에 따라 기본 유형 라벨을 덮어쓴다. */
+  typeLabel?: string;
+  /** 그룹 내 시설이면 소속 상위 구역명을 표시한다. */
+  parentZoneName?: string;
 }) {
   const [name, setName] = useState(initialName);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [typeCategory, setTypeCategory] = useState<MapObjectTypeCategory | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (pendingConfirm || pendingDelete) return;
+      if (popoverRef.current?.contains(event.target as Node)) return;
+      setTypeMenuOpen(false);
+      setTypeCategory(null);
+      onCancel();
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || pendingConfirm || pendingDelete) return;
+      setTypeMenuOpen(false);
+      setTypeCategory(null);
+      onCancel();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onCancel, pendingConfirm, pendingDelete]);
 
   return (
-    <div className="absolute z-20" style={style}>
+    <div ref={popoverRef} className="absolute z-20" style={style}>
       <MapOverlayCard showPointer>
         <div className="flex items-center gap-2">
-          <span className="size-4 shrink-0 text-zinc-500">
+          <span className="size-4 shrink-0 text-zinc-950 [&_svg]:size-4">
             <Pencil2Icon />
           </span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="body-small-bold min-w-0 flex-1 border-none p-0 text-zinc-950 outline-none"
+            className="body-large-bold min-w-0 flex-1 border-none p-0 text-zinc-950 outline-none"
           />
           <IconButton
             variant="ghost"
@@ -91,9 +146,9 @@ export function MapInfoPopover({
         <div className="mt-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="body-small text-zinc-500">유형</span>
-            <span className="body-small text-zinc-950">{TYPE_LABEL[mode]}</span>
+            <span className="body-small text-zinc-950">{typeLabel ?? TYPE_LABEL[mode]}</span>
           </div>
-          {onChangeType ? (
+          {onChangeType || onChangeNodeType ? (
             <div className="relative">
               <Button
                 type="button"
@@ -106,28 +161,62 @@ export function MapInfoPopover({
                 유형 변경하기
               </Button>
               {typeMenuOpen ? (
-                <div className="absolute top-full left-0 z-10 mt-1 w-full rounded-md border border-zinc-200 bg-white p-1 shadow-md">
+                <div className="absolute top-full left-0 z-10 mt-1 w-21 rounded-md border border-zinc-200 bg-white p-2 shadow-md">
                   {TYPE_CATEGORY_OPTIONS.map((option) => (
                     <button
                       key={option.value}
                       type="button"
                       onClick={() => {
-                        onChangeType(option.value);
+                        if (onChangeNodeType) {
+                          setTypeCategory(option.value);
+                          return;
+                        }
+                        onChangeType?.(option.value);
                         setTypeMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-zinc-100"
+                      className="flex w-full items-center gap-2 rounded-sm py-2 text-left hover:bg-zinc-100"
                     >
                       <span className="size-4 shrink-0 text-zinc-500">{option.icon}</span>
                       <span className="body-small flex-1 text-zinc-950">{option.label}</span>
                     </button>
                   ))}
+                  {typeCategory ? (
+                    <div
+                      className={`absolute top-0 left-full ml-2 rounded-md border border-zinc-200 bg-white p-2 shadow-md ${
+                        typeCategory === "pin" ? "w-25" : "w-21"
+                      }`}
+                    >
+                      {(typeCategory === "pin"
+                        ? PIN_TYPE_OPTIONS
+                        : typeCategory === "polygon"
+                          ? POLYGON_TYPE_OPTIONS
+                          : LINE_TYPE_OPTIONS
+                      ).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            onChangeNodeType?.(option.value);
+                            setTypeCategory(null);
+                            setTypeMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
+                        >
+                          <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
+                            {option.icon}
+                          </span>
+                          <span className="body-small text-zinc-950">{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
           ) : null}
           <div className="flex items-center justify-between">
             <span className="body-small text-zinc-500">상위구역</span>
-            <span className="body-small text-zinc-950">-</span>
+            <span className="body-small text-zinc-950">{parentZoneName}</span>
           </div>
         </div>
 
@@ -136,7 +225,6 @@ export function MapInfoPopover({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               onClick={() => setPendingDelete(true)}
               className="flex-1"
             >
@@ -147,7 +235,6 @@ export function MapInfoPopover({
             <Button
               type="button"
               variant="link"
-              size="sm"
               onClick={onDelete}
               className="text-error mr-auto px-0"
             >
@@ -155,14 +242,13 @@ export function MapInfoPopover({
             </Button>
           ) : null}
           {hideCancel ? null : (
-            <Button type="button" variant="outline" size="sm" onClick={onCancel} className="flex-1">
+            <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
               취소
             </Button>
           )}
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={() =>
               hideCancel ? setPendingConfirm(true) : onConfirm(name.trim() || initialName)
             }

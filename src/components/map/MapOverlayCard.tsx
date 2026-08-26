@@ -17,7 +17,7 @@ export function MapOverlayCard({ children, className, showPointer = false }: Map
         {children}
       </div>
       {showPointer ? (
-        <div className="ml-6 -mt-1.5 size-3 rotate-45 border-r border-b border-zinc-200 bg-white" />
+        <div className="mx-auto -mt-1.5 size-3 rotate-45 border-r border-b border-zinc-200 bg-white" />
       ) : null}
     </div>
   );
