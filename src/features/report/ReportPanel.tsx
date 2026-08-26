@@ -1,67 +1,93 @@
 "use client";
 
-import { ChevronDownIcon } from "@radix-ui/react-icons";
+import { ChevronDownIcon, StarFilledIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { getFestivalReportSummary } from "./api";
+import { getApiErrorMessage } from "@/lib/api/httpError";
+import { getFestivalReportEvaluation, getFestivalReportPerformance } from "./api";
+import type {
+  FestivalReportEvaluation,
+  FestivalReportPerformance,
+  FestivalReportTextSummary,
+} from "./types";
 
-// TODO(api/report-detail): 현재 결과리포트 API는 총 방문자 수, 최대 동시 방문자 수,
-// 평균 대기시간만 제공한다. 전년 대비 증감, 경제효과, 일자별 방문자, 시간대별 방문,
-// 구역별 혼잡도, 혼잡도 지속시간 데이터가 추가되면 아래 프리뷰 상수를 제거한다.
-const DAILY_VISITORS = [980, 790, 1120];
-const LAST_YEAR_VISITORS = [720, 860, 940];
-const CONGESTION_RANKING = [
-  { name: "이벤트김밥존", value: 92 },
-  { name: "이색김밥존", value: 76 },
-  { name: "명품로컬김밥존", value: 61 },
-  { name: "체험존", value: 45 },
-  { name: "휴게존", value: 29 },
-];
+type ReportSection = "축제성과" | "방문객평가";
 
-function SummaryCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+function SummaryCard({ label, value, helper }: { label: string; value: string; helper?: string }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-zinc-300 bg-white p-4">
       <p className="body-small-bold text-zinc-950">{label}</p>
       <p className="heading-small text-zinc-950">{value}</p>
-      <p className="body-caption text-secondary-600">{helper}</p>
+      {helper ? <p className="body-caption text-secondary-600">{helper}</p> : null}
     </div>
   );
 }
 
-function Panel({
-  title,
-  children,
-  className = "",
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className={`rounded-lg border border-zinc-300 bg-white p-5 ${className}`}>
+    <section className="rounded-lg border border-zinc-300 bg-white p-5">
       <h2 className="body-small-bold text-zinc-950">{title}</h2>
       <div className="mt-5">{children}</div>
     </section>
   );
 }
 
-function VisitorTrendChart() {
-  const points = DAILY_VISITORS.map((value, index) => `${index * 50},${115 - value / 12}`).join(
-    " ",
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-zinc-300 bg-white px-6 py-12 text-center">
+      <p className="body-regular text-zinc-500">{message}</p>
+    </div>
   );
-  const previousPoints = LAST_YEAR_VISITORS.map(
-    (value, index) => `${index * 50},${115 - value / 12}`,
-  ).join(" ");
+}
 
+function TextSummary({ summary }: { summary: FestivalReportTextSummary }) {
+  const groups = [
+    { title: "잘한 점", items: summary.positives },
+    { title: "아쉬운 점", items: summary.issues },
+    { title: "개선 제안", items: summary.improvements },
+  ];
+  if (groups.every(({ items }) => items.length === 0)) return null;
+  return (
+    <div className="grid grid-cols-3 gap-6">
+      {groups.map(({ title, items }) => (
+        <Panel key={title} title={title}>
+          {items.length ? (
+            <ul className="flex list-disc flex-col gap-2 pl-4 body-small text-zinc-600">
+              {items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="body-small text-zinc-400">분석 내용이 없습니다.</p>
+          )}
+        </Panel>
+      ))}
+    </div>
+  );
+}
+
+function VisitorTrend({ data }: { data: FestivalReportPerformance["metrics"]["dailyTrend"] }) {
+  if (!data.length) return <p className="body-small text-zinc-400">방문 추이 데이터가 없습니다.</p>;
+  const maximum = Math.max(
+    1,
+    ...data.flatMap((item) => [item.currentCount ?? 0, item.previousCount ?? 0]),
+  );
+  const points = (key: "currentCount" | "previousCount") =>
+    data
+      .map(
+        (item, index) =>
+          `${data.length === 1 ? 50 : (index * 100) / (data.length - 1)},${110 - ((item[key] ?? 0) / maximum) * 90}`,
+      )
+      .join(" ");
   return (
     <div>
       <svg
-        viewBox="0 0 100 130"
+        viewBox="0 0 100 120"
         className="h-52 w-full"
         preserveAspectRatio="none"
         aria-label="일자별 방문객 추이 차트"
       >
-        {[25, 55, 85, 115].map((y) => (
+        {[20, 50, 80, 110].map((y) => (
           <line
             key={y}
             x1="0"
@@ -73,66 +99,293 @@ function VisitorTrendChart() {
           />
         ))}
         <polyline
-          points={previousPoints}
+          points={points("previousCount")}
           fill="none"
-          stroke="var(--color-zinc-300)"
+          stroke="var(--color-zinc-400)"
           strokeWidth="1"
           strokeDasharray="3 2"
         />
-        <polyline points={points} fill="none" stroke="var(--color-primary-600)" strokeWidth="1.5" />
-        {points.split(" ").map((point) => {
-          const [cx, cy] = point.split(",");
-          return <circle key={point} cx={cx} cy={cy} r="1.8" fill="var(--color-primary-600)" />;
-        })}
+        <polyline
+          points={points("currentCount")}
+          fill="none"
+          stroke="var(--color-primary-600)"
+          strokeWidth="1.5"
+        />
       </svg>
       <div className="flex justify-between body-caption text-zinc-500">
-        <span>1일차</span>
-        <span>2일차</span>
-        <span>3일차</span>
+        {data.map((item) => (
+          <span key={item.visitDate}>{item.dayIndex}일차</span>
+        ))}
       </div>
       <div className="mt-4 flex gap-5 body-caption text-zinc-500">
-        <span className="flex items-center gap-2">
-          <i className="h-0.5 w-5 bg-primary" />
-          올해
-        </span>
-        <span className="flex items-center gap-2">
-          <i className="h-px w-5 border-t border-dashed border-zinc-400" />
-          전년도
-        </span>
+        <span>━ 올해</span>
+        <span>┄ 전년도</span>
       </div>
     </div>
   );
 }
 
-function Heatmap() {
-  const values = [2, 3, 5, 7, 5, 3, 1, 3, 6, 8, 7, 4, 2, 4, 7, 9, 8, 5];
+function PerformanceView({ report }: { report: FestivalReportPerformance }) {
+  if (!report.performanceAvailable)
+    return <EmptyState message="아직 제공할 수 있는 축제 성과 데이터가 없습니다." />;
+  const { metrics } = report;
+  const visitors = metrics.totalVisitors;
+  const directionLabel =
+    visitors.direction === "DOWN" ? "감소" : visitors.direction === "FLAT" ? "변동 없음" : "증가";
   return (
-    <div className="grid grid-cols-6 gap-2">
-      {values.map((value, index) => (
-        <div
-          key={index}
-          className="flex aspect-square items-center justify-center rounded body-caption text-zinc-950"
-          style={{
-            backgroundColor: `color-mix(in srgb, var(--color-primary-600) ${value * 9}%, white)`,
-          }}
-        >
-          {10 + (index % 6) * 2}시
-        </div>
-      ))}
+    <>
+      <h1 className="heading-small text-zinc-950">
+        {visitors.changeRatePercent === null
+          ? `${metrics.festivalName}의 성과를 확인해 보세요.`
+          : `이전 축제보다 방문객이 ${Math.abs(visitors.changeRatePercent).toLocaleString()}% ${directionLabel}${visitors.direction === "FLAT" ? "입니다" : "했습니다"}`}
+      </h1>
+      <div className="grid grid-cols-3 gap-6">
+        <SummaryCard
+          label="총 관광객수"
+          value={`${visitors.current.toLocaleString()} 명`}
+          helper={
+            visitors.previous === null
+              ? "비교할 이전 축제 데이터가 없습니다."
+              : `이전 축제 대비 ${Math.abs(visitors.delta ?? 0).toLocaleString()}명 ${directionLabel}`
+          }
+        />
+        <SummaryCard
+          label="경제효과"
+          value={
+            metrics.economicEffect.available && metrics.economicEffect.totalMillionKrw !== null
+              ? `${metrics.economicEffect.totalMillionKrw.toLocaleString()} 백만원`
+              : "데이터 미제공"
+          }
+        />
+        <SummaryCard
+          label="운영효율(평균 대기시간)"
+          value={
+            metrics.operationEfficiency.available &&
+            metrics.operationEfficiency.averageWaitMinutes !== null
+              ? `${metrics.operationEfficiency.averageWaitMinutes.toLocaleString()} 분`
+              : "데이터 미제공"
+          }
+          helper={
+            metrics.operationEfficiency.available
+              ? `참여부스 ${metrics.operationEfficiency.boothCount.toLocaleString()}개`
+              : undefined
+          }
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <Panel title="일자별 관광객 추이">
+          <VisitorTrend data={metrics.dailyTrend} />
+        </Panel>
+        <Panel title="방문 집중 시간대">
+          {metrics.visitPattern.available && metrics.visitPattern.peakHours.length ? (
+            <div className="flex flex-wrap gap-2">
+              {metrics.visitPattern.peakHours.map((hour) => (
+                <span
+                  key={hour}
+                  className="rounded-full bg-primary-300 px-3 py-1 body-small text-zinc-950"
+                >
+                  {hour}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="body-small text-zinc-400">시간대별 데이터가 없습니다.</p>
+          )}
+        </Panel>
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <Panel title="구역별 평균 대기시간">
+          {metrics.zoneWaitRanking.length ? (
+            <ol className="flex flex-col gap-3">
+              {metrics.zoneWaitRanking.map((zone) => (
+                <li
+                  key={`${zone.rank}-${zone.zoneName}`}
+                  className="flex justify-between body-small"
+                >
+                  <span>
+                    {zone.rank}. {zone.zoneName}
+                  </span>
+                  <span className="body-small-bold">{zone.averageWaitMinutes}분</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="body-small text-zinc-400">구역별 데이터가 없습니다.</p>
+          )}
+        </Panel>
+        <Panel title="부스 혼잡도 비율">
+          {metrics.boothCongestionShare.length ? (
+            <div className="flex flex-col gap-3">
+              {metrics.boothCongestionShare.map((item) => (
+                <div key={item.congestionLevel}>
+                  <div className="mb-1 flex justify-between body-small">
+                    <span>{item.congestionLevel}</span>
+                    <span>{item.sharePercent}%</span>
+                  </div>
+                  <div className="h-3 rounded bg-zinc-100">
+                    <div
+                      className="h-full rounded bg-primary"
+                      style={{ width: `${Math.min(100, Math.max(0, item.sharePercent))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="body-small text-zinc-400">혼잡도 데이터가 없습니다.</p>
+          )}
+        </Panel>
+      </div>
+      <TextSummary summary={report.ai.performanceSummary} />
+    </>
+  );
+}
+
+function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
+  if (!report.evaluationAvailable || !report.reviews.available)
+    return <EmptyState message="아직 제공할 수 있는 방문객 평가 데이터가 없습니다." />;
+  const reviews = report.reviews.featuredReviews.length
+    ? report.reviews.featuredReviews
+    : report.reviews.reviews;
+  return (
+    <>
+      <h1 className="heading-small text-zinc-950">방문객이 남긴 평가를 확인해 보세요.</h1>
+      <div className="grid grid-cols-3 gap-6">
+        <SummaryCard
+          label="평균 별점"
+          value={
+            report.reviews.averageScore === null
+              ? "데이터 미제공"
+              : `${report.reviews.averageScore.toFixed(1)} / 5.0`
+          }
+          helper={
+            report.reviews.scoreDelta === null
+              ? undefined
+              : `이전 축제 대비 ${report.reviews.scoreDelta >= 0 ? "+" : ""}${report.reviews.scoreDelta.toFixed(1)}점`
+          }
+        />
+        <SummaryCard label="리뷰 수" value={`${report.reviews.reviewCount.toLocaleString()} 개`} />
+        <SummaryCard
+          label="종합 감성"
+          value={
+            report.ai.headlineSentiment === "NONE" ? "분석 결과 없음" : report.ai.headlineSentiment
+          }
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <Panel title="별점 분포">
+          <div className="flex flex-col gap-3">
+            {[...report.reviews.ratingDistribution]
+              .sort((a, b) => b.rating - a.rating)
+              .map((item) => {
+                const ratio = item.ratio <= 1 ? item.ratio * 100 : item.ratio;
+                return (
+                  <div
+                    key={item.rating}
+                    className="grid grid-cols-[48px_1fr_52px] items-center gap-3 body-small"
+                  >
+                    <span className="flex items-center gap-1">
+                      {item.rating}
+                      <StarFilledIcon className="text-point-600" />
+                    </span>
+                    <div className="h-3 rounded bg-zinc-100">
+                      <div
+                        className="h-full rounded bg-point-600"
+                        style={{ width: `${Math.min(100, Math.max(0, ratio))}%` }}
+                      />
+                    </div>
+                    <span className="text-right text-zinc-500">{item.count}개</span>
+                  </div>
+                );
+              })}
+          </div>
+        </Panel>
+        <Panel title="주요 키워드">
+          <div className="flex flex-col gap-5">
+            <KeywordGroup
+              title="긍정"
+              keywords={report.ai.positiveKeywords}
+              className="bg-primary-300"
+            />
+            <KeywordGroup
+              title="부정"
+              keywords={report.ai.negativeKeywords}
+              className="bg-red-300"
+            />
+          </div>
+        </Panel>
+      </div>
+      <Panel title="방문객 리뷰">
+        {reviews.length ? (
+          <ul className="grid grid-cols-2 gap-4">
+            {reviews.map((review, index) => (
+              <li
+                key={review.reviewId ?? `${review.displayName}-${index}`}
+                className="rounded-lg bg-zinc-50 p-4"
+              >
+                <div className="mb-2 flex justify-between body-small-bold">
+                  <span>{review.displayName}</span>
+                  {review.rating === null ? null : (
+                    <span className="flex items-center gap-1">
+                      {review.rating}
+                      <StarFilledIcon className="text-point-600" />
+                    </span>
+                  )}
+                </div>
+                <p className="body-small text-zinc-600">{review.content}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="body-small text-zinc-400">표시할 리뷰가 없습니다.</p>
+        )}
+      </Panel>
+      <TextSummary summary={report.ai.summary} />
+    </>
+  );
+}
+
+function KeywordGroup({
+  title,
+  keywords,
+  className,
+}: {
+  title: string;
+  keywords: string[];
+  className: string;
+}) {
+  return (
+    <div>
+      <p className="mb-2 body-small-bold text-zinc-950">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {keywords.length ? (
+          keywords.map((keyword) => (
+            <span key={keyword} className={`rounded-full px-3 py-1 body-small ${className}`}>
+              {keyword}
+            </span>
+          ))
+        ) : (
+          <span className="body-small text-zinc-400">키워드 없음</span>
+        )}
+      </div>
     </div>
   );
 }
 
 export function ReportPanel({ festivalId }: { festivalId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<"축제성과" | "방문객평가">("축제성과");
-  const reportQuery = useQuery({
-    queryKey: ["festival-report-summary", festivalId],
-    queryFn: () => getFestivalReportSummary(festivalId),
+  const [activeSection, setActiveSection] = useState<ReportSection>("축제성과");
+  const performanceQuery = useQuery({
+    queryKey: ["festival-report-performance", festivalId],
+    queryFn: () => getFestivalReportPerformance(festivalId),
+    enabled: activeSection === "축제성과",
   });
-  // 백엔드가 집계 소스 미연결을 명시하면 0을 실제 집계값처럼 노출하지 않는다.
-  const report = reportQuery.data?.dataAvailable ? reportQuery.data : null;
-
+  const evaluationQuery = useQuery({
+    queryKey: ["festival-report-evaluation", festivalId],
+    queryFn: () => getFestivalReportEvaluation(festivalId),
+    enabled: activeSection === "방문객평가",
+  });
+  const activeQuery = activeSection === "축제성과" ? performanceQuery : evaluationQuery;
   return (
     <div id="festival-performance" className="flex flex-col gap-6">
       <div className="relative flex items-center gap-2 body-small text-zinc-500">
@@ -143,7 +396,8 @@ export function ReportPanel({ festivalId }: { festivalId: string }) {
           className="flex items-center gap-1 text-zinc-950"
           onClick={() => setMenuOpen((open) => !open)}
         >
-          {activeSection} <ChevronDownIcon />
+          {activeSection}
+          <ChevronDownIcon />
         </button>
         {menuOpen ? (
           <div className="absolute top-7 left-20 z-10 flex w-32 flex-col rounded-md border border-zinc-200 bg-white py-1 shadow-sm">
@@ -163,65 +417,18 @@ export function ReportPanel({ festivalId }: { festivalId: string }) {
           </div>
         ) : null}
       </div>
-
-      <h1 className="heading-small text-zinc-950">
-        이번 축제, 지난 축제보다 방문객이 <span className="text-secondary-600">23%</span>{" "}
-        증가했습니다
-      </h1>
-
-      <div className="grid grid-cols-3 gap-6">
-        <SummaryCard
-          label="총 관광객수"
-          value={`${(report?.totalVisitorCount ?? 51194).toLocaleString()} 명`}
-          helper="전년대비 11,775명 증가"
-        />
-        <SummaryCard label="경제효과" value="164 백만원" helper="전년대비 3.6백만원 증가" />
-        <SummaryCard
-          label="운영효율(평균 대기시간)"
-          value={`${report?.averageWaitMinutes ?? 12.4} 분`}
-          helper="참여부스 30개"
-        />
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        <Panel title="일자별 관광객 추이" className="col-span-2">
-          <VisitorTrendChart />
-        </Panel>
-        <Panel title="요일/시간대별 방문 패턴">
-          <Heatmap />
-        </Panel>
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        <Panel title="구역별 혼잡도(또는 평균 대기시간) 랭킹">
-          <div className="flex flex-col gap-3">
-            {CONGESTION_RANKING.map((zone) => (
-              <div key={zone.name} className="grid grid-cols-[92px_1fr] items-center gap-3">
-                <span className="body-caption truncate text-zinc-600">{zone.name}</span>
-                <div className="h-4 rounded-sm bg-zinc-100">
-                  <div
-                    className="h-full rounded-sm bg-primary"
-                    style={{ width: `${zone.value}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-        <Panel title="혼잡도 단계별 지속시간 비율" className="col-span-2">
-          <div className="flex h-16 overflow-hidden rounded-lg">
-            <div className="flex w-[48%] items-center justify-center bg-primary-300 body-small-bold">
-              여유 48%
-            </div>
-            <div className="flex w-[34%] items-center justify-center bg-point-300 body-small-bold">
-              보통 34%
-            </div>
-            <div className="flex w-[18%] items-center justify-center bg-red-300 body-small-bold">
-              혼잡 18%
-            </div>
-          </div>
-        </Panel>
-      </div>
+      {activeQuery.isLoading ? (
+        <p className="body-regular text-zinc-500">리포트를 불러오는 중...</p>
+      ) : null}
+      {activeQuery.isError ? (
+        <p className="body-small text-error">{getApiErrorMessage(activeQuery.error)}</p>
+      ) : null}
+      {activeSection === "축제성과" && performanceQuery.data ? (
+        <PerformanceView report={performanceQuery.data} />
+      ) : null}
+      {activeSection === "방문객평가" && evaluationQuery.data ? (
+        <EvaluationView report={evaluationQuery.data} />
+      ) : null}
     </div>
   );
 }
