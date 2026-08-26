@@ -1,15 +1,24 @@
 export type AdminRole = "FESTIVAL_OWNER" | "SUB_ADMIN";
 
+export type AccountKind = "GOVERNMENT" | "CONTRACTOR";
+
+/** 축제 개설은 공무원 계정만 가능하다. 초대된 외부업자는 제2관리자와 같다. */
+export function canCreateFestival(accountKind: AccountKind | null | undefined): boolean {
+  return accountKind !== "CONTRACTOR";
+}
+
 export interface AdminSummary {
   adminId: string;
   /** 축제 생성 전에는 null */
   festivalId: string | null;
   email: string;
   name: string;
-  /** 과·팀 (예: 토목과) */
+  /** 과·팀 또는 외부업자 업체명 */
   organization: string;
-  /** 직급 (예: 과장) */
-  rank: string;
+  /** 직급. 외부업자는 null. 기존 세션에는 없을 수 있다. */
+  rank?: string | null;
+  /** 기존 세션에는 없을 수 있다. 없으면 공무원으로 취급한다. */
+  accountKind?: AccountKind;
   /** 축제 생성 전에는 null */
   role: AdminRole | null;
   canInviteSubAdmin: boolean;
@@ -31,13 +40,14 @@ export interface AdminLoginResponse {
 export interface UpdateAdminProfileRequest {
   name: string;
   organization: string;
-  rank: string;
+  rank: string | null;
 }
 
 export type AdminStatus = "ACTIVE" | "SUSPENDED" | "DELETED";
 
 export interface AdminEmailVerificationRequest {
   email: string;
+  accountKind: AccountKind;
 }
 
 export interface AdminEmailVerificationConfirmRequest {
@@ -55,13 +65,22 @@ export interface AdminSignupRequest {
   passwordConfirm: string;
 }
 
+export interface AdminContractorSignupRequest {
+  email: string;
+  name: string;
+  companyName: string;
+  password: string;
+  passwordConfirm: string;
+}
+
 export interface AdminSignupResponse {
   adminId: string;
   festivalId: string | null;
   email: string;
   name: string;
   organization: string;
-  rank: string;
+  rank: string | null;
+  accountKind: AccountKind;
   role: AdminRole | null;
   status: AdminStatus;
 }
@@ -71,7 +90,8 @@ export interface AdminAccountProfile {
   email: string;
   name: string;
   organization: string;
-  rank: string;
+  rank: string | null;
+  accountKind: AccountKind;
   status: AdminStatus;
 }
 

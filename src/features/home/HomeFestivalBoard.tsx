@@ -15,6 +15,8 @@ import {
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { getManagedFestivals } from "./api";
 import type { FestivalProgressStatus, FestivalSummary } from "./types";
+import { canCreateFestival } from "@/features/auth/admin/types";
+import { useAdminAuthStore } from "@/store/adminAuthStore";
 
 const REGISTER_CTA_CLASSES =
   "inline-flex items-center justify-center gap-2.5 rounded-md bg-primary px-4 py-2 body-regular text-white transition-colors hover:bg-primary/90";
@@ -126,6 +128,8 @@ function StatusColumn({
 }
 
 export function HomeFestivalBoard() {
+  const accountKind = useAdminAuthStore((state) => state.session?.admin.accountKind);
+  const canRegister = canCreateFestival(accountKind);
   const festivalsQuery = useQuery({
     queryKey: ["managed-festivals"],
     queryFn: getManagedFestivals,
@@ -148,14 +152,18 @@ export function HomeFestivalBoard() {
             등록된 축제가 없습니다
           </EmptyTitle>
           <EmptyDescription className="body-regular text-zinc-500">
-            축제를 등록하고 관리해 보세요!
+            {canRegister
+              ? "축제를 등록하고 관리해 보세요!"
+              : "축제 총괄이 운영자로 초대하면 여기에 표시됩니다."}
           </EmptyDescription>
         </EmptyHeader>
-        <EmptyContent>
-          <Link href="/console/festivals/new" className={REGISTER_CTA_CLASSES}>
-            축제 등록하기
-          </Link>
-        </EmptyContent>
+        {canRegister ? (
+          <EmptyContent>
+            <Link href="/console/festivals/new" className={REGISTER_CTA_CLASSES}>
+              축제 등록하기
+            </Link>
+          </EmptyContent>
+        ) : null}
       </Empty>
     );
   }

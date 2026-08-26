@@ -7,6 +7,7 @@ import type {
   AdminLoginResponse,
   AdminAccountProfile,
   AdminPasswordResetConfirmRequest,
+  AdminContractorSignupRequest,
   AdminSignupRequest,
   AdminSignupResponse,
   UpdateAdminProfileRequest,
@@ -62,6 +63,16 @@ export async function confirmEmailVerification(
 export async function signupAdmin(request: AdminSignupRequest): Promise<AdminSignupResponse> {
   const { data } = await adminApiClient.post<ApiResponse<AdminSignupResponse>>(
     "/admin/auth/signup",
+    request,
+  );
+  return data.data;
+}
+
+export async function signupContractor(
+  request: AdminContractorSignupRequest,
+): Promise<AdminSignupResponse> {
+  const { data } = await adminApiClient.post<ApiResponse<AdminSignupResponse>>(
+    "/admin/auth/signup/contractor",
     request,
   );
   return data.data;

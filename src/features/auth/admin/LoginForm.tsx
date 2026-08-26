@@ -39,7 +39,7 @@ export function LoginForm() {
           type="email"
           required
           label="이메일"
-          placeholder="이메일"
+          placeholder="가입한 이메일"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
@@ -60,9 +60,11 @@ export function LoginForm() {
           {loginMutation.isPending ? "로그인 중..." : "로그인"}
         </Button>
 
-        <Link href="/forgot-password" className="body-small mx-auto text-zinc-950">
-          비밀번호 찾기
-        </Link>
+        <div className="body-small mx-auto flex items-center gap-3 text-zinc-950">
+          <Link href="/signup">회원가입</Link>
+          <span className="text-zinc-300">|</span>
+          <Link href="/forgot-password">비밀번호 찾기</Link>
+        </div>
       </form>
     </AuthCard>
   );
