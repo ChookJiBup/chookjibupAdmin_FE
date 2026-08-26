@@ -1,95 +1,72 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
-import { getMockBoothCongestion, mockUpdateQueueTail } from "./mockData";
-import type { CongestionLevel } from "./types";
+import { ExclamationTriangleIcon, IdCardIcon } from "@radix-ui/react-icons";
+import { useStaffAuthStore } from "@/store/staffAuthStore";
+import type { UnsupportedStaffFeature } from "./types";
 
-const CONGESTION_LABEL: Record<CongestionLevel, string> = {
-  LOW: "여유",
-  MEDIUM: "보통",
-  HIGH: "혼잡",
-};
-
-const CONGESTION_COLOR: Record<CongestionLevel, string> = {
-  LOW: "text-zinc-500",
-  MEDIUM: "text-zinc-700",
-  HIGH: "text-error",
-};
-
-function BoothRow({
-  boothId,
-  boothName,
-  congestionLevel,
-  initialDistance,
-}: {
-  boothId: string;
-  boothName: string;
-  congestionLevel: CongestionLevel;
-  initialDistance: number;
-}) {
-  const [distance, setDistance] = useState(initialDistance);
-  const [saved, setSaved] = useState(false);
-
-  const updateMutation = useMutation({
-    mutationFn: () => mockUpdateQueueTail(boothId, distance),
-    onSuccess: () => {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-    },
-  });
-
-  return (
-    <li className="flex flex-col gap-2 rounded-lg border px-4 py-3">
-      <div className="flex items-center justify-between">
-        <p className="body-regular-bold">{boothName}</p>
-        <span className={`body-small ${CONGESTION_COLOR[congestionLevel]}`}>
-          {CONGESTION_LABEL[congestionLevel]}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="body-small flex flex-1 items-center gap-2 text-zinc-500">
-          줄 끝 위치 (부스 앞 m)
-          <input
-            type="number"
-            min={0}
-            value={distance}
-            onChange={(event) => setDistance(Number(event.target.value))}
-            className="body-regular w-20 rounded-lg border px-2 py-1"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => updateMutation.mutate()}
-          disabled={updateMutation.isPending}
-          className="body-small rounded-lg border px-3 py-1.5 disabled:opacity-50"
-        >
-          {updateMutation.isPending ? "저장 중..." : saved ? "저장됨" : "저장"}
-        </button>
-      </div>
-    </li>
-  );
-}
+const UNSUPPORTED_FEATURES: UnsupportedStaffFeature[] = [
+  {
+    title: "담당 부스",
+    description: "담당 부스 조회 API가 준비되면 이곳에 표시됩니다.",
+  },
+  {
+    title: "실시간 혼잡도",
+    description: "혼잡도 조회 API가 아직 제공되지 않습니다.",
+  },
+  {
+    title: "줄 끝 위치 수정",
+    description: "줄 끝 좌표 조회·수정 API가 아직 제공되지 않습니다.",
+  },
+];
 
 export function StaffDashboardPanel() {
-  const [booths] = useState(getMockBoothCongestion);
+  const session = useStaffAuthStore((state) => state.session);
+
+  if (!session) return null;
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="body-small text-zinc-400">
-        아직 목업 데이터입니다. 백엔드 혼잡도/줄끝라인 API가 준비되면 실제 데이터로 교체합니다.
-      </p>
-      <ul className="flex flex-col gap-2">
-        {booths.map((booth) => (
-          <BoothRow
-            key={booth.boothId}
-            boothId={booth.boothId}
-            boothName={booth.boothName}
-            congestionLevel={booth.congestionLevel}
-            initialDistance={booth.queueTailDistanceMeters}
-          />
-        ))}
-      </ul>
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5">
+        <div className="mb-5 flex items-center gap-2">
+          <IdCardIcon className="size-5 text-primary" />
+          <h2 className="heading-small">내 근무 정보</h2>
+        </div>
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <dt className="body-small text-zinc-500">이름</dt>
+            <dd className="body-regular-bold mt-1">{session.name}</dd>
+          </div>
+          <div>
+            <dt className="body-small text-zinc-500">로그인 아이디</dt>
+            <dd className="body-regular-bold mt-1">{session.loginId}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="body-small text-zinc-500">담당 축제 코드</dt>
+            <dd className="body-small mt-1 break-all text-zinc-950">{session.festivalId}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section>
+        <h2 className="heading-small mb-3">현장 운영</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {UNSUPPORTED_FEATURES.map((feature) => (
+            <article
+              key={feature.title}
+              className="rounded-2xl border border-zinc-200 bg-white p-5"
+            >
+              <div className="flex items-center gap-2">
+                <ExclamationTriangleIcon className="size-4 text-point-600" />
+                <h3 className="body-regular-bold">{feature.title}</h3>
+              </div>
+              <p className="body-small mt-3 text-zinc-500">{feature.description}</p>
+              <span className="body-caption mt-4 inline-flex rounded-md bg-zinc-100 px-2 py-1 text-zinc-500">
+                준비 중
+              </span>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
