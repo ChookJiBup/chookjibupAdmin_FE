@@ -110,7 +110,7 @@ export function BoothMapView({
               className="flex size-3 items-center justify-center"
             >
               {isSelected ? (
-                <span className="flex size-3 items-center justify-center rounded-full bg-point-300">
+                <span className="flex size-3 items-center justify-center rounded-full bg-point-600/25">
                   <span className="size-1 rounded-full bg-point-600" />
                 </span>
               ) : (
