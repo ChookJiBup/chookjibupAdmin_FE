@@ -1,7 +1,128 @@
 export interface FestivalReportSummary {
   festivalId: string;
+  dataAvailable: boolean;
   totalVisitorCount: number;
   peakConcurrentVisitorCount: number;
   averageWaitMinutes: number;
-  generatedAt: string;
+  generatedAt: string | null;
+}
+
+export interface FestivalVisitorDay {
+  visitDate: string;
+  dayIndex: number;
+  visitorCount: number | null;
+  inputAllowed: boolean;
+  saved: boolean;
+}
+export interface FestivalVisitorCounts {
+  festivalId: string;
+  startDate: string;
+  endDate: string;
+  days: FestivalVisitorDay[];
+  filledDayCount: number;
+  totalDayCount: number;
+  allDaysFilled: boolean;
+  sumVisitorCount: number;
+  totalOverrideVisitorCount: number | null;
+}
+export interface FestivalReportStatus {
+  festivalId: string;
+  progressStatus: string;
+  visitorInput: "MISSING" | "PARTIAL" | "COMPLETE";
+  generationStatus: "NONE" | "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
+  progressDayIndex: number | null;
+  progressMessage: string | null;
+  performanceAvailable: boolean;
+  evaluationAvailable: boolean;
+  previousFestivalId: string | null;
+  generatedAt: string | null;
+  jobId: string | null;
+}
+export interface FestivalReportGenerateResult {
+  festivalId: string;
+  jobId: string;
+  status: string;
+}
+
+export type VisitorChangeDirection = "UP" | "DOWN" | "FLAT" | "NONE";
+
+export interface FestivalReportTextSummary {
+  positives: string[];
+  issues: string[];
+  improvements: string[];
+}
+
+export interface FestivalReportPerformance {
+  festivalId: string;
+  performanceAvailable: boolean;
+  generationStatus: string;
+  metrics: {
+    festivalId: string;
+    festivalName: string;
+    festivalYear: number;
+    totalDayCount: number;
+    visitorInputCompleted: boolean;
+    totalVisitors: {
+      current: number;
+      previous: number | null;
+      delta: number | null;
+      changeRatePercent: number | null;
+      direction: VisitorChangeDirection;
+    };
+    dailyTrend: Array<{
+      dayIndex: number;
+      visitDate: string;
+      currentCount: number | null;
+      previousCount: number | null;
+    }>;
+    economicEffect: {
+      available: boolean;
+      totalMillionKrw: number | null;
+      previousMillionKrw: number | null;
+    };
+    operationEfficiency: {
+      available: boolean;
+      averageWaitMinutes: number | null;
+      boothCount: number;
+    };
+    zoneWaitRanking: Array<{ rank: number; zoneName: string; averageWaitMinutes: number }>;
+    boothCongestionShare: Array<{ congestionLevel: string; sharePercent: number }>;
+    visitPattern: { available: boolean; peakHours: string[] };
+  };
+  ai: {
+    performanceSummary: FestivalReportTextSummary;
+    evaluation: FestivalReportEvaluationAi;
+  };
+}
+
+export interface FestivalReportEvaluationAi {
+  headlineSentiment: string;
+  positiveKeywords: string[];
+  negativeKeywords: string[];
+  summary: FestivalReportTextSummary;
+}
+
+export interface FestivalReviewItem {
+  reviewId: number | null;
+  displayName: string;
+  rating: number | null;
+  content: string;
+}
+
+export interface FestivalReportEvaluation {
+  festivalId: string;
+  evaluationAvailable: boolean;
+  generationStatus: string;
+  reviews: {
+    available: boolean;
+    averageScore: number | null;
+    previousAverageScore: number | null;
+    scoreDelta: number | null;
+    reviewCount: number;
+    ratingDistribution: Array<{ rating: number; count: number; ratio: number }>;
+    featuredReviews: FestivalReviewItem[];
+    reviews: FestivalReviewItem[];
+    hasMore: boolean;
+  };
+  ai: FestivalReportEvaluationAi;
 }

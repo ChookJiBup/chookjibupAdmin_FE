@@ -1,3 +1,4 @@
+import { FestivalOwnerGuard } from "@/components/auth/FestivalOwnerGuard";
 import { DashboardPanel } from "@/features/dashboard/DashboardPanel";
 
 export default async function FestivalDashboardPage({
@@ -6,5 +7,9 @@ export default async function FestivalDashboardPage({
   params: Promise<{ festivalId: string }>;
 }) {
   const { festivalId } = await params;
-  return <DashboardPanel festivalId={festivalId} />;
+  return (
+    <FestivalOwnerGuard festivalId={festivalId}>
+      <DashboardPanel festivalId={festivalId} />
+    </FestivalOwnerGuard>
+  );
 }

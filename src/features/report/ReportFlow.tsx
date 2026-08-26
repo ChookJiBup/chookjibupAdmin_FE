@@ -1,62 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
-import { ReportLoadingState } from "./ReportLoadingState";
+import {
+  generateFestivalReport,
+  getFestivalReportStatus,
+  getFestivalVisitorCounts,
+  updateDailyVisitorCount,
+} from "./api";
 import { ReportPanel } from "./ReportPanel";
 import { VisitorCountForm } from "./VisitorCountForm";
 
-// 축제 단건 조회 API가 아직 없어 실제 축제 기간을 알 수 없다. 그 값이 생기면
-// 실제 일수로 교체한다.
-const FESTIVAL_DAY_COUNT = 2;
-
-function reportFlowStorageKey(festivalId: string) {
-  return `chookjibup-report-flow-${festivalId}`;
-}
-
-type Step = "form" | "loading" | "done";
-
-/**
- * "방문인원 입력(9) → 분석 중(9-1) → 결과 리포트" 흐름을 관리한다.
- * 방문인원을 입력받는 서버 API가 없어(리포트는 GET 요약 하나뿐), 입력/건너뛰기
- * 결과는 어디에도 전송하지 않고 이 브라우저에 "한 번 봤다"는 표시만 남긴다.
- */
 export function ReportFlow({ festivalId }: { festivalId: string }) {
-  const [step, setStep] = useState<Step>(() => {
-    if (typeof window === "undefined") return "form";
-    return window.localStorage.getItem(reportFlowStorageKey(festivalId)) ? "done" : "form";
-  });
+  const queryClient = useQueryClient();
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
+  const visitorsQuery = useQuery({
+    queryKey: ["festival-visitor-counts", festivalId],
+    queryFn: () => getFestivalVisitorCounts(festivalId),
+  });
+  const statusQuery = useQuery({
+    queryKey: ["festival-report-status", festivalId],
+    queryFn: () => getFestivalReportStatus(festivalId),
+    refetchInterval: (query) =>
+      ["PENDING", "PROCESSING"].includes(query.state.data?.generationStatus ?? "") ? 1500 : false,
+  });
+  const generationStatus = statusQuery.data?.generationStatus;
+  const isGenerating = generationStatus === "PENDING" || generationStatus === "PROCESSING";
+  const showForm = generationStatus !== "COMPLETED" && !isGenerating;
 
-  // 방문인원 입력/분석 중 화면에서는 Nav 탭 줄을 숨긴다(디자인 스펙).
   useEffect(() => {
-    setHideNav(step !== "done");
+    setHideNav(showForm || isGenerating);
     return () => setHideNav(false);
-  }, [step, setHideNav]);
+  }, [isGenerating, setHideNav, showForm]);
 
-  function markHandled() {
-    window.localStorage.setItem(reportFlowStorageKey(festivalId), "1");
-  }
+  const submitMutation = useMutation({
+    mutationFn: async (counts: number[]) => {
+      const days = visitorsQuery.data?.days ?? [];
+      await Promise.all(
+        days.map((day, index) => updateDailyVisitorCount(festivalId, day.visitDate, counts[index])),
+      );
+      await generateFestivalReport(festivalId);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["festival-visitor-counts", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: ["festival-report-status", festivalId] }),
+      ]);
+    },
+  });
 
-  if (step === "form") {
+  if (visitorsQuery.isLoading || statusQuery.isLoading)
+    return <p className="body-regular col-span-3 text-zinc-500">불러오는 중...</p>;
+  const error = visitorsQuery.error ?? statusQuery.error ?? submitMutation.error;
+  if (error) return <p className="body-small col-span-3 text-error">{getApiErrorMessage(error)}</p>;
+
+  if (showForm && visitorsQuery.data) {
     return (
-      <VisitorCountForm
-        dayCount={FESTIVAL_DAY_COUNT}
-        onSkip={() => {
-          markHandled();
-          setStep("loading");
-        }}
-        onSubmit={() => {
-          markHandled();
-          setStep("loading");
-        }}
-      />
+      <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 flex items-center justify-center bg-dimmed p-8">
+        <VisitorCountForm
+          days={visitorsQuery.data.days}
+          isPending={submitMutation.isPending}
+          onSubmit={(counts) => submitMutation.mutate(counts)}
+        />
+      </div>
     );
   }
 
-  if (step === "loading") {
-    return <ReportLoadingState totalDays={FESTIVAL_DAY_COUNT} onDone={() => setStep("done")} />;
+  if (isGenerating) {
+    return (
+      <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 flex flex-col items-center justify-center gap-4 bg-white">
+        <p className="body-regular text-zinc-950">
+          {statusQuery.data?.progressMessage ?? "축제 결과를 분석하고 있어요"}
+        </p>
+        {statusQuery.data?.progressDayIndex ? (
+          <p className="body-small text-zinc-500">
+            {statusQuery.data.progressDayIndex}일차 분석 중
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
-  return <ReportPanel festivalId={festivalId} />;
+  return (
+    <div className="col-span-3">
+      <ReportPanel festivalId={festivalId} />
+    </div>
+  );
 }

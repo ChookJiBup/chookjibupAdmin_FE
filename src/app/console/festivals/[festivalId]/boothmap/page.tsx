@@ -1,3 +1,4 @@
+import { FestivalOwnerGuard } from "@/components/auth/FestivalOwnerGuard";
 import { BoothMapUploadPanel } from "@/features/boothmap/BoothMapUploadPanel";
 
 export default async function BoothMapEditPage({
@@ -6,5 +7,9 @@ export default async function BoothMapEditPage({
   params: Promise<{ festivalId: string }>;
 }) {
   const { festivalId } = await params;
-  return <BoothMapUploadPanel key={festivalId} festivalId={festivalId} />;
+  return (
+    <FestivalOwnerGuard festivalId={festivalId}>
+      <BoothMapUploadPanel key={festivalId} festivalId={festivalId} />
+    </FestivalOwnerGuard>
+  );
 }

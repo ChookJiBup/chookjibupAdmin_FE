@@ -45,8 +45,12 @@ export function SubAdminDetailPanel({
         <dd className="body-regular">{subAdmin.email}</dd>
       </div>
       <div className="flex gap-2">
-        <dt className="body-small w-24 text-zinc-500">소속</dt>
+        <dt className="body-small w-24 text-zinc-500">과·팀</dt>
         <dd className="body-regular">{subAdmin.organization}</dd>
+      </div>
+      <div className="flex gap-2">
+        <dt className="body-small w-24 text-zinc-500">직급</dt>
+        <dd className="body-regular">{subAdmin.rank}</dd>
       </div>
       <div className="flex gap-2">
         <dt className="body-small w-24 text-zinc-500">상태</dt>

@@ -1,17 +1,20 @@
 "use client";
 
-import { MagnifyingGlassIcon, PersonIcon } from "@radix-ui/react-icons";
+import { PersonIcon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { assignSubAdmin, deleteSubAdmins, getSubAdmins, searchSubAdminCandidates } from "./api";
+import { deleteSubAdmins, getSubAdmins, registerOperator } from "./api";
+import type { RegisterOperatorResult } from "./types";
 
 export function OperatorsPanel({ festivalId }: { festivalId: string }) {
-  const [keywordInput, setKeywordInput] = useState("");
-  const [searchKeyword, setSearchKeyword] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [created, setCreated] = useState<RegisterOperatorResult | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
@@ -20,18 +23,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
     queryFn: () => getSubAdmins(festivalId),
   });
 
-  const candidatesQuery = useQuery({
-    queryKey: ["sub-admin-candidates", festivalId, searchKeyword],
-    queryFn: () => searchSubAdminCandidates(festivalId, searchKeyword ?? ""),
-    enabled: searchKeyword !== null && searchKeyword.length > 0,
-  });
-
   const operators = subAdminsQuery.data ?? [];
-  const addedIds = new Set(operators.map((operator) => operator.adminId));
-  const candidates = (candidatesQuery.data ?? []).filter(
-    (candidate) => !addedIds.has(candidate.adminId),
-  );
-
   const allSelected = operators.length > 0 && selectedIds.size === operators.length;
 
   function toggleAll() {
@@ -52,11 +44,14 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
     });
   }
 
-  const assignMutation = useMutation({
-    mutationFn: (adminId: string) => assignSubAdmin(festivalId, adminId),
-    onSuccess: () => {
+  const registerMutation = useMutation({
+    mutationFn: () => registerOperator(festivalId, { email, name, companyName }),
+    onSuccess: (result) => {
+      setCreated(result);
+      setEmail("");
+      setName("");
+      setCompanyName("");
       queryClient.invalidateQueries({ queryKey: ["sub-admins", festivalId] });
-      queryClient.invalidateQueries({ queryKey: ["sub-admin-candidates", festivalId] });
     },
   });
 
@@ -74,71 +69,77 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
         <div className="col-span-1 flex flex-col gap-4 rounded-lg border border-zinc-300 bg-white p-6">
           <p className="body-large-bold text-zinc-950">운영자 추가</p>
 
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setSearchKeyword(keywordInput.trim());
-            }}
-          >
-            <Input
-              wrapperClassName="flex-1"
-              placeholder="이름 또는 이메일을 입력해 주세요"
-              value={keywordInput}
-              onChange={(event) => setKeywordInput(event.target.value)}
-            />
-            <Button type="submit" icon={<MagnifyingGlassIcon />}>
-              검색
-            </Button>
-          </form>
-
-          {candidatesQuery.isLoading ? (
-            <p className="body-small text-zinc-500">검색 중...</p>
-          ) : null}
-
-          {candidatesQuery.isError ? (
-            <p className="body-small text-error">{getApiErrorMessage(candidatesQuery.error)}</p>
-          ) : null}
-
-          {searchKeyword === null ? (
-            <div className="rounded-lg bg-zinc-50 px-4 py-3">
-              <p className="body-small text-zinc-500">
-                이름이나 이메일로 검색해 운영자를 추가할 수 있어요.
-              </p>
+          {created ? (
+            <div className="flex flex-col gap-1 rounded-lg bg-zinc-50 px-4 py-3">
+              {created.created ? (
+                <>
+                  <p className="body-small-bold text-zinc-950">
+                    {created.name}({created.email}) 계정이 생성되었습니다.
+                  </p>
+                  {created.temporaryPassword ? (
+                    <p className="body-small text-zinc-950">
+                      임시 비밀번호: <span className="font-mono">{created.temporaryPassword}</span>
+                    </p>
+                  ) : null}
+                  <p className="body-caption text-zinc-500">
+                    임시 비밀번호는 지금만 확인할 수 있습니다. 운영자에게 바로 전달해주세요.
+                  </p>
+                </>
+              ) : (
+                <p className="body-small-bold text-zinc-950">
+                  {created.name}({created.email}) 계정을 운영자로 추가했습니다.
+                </p>
+              )}
             </div>
           ) : null}
 
-          {searchKeyword !== null && !candidatesQuery.isLoading && candidates.length === 0 ? (
-            <p className="body-small text-zinc-500">검색 결과가 없습니다.</p>
-          ) : null}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setCreated(null);
+              registerMutation.mutate();
+            }}
+          >
+            <Input
+              type="email"
+              required
+              label="이메일"
+              placeholder="이메일"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <Input
+              required
+              minLength={2}
+              maxLength={100}
+              label="이름"
+              placeholder="이름"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <Input
+              required
+              minLength={2}
+              maxLength={255}
+              label="업체명"
+              placeholder="업체명"
+              value={companyName}
+              onChange={(event) => setCompanyName(event.target.value)}
+            />
 
-          {candidates.length > 0 ? (
-            <ul className="flex flex-col divide-y divide-zinc-200">
-              {candidates.map((candidate) => (
-                <li
-                  key={candidate.adminId}
-                  className="flex items-center justify-between gap-3 py-3"
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <p className="body-small-bold text-zinc-950">{candidate.name}</p>
-                    <p className="body-caption text-zinc-500">
-                      {candidate.email}
-                      {candidate.organization ? ` · ${candidate.organization}` : ""}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={assignMutation.isPending}
-                    onClick={() => assignMutation.mutate(candidate.adminId)}
-                  >
-                    추가
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+            {registerMutation.isError ? (
+              <p className="body-caption text-error">
+                {getApiErrorMessage(registerMutation.error)}
+              </p>
+            ) : null}
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={registerMutation.isPending}>
+                {registerMutation.isPending ? "추가하는 중..." : "추가하기"}
+              </Button>
+            </div>
+          </form>
         </div>
 
         <div className="col-span-2 flex flex-col rounded-lg border border-zinc-300 bg-white">
@@ -177,10 +178,17 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                     onCheckedChange={() => toggleOne(operator.adminId)}
                   />
                   <PersonIcon className="size-4 shrink-0 text-zinc-400" />
-                  <p className="body-regular-bold text-zinc-950">
-                    {operator.name}
-                    <span className="body-small font-normal text-zinc-500">({operator.email})</span>
-                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    <p className="body-regular-bold text-zinc-950">
+                      {operator.name}
+                      <span className="body-small font-normal text-zinc-500">
+                        ({operator.email})
+                      </span>
+                    </p>
+                    {operator.organization ? (
+                      <p className="body-caption text-zinc-500">{operator.organization}</p>
+                    ) : null}
+                  </div>
                 </label>
               ))}
             </div>

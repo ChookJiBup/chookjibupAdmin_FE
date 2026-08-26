@@ -20,6 +20,8 @@ function findZoneName(zones: BoothZone[], zoneId: string) {
 }
 
 async function mockUpdateQueueTail(boothId: string, zone: string) {
+  // TODO(api/queue-tail): 관리자용 줄끝 조회·갱신 API가 없다. API에는 boothId와
+  // 선택한 queueZone을 받아 최종 갱신자/갱신 시각을 반환하는 계약이 필요하다.
   await new Promise((resolve) => setTimeout(resolve, 400));
   return { boothId, zone };
 }
@@ -65,11 +67,7 @@ function BoothQueueUpdateBar({ booth }: { booth: Booth }) {
             ))}
           </SelectContent>
         </Select>
-        <Button
-          size="sm"
-          onClick={() => updateMutation.mutate()}
-          disabled={updateMutation.isPending}
-        >
+        <Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
           {updateMutation.isPending ? "갱신 중..." : "줄끝 갱신하기"}
         </Button>
       </div>

@@ -13,7 +13,7 @@ export const POLICY_CONTENT: Record<PolicySlug, PolicyContent> = {
   },
   privacy: {
     title: "개인정보 수집 및 이용동의",
-    body: "1. 수집 항목: 이메일, 이름, 소속(부서/직급)\n2. 수집 목적: 관리자 계정 생성 및 서비스 이용\n3. 보유 기간: 회원 탈퇴 시까지\n\n※ 실제 약관 문구는 추후 법무 검토 후 반영 예정입니다.",
+    body: "1. 수집 항목: 이메일, 이름, 과·팀, 직급\n2. 수집 목적: 관리자 계정 생성 및 서비스 이용\n3. 보유 기간: 회원 탈퇴 시까지\n\n※ 실제 약관 문구는 추후 법무 검토 후 반영 예정입니다.",
   },
   "privacy-outsourcing": {
     title: "개인정보 취급 위탁 동의",

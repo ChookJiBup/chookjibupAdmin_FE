@@ -6,6 +6,7 @@ import { AdminAuthGuard } from "@/components/auth/AdminAuthGuard";
 import { HeaderNav } from "@/components/layout/HeaderNav";
 import { Toaster } from "@/components/ui/sonner";
 import { getManagedFestival } from "@/features/festivals/api";
+import { canCreateFestival } from "@/features/auth/admin/types";
 import { cn } from "@/lib/utils";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
@@ -17,18 +18,23 @@ const HOME_NAV_PATHS = ["/console", "/console/festivals/new", "/console/mypage"]
 export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const adminName = useAdminAuthStore((state) => state.session?.admin.name);
   const accountRole = useAdminAuthStore((state) => state.session?.admin.role);
+  const accountKind = useAdminAuthStore((state) => state.session?.admin.accountKind);
   const hideNav = useConsoleUiStore((state) => state.hideNav);
   const fullBleed = useConsoleUiStore((state) => state.fullBleed);
   const pathname = usePathname();
   const params = useParams<{ festivalId?: string }>();
   const festivalId = params?.festivalId;
-  const navItems = pathname && HOME_NAV_PATHS.includes(pathname) ? HOME_NAV_ITEMS : undefined;
+  const isHomeScope = Boolean(pathname && HOME_NAV_PATHS.includes(pathname));
+  const homeNavItems = canCreateFestival(accountKind) ? HOME_NAV_ITEMS : [];
+  const navItems = isHomeScope ? homeNavItems : undefined;
+  const hideHomeNav = isHomeScope && homeNavItems.length === 0;
   const festivalQuery = useQuery({
     queryKey: ["managed-festival", festivalId],
     queryFn: () => getManagedFestival(festivalId as string),
     enabled: Boolean(festivalId),
   });
-  const festivalName = festivalQuery.data?.festivalName;
+  const festivalName =
+    festivalQuery.data?.festivalName ?? (festivalId === "demo" ? "김천김밥축제" : undefined);
   // 로그인 시점 세션에는 축제별 권한이 없다(계정은 축제마다 역할이 다를 수 있음).
   // 축제 범위 화면에서는 이 축제의 조회 응답에 담긴 role을 우선 쓰고,
   // 축제 범위 밖(메인홈 등)에서만 계정 세션의 role로 대체한다.
@@ -42,7 +48,8 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           navItems={navItems}
           festivalName={festivalName}
           role={role}
-          hideNav={hideNav}
+          accountKind={accountKind}
+          hideNav={hideNav || hideHomeNav}
         />
         <div className="relative flex-1">
           <div

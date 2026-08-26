@@ -7,8 +7,10 @@ import type {
   AdminLoginResponse,
   AdminAccountProfile,
   AdminPasswordResetConfirmRequest,
+  AdminContractorSignupRequest,
   AdminSignupRequest,
   AdminSignupResponse,
+  UpdateAdminProfileRequest,
 } from "./types";
 
 export async function getAdminProfile(): Promise<AdminAccountProfile> {
@@ -38,6 +40,14 @@ export async function loginAdmin(request: AdminLoginRequest): Promise<AdminLogin
   return data.data;
 }
 
+export async function logoutAdmin(): Promise<void> {
+  await adminApiClient.post<ApiResponse<void>>("/admin/auth/logout");
+}
+
+export async function updateAdminProfile(request: UpdateAdminProfileRequest): Promise<void> {
+  await adminApiClient.patch<ApiResponse<void>>("/admin/me", request);
+}
+
 export async function requestEmailVerification(
   request: AdminEmailVerificationRequest,
 ): Promise<void> {
@@ -53,6 +63,16 @@ export async function confirmEmailVerification(
 export async function signupAdmin(request: AdminSignupRequest): Promise<AdminSignupResponse> {
   const { data } = await adminApiClient.post<ApiResponse<AdminSignupResponse>>(
     "/admin/auth/signup",
+    request,
+  );
+  return data.data;
+}
+
+export async function signupContractor(
+  request: AdminContractorSignupRequest,
+): Promise<AdminSignupResponse> {
+  const { data } = await adminApiClient.post<ApiResponse<AdminSignupResponse>>(
+    "/admin/auth/signup/contractor",
     request,
   );
   return data.data;
