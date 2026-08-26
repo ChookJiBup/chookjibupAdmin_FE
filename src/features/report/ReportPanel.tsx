@@ -2,7 +2,7 @@
 
 import { ChevronDownIcon, StarFilledIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { getFestivalReportEvaluation, getFestivalReportPerformance } from "./api";
 import type {
@@ -374,6 +374,7 @@ function KeywordGroup({
 
 export function ReportPanel({ festivalId }: { festivalId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<ReportSection>("축제성과");
   const performanceQuery = useQuery({
     queryKey: ["festival-report-performance", festivalId],
@@ -386,9 +387,25 @@ export function ReportPanel({ festivalId }: { festivalId: string }) {
     enabled: activeSection === "방문객평가",
   });
   const activeQuery = activeSection === "축제성과" ? performanceQuery : evaluationQuery;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function closeMenu(event: PointerEvent | KeyboardEvent) {
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      if (event instanceof PointerEvent && menuRef.current?.contains(event.target as Node)) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeMenu);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeMenu);
+    };
+  }, [menuOpen]);
+
   return (
     <div id="festival-performance" className="flex flex-col gap-6">
-      <div className="relative flex items-center gap-2 body-small text-zinc-500">
+      <div ref={menuRef} className="relative flex items-center gap-2 body-small text-zinc-500">
         <span>결과리포트</span>
         <span>&gt;</span>
         <button
