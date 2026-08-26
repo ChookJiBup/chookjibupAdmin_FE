@@ -13,8 +13,10 @@ import {
   logoutAdmin,
   requestAuthenticatedPasswordReset,
   updateAdminProfile as updateAdminProfileApi,
+  verifyAdminPassword,
   withdrawAdmin,
 } from "@/features/auth/admin/api";
+import { PasswordConfirmDialog } from "@/features/auth/admin/PasswordConfirmDialog";
 import type { AdminAccountProfile } from "@/features/auth/admin/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
@@ -26,12 +28,13 @@ export default function MyPage() {
   const queryClient = useQueryClient();
   const admin = useAdminAuthStore((state) => state.session?.admin);
   const clearSession = useAdminAuthStore((state) => state.clearSession);
+  const setSession = useAdminAuthStore((state) => state.setSession);
   const updateAdminProfile = useAdminAuthStore((state) => state.updateAdminProfile);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
-  const [name, setName] = useState("");
   const [organization, setOrganization] = useState("");
   const [rank, setRank] = useState("");
   const [formReady, setFormReady] = useState(false);
+  const [passwordConfirmOpen, setPasswordConfirmOpen] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["admin-profile"],
@@ -77,6 +80,20 @@ export default function MyPage() {
           : current,
       );
       toast.success("프로필이 수정되었습니다.");
+      setPasswordConfirmOpen(false);
+    },
+  });
+
+  const passwordConfirmMutation = useMutation({
+    mutationFn: (password: string) => verifyAdminPassword({ email: admin?.email ?? "", password }),
+    onSuccess: (loginResponse) => {
+      setSession(loginResponse.expiresIn, loginResponse.admin);
+      const accountKind = profile?.accountKind ?? admin?.accountKind;
+      profileUpdateMutation.mutate({
+        name: profile?.name ?? admin?.name ?? "",
+        organization: organization.trim(),
+        rank: accountKind === "CONTRACTOR" ? null : rank.trim(),
+      });
     },
   });
 
@@ -84,7 +101,6 @@ export default function MyPage() {
 
   // 프로필 조회가 끝나자마자 폼 초기값을 한 번만 채운다(렌더 중 조정 — effect가 아니다).
   if (profile && !formReady) {
-    setName(profile.name);
     setOrganization(profile.organization);
     setRank(profile.rank ?? "");
     setFormReady(true);
@@ -101,12 +117,8 @@ export default function MyPage() {
   }
 
   function handleProfileUpdate() {
-    const accountKind = profile?.accountKind ?? admin?.accountKind;
-    profileUpdateMutation.mutate({
-      name: name.trim(),
-      organization: organization.trim(),
-      rank: accountKind === "CONTRACTOR" ? null : rank.trim(),
-    });
+    passwordConfirmMutation.reset();
+    setPasswordConfirmOpen(true);
   }
 
   if (!admin) return null;
@@ -122,14 +134,7 @@ export default function MyPage() {
     <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
       <FormSection label="프로필 설정">
         <Input label="이메일" disabled value={profile?.email ?? admin.email} />
-        <Input
-          label="이름"
-          required
-          minLength={2}
-          maxLength={100}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
+        <Input label="이름" disabled value={profile?.name ?? admin.name} />
         <div className="flex gap-3">
           <Input
             label={isContractor ? "업체명" : "과·팀"}
@@ -199,7 +204,6 @@ export default function MyPage() {
         <Button
           disabled={
             !formReady ||
-            !name.trim() ||
             !organization.trim() ||
             (!isContractor && !rank.trim()) ||
             profileUpdateMutation.isPending
@@ -214,11 +218,30 @@ export default function MyPage() {
         open={confirmKind === "logout"}
         onOpenChange={(open) => !open && setConfirmKind(null)}
         title="로그아웃 하시겠습니까?"
-        description="모든 기기에서 로그아웃됩니다."
+        description="현재 브라우저에서 로그아웃됩니다."
         confirmLabel="로그아웃"
         confirmVariant="primary"
         onConfirm={handleLogout}
       />
+
+      {passwordConfirmOpen ? (
+        <PasswordConfirmDialog
+          open
+          onOpenChange={(open) => {
+            setPasswordConfirmOpen(open);
+            if (!open) passwordConfirmMutation.reset();
+          }}
+          pending={passwordConfirmMutation.isPending || profileUpdateMutation.isPending}
+          errorMessage={
+            passwordConfirmMutation.isError
+              ? getApiErrorMessage(passwordConfirmMutation.error)
+              : profileUpdateMutation.isError
+                ? getApiErrorMessage(profileUpdateMutation.error)
+                : undefined
+          }
+          onConfirm={(password) => passwordConfirmMutation.mutate(password)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={confirmKind === "withdraw"}

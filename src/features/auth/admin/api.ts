@@ -1,3 +1,4 @@
+import axios from "axios";
 import { adminApiClient } from "@/lib/api/adminApiClient";
 import type { ApiResponse } from "@/lib/api/types";
 import type {
@@ -36,6 +37,19 @@ export async function loginAdmin(request: AdminLoginRequest): Promise<AdminLogin
   const { data } = await adminApiClient.post<ApiResponse<AdminLoginResponse>>(
     "/admin/auth/login",
     request,
+  );
+  return data.data;
+}
+
+/**
+ * 로그인된 관리자의 비밀번호를 기존 로그인 API로 다시 확인한다.
+ * 비밀번호 오입력(401)이 현재 세션까지 지우지 않도록 전역 401 인터셉터가 없는 요청을 사용한다.
+ */
+export async function verifyAdminPassword(request: AdminLoginRequest): Promise<AdminLoginResponse> {
+  const { data } = await axios.post<ApiResponse<AdminLoginResponse>>(
+    "/api/admin/auth/login",
+    request,
+    { withCredentials: true },
   );
   return data.data;
 }

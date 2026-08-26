@@ -1,19 +1,12 @@
 "use client";
 
-import { Map, CustomOverlayMap, Polyline, useKakaoLoader } from "react-kakao-maps-sdk";
-import { Cross2Icon, UpdateIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
+import { Map, CustomOverlayMap, useKakaoLoader } from "react-kakao-maps-sdk";
+import { Cross2Icon } from "@radix-ui/react-icons";
 import { IconButton } from "@/components/ui/IconButton";
-import { Button } from "@/components/ui/Button";
-import { CongestionText } from "@/components/ui/CongestionBadge";
-import { StaffBadge, OperatorBadge } from "@/components/ui/RoleBadge";
-import { FESTIVAL_MAP_CENTER } from "./mockData";
-import type { AiSuggestion, Booth } from "./types";
+import type { Booth } from "./types";
 
 /** 지도 마커 위에 뜨는 부스 상세정보 말풍선. 아래쪽 중앙에서 마커를 향해 뾰족한 꼬리가 이어진다. */
 function BoothPopup({ booth, onClose }: { booth: Booth; onClose: () => void }) {
-  const [updatedMinutesAgo, setUpdatedMinutesAgo] = useState(booth.updatedMinutesAgo);
-
   return (
     <div className="mb-2.5 flex flex-col items-center">
       <div className="w-72 rounded-2xl bg-white p-5">
@@ -29,30 +22,10 @@ function BoothPopup({ booth, onClose }: { booth: Booth; onClose: () => void }) {
           />
         </div>
 
-        <div className="mt-3 flex items-center justify-between">
-          <p className="body-caption text-zinc-500">실시간 혼잡도정보</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<UpdateIcon className="size-3 text-zinc-950" />}
-            className="body-caption text-zinc-500 hover:text-zinc-600"
-            onClick={() => setUpdatedMinutesAgo(0)}
-          >
-            {updatedMinutesAgo === 0 ? "방금 전" : `${updatedMinutesAgo}분 전`}
-          </Button>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between">
-          <p className="body-small text-zinc-950">혼잡도</p>
-          <CongestionText level={booth.congestionLevel} />
-        </div>
-
-        <div className="mt-2 flex items-center justify-between">
-          <p className="body-small text-zinc-950">마지막 줄끝갱신자</p>
-          <div className="flex items-center gap-1.5">
-            <span className="body-small-bold text-zinc-950">{booth.lastQueueUpdater.name}</span>
-            {booth.lastQueueUpdater.role === "STAFF" ? <StaffBadge /> : <OperatorBadge />}
-          </div>
+        <div className="mt-3 rounded-md bg-zinc-100 px-3 py-2">
+          <p className="body-caption text-zinc-500">
+            실시간 혼잡도와 줄끝 갱신 정보는 아직 제공되지 않습니다.
+          </p>
         </div>
       </div>
       <div className="-mt-2.5 size-5 rotate-45 bg-white" />
@@ -65,17 +38,14 @@ export function BoothMapView({
   selectedBooth,
   onSelectBooth,
   zoomStep = 0,
-  suggestions = [],
-  center = FESTIVAL_MAP_CENTER,
+  center,
 }: {
   booths: Booth[];
   selectedBooth: Booth | null;
   onSelectBooth: (booth: Booth | null) => void;
   /** 기본 확대 수준(4)에 대한 상대값. 낮을수록 확대된다. */
   zoomStep?: number;
-  /** 경로선(path)이 있는 AI 제안을 지도 위에 함께 그린다. */
-  suggestions?: AiSuggestion[];
-  center?: { lat: number; lng: number };
+  center: { lat: number; lng: number };
 }) {
   const [loading, error] = useKakaoLoader({
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
@@ -120,20 +90,6 @@ export function BoothMapView({
         map.setMaxLevel(8);
       }}
     >
-      {suggestions.map((suggestion) =>
-        suggestion.path ? (
-          <Polyline
-            key={suggestion.id}
-            path={suggestion.path}
-            strokeWeight={4}
-            strokeColor="#18181b"
-            strokeOpacity={0.9}
-            strokeStyle="solid"
-            endArrow
-          />
-        ) : null,
-      )}
-
       {booths.map((booth) => {
         const isSelected = selectedBooth?.boothId === booth.boothId;
         return (
@@ -154,7 +110,7 @@ export function BoothMapView({
               className="flex size-3 items-center justify-center"
             >
               {isSelected ? (
-                <span className="flex size-3 items-center justify-center rounded-full bg-point-300">
+                <span className="flex size-3 items-center justify-center rounded-full bg-point-600/25">
                   <span className="size-1 rounded-full bg-point-600" />
                 </span>
               ) : (

@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
   Cross2Icon,
   DimensionsIcon,
   FileIcon,
@@ -22,6 +20,7 @@ import { BoothMapGuideBanner } from "./BoothMapGuideBanner";
 import { MapInfoPopover } from "./MapInfoPopover";
 import { useBoothMapStore } from "./store";
 import type { BoothMapShape } from "./types";
+import { ZoneListItem } from "./ZoneListItem";
 
 interface LocalZone {
   id: string;
@@ -272,11 +271,15 @@ export function BoothMapEditorReady({
                   select(booth.id);
                   setSelection({ kind: "booth", id: booth.id });
                 }}
-                className={`absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow ${
-                  booth.id === selectedId ? "bg-primary" : "bg-point-600"
+                className={`absolute flex size-3 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ${
+                  booth.id === selectedId ? "bg-point-600/25" : "bg-point-600 shadow-sm"
                 }`}
                 style={{ left: x, top: y }}
-              />
+              >
+                {booth.id === selectedId ? (
+                  <span className="size-1 rounded-full bg-point-600" />
+                ) : null}
+              </button>
             );
           })}
         </div>
@@ -293,49 +296,29 @@ export function BoothMapEditorReady({
               const members = boothShapes.filter((booth) => zone.boothIds.includes(booth.id));
               const expanded = expandedZoneIds.has(zone.id);
               return (
-                <div key={zone.id} className="flex flex-col">
-                  <div className="flex items-center gap-2 rounded-lg py-2 pl-1">
-                    <button
-                      type="button"
-                      aria-label={expanded ? "구역 접기" : "구역 펼치기"}
-                      onClick={() => toggleZoneExpanded(zone.id)}
-                      className="shrink-0 text-zinc-500"
-                    >
-                      {expanded ? (
-                        <ChevronUpIcon className="size-4" />
-                      ) : (
-                        <ChevronDownIcon className="size-4" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelection({ kind: "zone", id: zone.id })}
-                      className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                    >
-                      <span className="body-regular truncate text-zinc-950">{zone.name}</span>
-                      <span className="body-small text-zinc-500">{members.length}</span>
-                    </button>
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      icon={<HamburgerMenuIcon />}
-                      aria-label="구역 메뉴"
-                      onClick={() => setSelection({ kind: "zone", id: zone.id })}
+                <ZoneListItem
+                  key={zone.id}
+                  name={zone.name}
+                  count={members.length}
+                  expanded={expanded}
+                  checked={selection?.kind === "zone" && selection.id === zone.id}
+                  onToggleExpanded={() => toggleZoneExpanded(zone.id)}
+                  onCheckedChange={(checked) =>
+                    setSelection(checked ? { kind: "zone", id: zone.id } : null)
+                  }
+                  onSelect={() => setSelection({ kind: "zone", id: zone.id })}
+                >
+                  {members.map((booth) => (
+                    <BoothRow
+                      key={booth.id}
+                      booth={booth}
+                      checked={checkedIds.has(booth.id)}
+                      onToggleChecked={() => toggleChecked(booth.id)}
+                      onSelect={() => setSelection({ kind: "booth", id: booth.id })}
+                      indent
                     />
-                  </div>
-                  {expanded
-                    ? members.map((booth) => (
-                        <BoothRow
-                          key={booth.id}
-                          booth={booth}
-                          checked={checkedIds.has(booth.id)}
-                          onToggleChecked={() => toggleChecked(booth.id)}
-                          onSelect={() => setSelection({ kind: "booth", id: booth.id })}
-                          indent
-                        />
-                      ))
-                    : null}
-                </div>
+                  ))}
+                </ZoneListItem>
               );
             })}
 

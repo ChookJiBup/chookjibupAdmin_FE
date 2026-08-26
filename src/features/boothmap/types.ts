@@ -79,6 +79,7 @@ export interface MapEditorResponse {
   roadmapStatus: RoadmapStatus;
   analysis?: MapAnalysisStatusResponse | null;
   nodes: NodeResponse[];
+  zones?: RoadmapZoneResponse[];
   center?: { lat: number; lng: number } | null;
 }
 
@@ -96,6 +97,7 @@ export interface CreateCoordinateMapRequest {
 
 export interface NodeChangeRequest {
   nodeId: string | null;
+  clientNodeId?: string | null;
   nodeType: NodeType;
   name: string;
   geometryType: GeometryType;
@@ -104,9 +106,24 @@ export interface NodeChangeRequest {
   sortOrder: number;
 }
 
+export interface RoadmapZoneResponse {
+  zoneId: string;
+  name: string;
+  sortOrder: number;
+  boothNodeIds: string[];
+}
+
+export interface RoadmapZoneChangeRequest {
+  zoneId: string | null;
+  name: string;
+  sortOrder: number;
+  boothNodeIds: string[];
+}
+
 export interface SaveRoadmapDraftRequest {
   baseRevision: number;
   nodes: NodeChangeRequest[];
+  zones?: RoadmapZoneChangeRequest[];
 }
 
 export interface SaveRoadmapDraftResponse {
