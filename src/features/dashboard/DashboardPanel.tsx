@@ -161,19 +161,31 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         ) : dashboard?.dataAvailable ? (
           <div className="flex items-center gap-6 rounded-lg border border-zinc-200 bg-white px-5 py-4 shadow-md">
             <DashboardMetric
-              value={`${dashboard.currentVisitorCount.toLocaleString()} 명`}
+              value={
+                dashboard.currentVisitorCount === null
+                  ? "데이터 없음"
+                  : `${dashboard.currentVisitorCount.toLocaleString()} 명`
+              }
               valueClassName="body-regular-bold"
               label="현재 방문자수"
               description="백엔드에서 집계한 현재 방문자수입니다."
             />
             <DashboardMetric
-              value={`${dashboard.activeQueueCount.toLocaleString()} 개`}
+              value={
+                dashboard.activeQueueCount === null
+                  ? "데이터 없음"
+                  : `${dashboard.activeQueueCount.toLocaleString()} 개`
+              }
               valueClassName="body-regular-bold"
               label="활성 대기열"
               description="현재 활성화된 대기열 수입니다."
             />
             <DashboardMetric
-              value={`${dashboard.averageWaitMinutes.toLocaleString()} 분`}
+              value={
+                dashboard.averageWaitMinutes === null
+                  ? "데이터 없음"
+                  : `${dashboard.averageWaitMinutes.toLocaleString()} 분`
+              }
               valueClassName="body-regular-bold"
               label="평균 대기시간"
               description="현재 활성 대기열의 평균 대기시간입니다."
