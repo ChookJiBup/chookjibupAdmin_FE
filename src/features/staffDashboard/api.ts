@@ -5,7 +5,7 @@ import type { BoothCongestionResponse, UpdateBoothCongestionRequest } from "./ty
 
 export async function getStaffDashboard(festivalId: string): Promise<FestivalDashboard> {
   const { data } = await staffApiClient.get<ApiResponse<FestivalDashboard>>(
-    `/api/festivals/${festivalId}/dashboard`,
+    `/festivals/${festivalId}/dashboard`,
   );
   return data.data;
 }
@@ -16,7 +16,7 @@ export async function updateBoothCongestion(
   request: UpdateBoothCongestionRequest,
 ): Promise<BoothCongestionResponse> {
   const { data } = await staffApiClient.put<ApiResponse<BoothCongestionResponse>>(
-    `/api/festivals/${festivalId}/booths/${boothId}/congestion`,
+    `/festivals/${festivalId}/booths/${boothId}/congestion`,
     request,
   );
   return data.data;
