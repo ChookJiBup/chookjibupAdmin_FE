@@ -43,9 +43,22 @@ export interface AiSuggestion {
 export interface FestivalDashboard {
   festivalId: string;
   dataAvailable: boolean;
+  visitorAvailable: boolean;
+  boothAvailable: boolean;
+  congestionAvailable: boolean;
+  summaryAvailable: boolean;
   operatingStatus: string;
-  currentVisitorCount: number;
-  activeQueueCount: number;
-  averageWaitMinutes: number;
+  currentVisitorCount: number | null;
+  activeQueueCount: number | null;
+  averageWaitMinutes: number | null;
   updatedAt: string | null;
+  booths: DashboardBooth[];
+}
+
+export interface DashboardBooth {
+  boothId: number;
+  boothName: string;
+  congestionLevel: CongestionLevel | null;
+  waitMinutes: number | null;
+  congestionUpdatedAt: string | null;
 }
