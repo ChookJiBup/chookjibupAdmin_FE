@@ -305,7 +305,8 @@ export function BoothMapEditorFileRegisteredState({
       if (!mapQuery.data?.mapId) {
         throw new Error("지도 정보를 불러오지 못했습니다.");
       }
-      if (booths.length === 0) {
+      // 부스를 전부 지운 경우에도 삭제 내역은 서버에 보내야 하므로, 지울 노드가 있으면 통과시킨다.
+      if (booths.length === 0 && deletedNodeIds.length === 0) {
         throw new Error("저장할 부스가 없습니다.");
       }
       return saveMapEditor(festivalId, mapQuery.data.mapId, {
