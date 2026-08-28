@@ -1,6 +1,7 @@
 "use client";
 
 import { PersonIcon } from "@radix-ui/react-icons";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -147,22 +148,26 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
           {staffList.length > 0 ? (
             <div className="flex flex-col divide-y divide-zinc-200">
               {staffList.map((staff) => (
-                <label key={staff.staffId} className="flex cursor-pointer items-start gap-2 py-4">
+                <div key={staff.staffId} className="flex items-start gap-2 py-4">
                   <Checkbox
                     className="mt-1 border-zinc-200 data-[state=checked]:border-point-600 data-[state=checked]:bg-point-600"
                     checked={selectedIds.has(staff.staffId)}
                     onCheckedChange={() => toggleOne(staff.staffId)}
+                    aria-label={`${staff.name} 선택`}
                   />
-                  <div className="flex flex-col gap-1">
+                  <Link
+                    href={`/console/festivals/${festivalId}/staffs/${staff.staffId}`}
+                    className="flex min-w-0 flex-col gap-1"
+                  >
                     <div className="flex items-center gap-1">
                       <PersonIcon className="size-4 shrink-0 text-point-600" />
-                      <p className="body-regular text-zinc-950">
+                      <p className="body-regular text-zinc-950 hover:underline">
                         {staff.name}({formatPhoneNumber(staff.phoneNumber)})
                       </p>
                     </div>
                     <p className="body-small pl-4 text-zinc-500">{staff.loginId}</p>
-                  </div>
-                </label>
+                  </Link>
+                </div>
               ))}
             </div>
           ) : null}

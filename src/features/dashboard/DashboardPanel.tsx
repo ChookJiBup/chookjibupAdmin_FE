@@ -69,6 +69,8 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
       const editor = await getMapEditor(festivalId, map.mapId);
       return { map, editor };
     },
+    // 축제 장소에 위경도가 없으면 지도 준비 API가 400을 준다. 재시도해도 결과가 같으므로 한 번만 시도한다.
+    retry: false,
   });
   const mapBooths = useMemo((): Booth[] => {
     return (mapDataQuery.data?.editor.nodes ?? [])
@@ -106,7 +108,8 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     return <DashboardState message="대시보드를 불러오는 중..." />;
   }
 
-  const queryError = festivalQuery.error ?? mapDataQuery.error ?? dashboardQuery.error;
+  // 지도를 못 불러와도 방문자수 등 운영 지표는 보여줘야 하므로 지도 실패는 화면 전체를 막지 않는다.
+  const queryError = festivalQuery.error ?? dashboardQuery.error;
   if (queryError) {
     return (
       <DashboardState
@@ -118,6 +121,9 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
 
   const dashboard = dashboardQuery.data;
   const canEditMap = festivalQuery.data?.festivalStatus === "DRAFT";
+  const mapErrorMessage = mapDataQuery.isError
+    ? getApiErrorMessage(mapDataQuery.error, "부스맵을 불러오지 못했습니다.")
+    : null;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -128,6 +134,16 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         zoomStep={zoomStep}
         center={dashboardMapCenter}
       />
+
+      {mapErrorMessage ? (
+        <div className="absolute top-10 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-zinc-200 bg-white px-5 py-4 shadow-md">
+          <p className="body-small-bold text-zinc-950">{mapErrorMessage}</p>
+          <p className="body-caption mt-1 text-zinc-500">
+            축제 장소에 위도·경도가 없으면 부스맵을 만들 수 없습니다. 축제관리에서 주소를 다시
+            검색해 좌표를 저장해 주세요.
+          </p>
+        </div>
+      ) : null}
 
       <BoothTreeSidebar
         zones={mapZones}

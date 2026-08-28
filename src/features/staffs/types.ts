@@ -1,4 +1,4 @@
-export type FieldStaffStatus = "ACTIVE" | "DELETED";
+export type FieldStaffStatus = "ACTIVE" | "INACTIVE" | "DELETED";
 
 export interface FieldStaff {
   staffId: string;
