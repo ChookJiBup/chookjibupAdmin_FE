@@ -4,7 +4,7 @@ import type { StaffLoginRequest, StaffLoginResponse } from "./types";
 
 export async function loginStaff(request: StaffLoginRequest): Promise<StaffLoginResponse> {
   const { data } = await staffApiClient.post<ApiResponse<StaffLoginResponse>>(
-    "/auth/login",
+    "/field-staff/auth/login",
     request,
   );
   return data.data;

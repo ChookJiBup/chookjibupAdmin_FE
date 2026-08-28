@@ -2,7 +2,7 @@ import axios from "axios";
 import { useStaffAuthStore } from "@/store/staffAuthStore";
 
 export const staffApiClient = axios.create({
-  baseURL: "/api/field-staff",
+  baseURL: "/api",
 });
 
 staffApiClient.interceptors.request.use((config) => {
