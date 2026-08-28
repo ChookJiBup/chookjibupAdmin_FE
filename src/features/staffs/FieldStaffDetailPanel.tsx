@@ -15,6 +15,7 @@ import type { FieldStaffStatus } from "./types";
 
 const STATUS_LABEL: Record<FieldStaffStatus, string> = {
   ACTIVE: "활성",
+  INACTIVE: "비활성",
   DELETED: "삭제됨",
 };
 
@@ -66,6 +67,14 @@ export function FieldStaffDetailPanel({
     onSuccess: (result) => setTemporaryPassword(result.temporaryPassword),
   });
 
+  /** 직전 작업의 에러·임시 비밀번호가 다음 작업 결과와 섞여 보이지 않도록 먼저 지운다. */
+  function resetActionResults() {
+    setTemporaryPassword(null);
+    updateMutation.reset();
+    statusMutation.reset();
+    passwordMutation.reset();
+  }
+
   if (staffQuery.isLoading) {
     return <p className="body-regular text-zinc-500">불러오는 중...</p>;
   }
@@ -115,20 +124,32 @@ export function FieldStaffDetailPanel({
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+        <Button
+          disabled={updateMutation.isPending}
+          onClick={() => {
+            resetActionResults();
+            updateMutation.mutate();
+          }}
+        >
           정보 저장
         </Button>
         <Button
           variant="outline"
           disabled={statusMutation.isPending}
-          onClick={() => statusMutation.mutate(staff.status !== "ACTIVE")}
+          onClick={() => {
+            resetActionResults();
+            statusMutation.mutate(staff.status !== "ACTIVE");
+          }}
         >
           {staff.status === "ACTIVE" ? "비활성화" : "활성화"}
         </Button>
         <Button
           variant="outline"
           disabled={passwordMutation.isPending}
-          onClick={() => passwordMutation.mutate()}
+          onClick={() => {
+            resetActionResults();
+            passwordMutation.mutate();
+          }}
         >
           임시 비밀번호 재발급
         </Button>

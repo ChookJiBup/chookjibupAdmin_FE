@@ -208,6 +208,8 @@ export function BoothMapEditorFileRegisteredState({
     queryKey: ["coordinate-map", festivalId],
     queryFn: () => ensureCoordinateMap(festivalId),
     enabled: !seedMockBooths && festivalId !== "demo" && festivalId !== "mock-preview",
+    // 축제 장소에 위경도가 없으면 400이 확정이라 재시도하지 않고 바로 안내한다.
+    retry: false,
   });
   const editorQuery = useQuery({
     queryKey: ["map-editor", festivalId, mapQuery.data?.mapId],
@@ -524,6 +526,22 @@ export function BoothMapEditorFileRegisteredState({
         >
           <HamburgerMenuIcon />
         </span>
+      </div>
+    );
+  }
+
+  if (mapQuery.isError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-zinc-50 px-8">
+        <div className="max-w-md text-center">
+          <p className="body-regular-bold text-zinc-950">
+            {getApiErrorMessage(mapQuery.error, "부스맵을 준비하지 못했습니다.")}
+          </p>
+          <p className="body-small mt-2 text-zinc-500">
+            축제 장소에 위도·경도가 없으면 부스맵을 만들 수 없습니다. 축제관리에서 주소를 다시
+            검색해 좌표를 저장한 뒤 다시 시도해 주세요.
+          </p>
+        </div>
       </div>
     );
   }
