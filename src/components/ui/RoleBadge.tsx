@@ -23,6 +23,11 @@ export function OperatorBadge({ className }: { className?: string }) {
   );
 }
 
+/** 관리자(총괄관리자·운영자 구분 없이 관리자 계정) 역할 뱃지. */
+export function AdminBadge({ className }: { className?: string }) {
+  return <Badge className={cn(ROLE_BADGE_BASE_CLASSES, className)}>관리자</Badge>;
+}
+
 /** 스태프(현장 스태프) 역할 뱃지. */
 export function StaffBadge({ className }: { className?: string }) {
   return (

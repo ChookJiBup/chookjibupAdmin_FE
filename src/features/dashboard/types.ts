@@ -67,6 +67,7 @@ export interface FestivalOperationSuggestions {
 
 export interface FestivalDashboard {
   festivalId: string;
+  festivalName: string;
   dataAvailable: boolean;
   visitorAvailable: boolean;
   boothAvailable: boolean;
