@@ -19,6 +19,7 @@ import type {
   FestivalLocationRequest,
   FestivalLocationResponse,
   FestivalSeriesSearchResult,
+  FestivalVisitorCountInputMode,
 } from "./types";
 
 export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
@@ -31,6 +32,8 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
   const [detailAddress, setDetailAddress] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [visitorCountInputMode, setVisitorCountInputMode] =
+    useState<FestivalVisitorCountInputMode | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
@@ -89,6 +92,7 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
         endDate: endDate ? toIsoDate(endDate) : festival.endDate,
         operationStartTime: festival.operationStartTime,
         operationEndTime: festival.operationEndTime,
+        visitorCountInputMode: visitorCountInputMode ?? undefined,
       });
     },
     onSuccess: () => {
@@ -98,6 +102,7 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
       setDetailAddress(null);
       setStartDate(null);
       setEndDate(null);
+      setVisitorCountInputMode(null);
       queryClient.invalidateQueries({ queryKey: ["managed-festival", festivalId] });
       queryClient.invalidateQueries({ queryKey: ["managed-festivals"] });
     },
@@ -119,8 +124,13 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
 
   const displayStartDate = startDate ?? toDisplayDate(festival.startDate);
   const displayEndDate = endDate ?? toDisplayDate(festival.endDate);
+  const savedVisitorCountInputMode = festival.visitorCountInputMode;
 
   function handleEditClick() {
+    if (savedVisitorCountInputMode === "UNSET" && visitorCountInputMode === null) {
+      setDateError("방문 인원 집계 방식을 선택해 주세요.");
+      return;
+    }
     if (
       !DATE_DISPLAY_PATTERN.test(displayStartDate) ||
       !DATE_DISPLAY_PATTERN.test(displayEndDate)
@@ -194,6 +204,43 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
               onChange={(event) => setEndDate(formatDateInput(event.target.value))}
             />
           </div>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="body-small-bold text-zinc-950">방문 인원 집계 방식</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["DAILY", "일자별"],
+                  ["TOTAL", "총 방문객"],
+                ] as const
+              ).map(([value, label]) => {
+                const selected = (visitorCountInputMode ?? savedVisitorCountInputMode) === value;
+                return (
+                  <label
+                    key={value}
+                    className={`cursor-pointer rounded-lg border px-3 py-2 text-center transition-colors ${
+                      selected ? "border-primary bg-zinc-50" : "border-zinc-300 bg-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="visitorCountInputMode"
+                      value={value}
+                      checked={selected}
+                      onChange={() => setVisitorCountInputMode(value)}
+                      className="sr-only"
+                    />
+                    <span className="body-small-bold text-zinc-950">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {savedVisitorCountInputMode === "UNSET" ? (
+              <p className="body-caption text-zinc-500">
+                기존 축제의 결과보고서를 만들려면 집계 방식을 선택해야 합니다.
+              </p>
+            ) : null}
+          </fieldset>
           {dateError ? <p className="body-caption text-error">{dateError}</p> : null}
         </div>
 

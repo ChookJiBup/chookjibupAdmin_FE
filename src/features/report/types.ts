@@ -18,12 +18,19 @@ export interface FestivalVisitorCounts {
   festivalId: string;
   startDate: string;
   endDate: string;
+  visitorCountInputMode: "UNSET" | "DAILY" | "TOTAL";
   days: FestivalVisitorDay[];
   filledDayCount: number;
   totalDayCount: number;
   allDaysFilled: boolean;
   sumVisitorCount: number;
   totalOverrideVisitorCount: number | null;
+  totalSaved: boolean;
+  effectiveVisitorCount: number | null;
+  effectiveSource: "NONE" | "DAILY_SUM" | "TOTAL";
+  effectiveStatus: "UNSET" | "PARTIAL" | "READY" | "CONFLICT";
+  difference: number | null;
+  reportReadyToGenerate: boolean;
 }
 export interface FestivalReportStatus {
   festivalId: string;
