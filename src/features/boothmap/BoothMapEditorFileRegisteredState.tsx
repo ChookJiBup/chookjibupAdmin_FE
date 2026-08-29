@@ -24,7 +24,6 @@ import { IconButton } from "@/components/ui/IconButton";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getManagedFestival } from "@/features/festivals/api";
-import { FESTIVAL_MAP_CENTER } from "@/features/dashboard/mockData";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { cn } from "@/lib/utils";
@@ -115,74 +114,10 @@ function centroidOf(members: LocalBoothPin[]) {
 const POPOVER_ANCHORS = { xAnchor: 0.5, yAnchor: 1 } as const;
 
 /**
- * TODO(api/map-preview): 자동 매핑된 부스의 지도 좌표/이름/신뢰도와 구역 관계를
- * 조회하는 API가 없다. 이 데이터는 `?preview=ready` 개발 프리뷰에서만 사용한다.
- */
-const MOCK_BOOTHS: LocalBoothPin[] = [
-  {
-    id: "b1",
-    nodeId: null,
-    nodeType: "BOOTH",
-    name: "CU편의점",
-    lat: FESTIVAL_MAP_CENTER.lat + 0.0032,
-    lng: FESTIVAL_MAP_CENTER.lng - 0.0004,
-  },
-  {
-    id: "b2",
-    nodeId: null,
-    nodeType: "BOOTH",
-    name: "(주)대정 김밥공장",
-    lat: FESTIVAL_MAP_CENTER.lat + 0.0016,
-    lng: FESTIVAL_MAP_CENTER.lng - 0.0022,
-    uncertain: true,
-  },
-  {
-    id: "b3",
-    nodeId: null,
-    nodeType: "BOOTH",
-    name: "김천특산품 홍보관",
-    lat: FESTIVAL_MAP_CENTER.lat + 0.0018,
-    lng: FESTIVAL_MAP_CENTER.lng + 0.0028,
-  },
-  {
-    id: "b4",
-    nodeId: null,
-    nodeType: "STAGE",
-    name: "메인무대",
-    lat: FESTIVAL_MAP_CENTER.lat,
-    lng: FESTIVAL_MAP_CENTER.lng,
-  },
-  {
-    id: "b5",
-    nodeId: null,
-    nodeType: "BOOTH",
-    name: "명품로컬김밥판매존",
-    lat: FESTIVAL_MAP_CENTER.lat - 0.0016,
-    lng: FESTIVAL_MAP_CENTER.lng - 0.0012,
-    uncertain: true,
-  },
-  {
-    id: "b6",
-    nodeId: null,
-    nodeType: "BOOTH",
-    name: "플리마켓",
-    lat: FESTIVAL_MAP_CENTER.lat - 0.0008,
-    lng: FESTIVAL_MAP_CENTER.lng + 0.0018,
-  },
-];
-
-/**
  * 카카오맵에서 부스 핀을 찍고 구역을 묶는 편집 화면.
  * 배치도 사진 업로드/OpenAI 분석은 1차 경로가 아니다.
  */
-export function BoothMapEditorFileRegisteredState({
-  festivalId,
-  seedMockBooths = false,
-}: {
-  festivalId: string;
-  /** `?preview=ready` 개발 프리뷰에서만 더미 부스를 넣는다. */
-  seedMockBooths?: boolean;
-}) {
+export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
@@ -202,12 +137,10 @@ export function BoothMapEditorFileRegisteredState({
   const festivalQuery = useQuery({
     queryKey: ["managed-festival", festivalId],
     queryFn: () => getManagedFestival(festivalId),
-    enabled: festivalId !== "demo" && festivalId !== "mock-preview",
   });
   const mapQuery = useQuery({
     queryKey: ["coordinate-map", festivalId],
     queryFn: () => ensureCoordinateMap(festivalId),
-    enabled: !seedMockBooths && festivalId !== "demo" && festivalId !== "mock-preview",
     // 축제 장소에 위경도가 없으면 400이 확정이라 재시도하지 않고 바로 안내한다.
     retry: false,
   });
@@ -221,7 +154,7 @@ export function BoothMapEditorFileRegisteredState({
     [festivalQuery.data?.locations],
   );
 
-  const [booths, setBooths] = useState<LocalBoothPin[]>(() => (seedMockBooths ? MOCK_BOOTHS : []));
+  const [booths, setBooths] = useState<LocalBoothPin[]>([]);
   const [editRevision, setEditRevision] = useState(0);
   const [deletedNodeIds, setDeletedNodeIds] = useState<string[]>([]);
   const [editorInitialized, setEditorInitialized] = useState(false);
@@ -382,7 +315,7 @@ export function BoothMapEditorFileRegisteredState({
   });
 
   // 편집기 데이터가 처음 도착하면 로컬 상태를 한 번만 채운다(렌더 중 조정 — effect가 아니다).
-  if (!seedMockBooths && editorQuery.data && !editorInitialized) {
+  if (editorQuery.data && !editorInitialized) {
     setBooths(
       editorQuery.data.nodes
         .map(nodeToLocalBooth)
@@ -541,6 +474,19 @@ export function BoothMapEditorFileRegisteredState({
           <p className="body-small mt-2 text-zinc-500">
             축제 장소에 위도·경도가 없으면 부스맵을 만들 수 없습니다. 축제관리에서 주소를 다시
             검색해 좌표를 저장한 뒤 다시 시도해 주세요.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!mapCenter) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-zinc-50 px-8">
+        <div className="max-w-md text-center">
+          <p className="body-regular-bold text-zinc-950">축제 위치가 등록되지 않았습니다.</p>
+          <p className="body-small mt-2 text-zinc-500">
+            축제관리에서 주소를 검색해 위도·경도를 저장한 뒤 다시 시도해 주세요.
           </p>
         </div>
       </div>

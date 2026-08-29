@@ -20,7 +20,6 @@ export function LoginForm() {
   const loginMutation = useMutation({
     mutationFn: loginAdmin,
     onSuccess: (data) => {
-      window.localStorage.removeItem("chookjibup-admin-auth");
       setSession(data.expiresIn, data.admin);
       router.push("/console");
     },

@@ -48,7 +48,6 @@ export default function MyPage() {
         await logoutAdmin();
       } finally {
         clearSession();
-        window.localStorage.removeItem("chookjibup-admin-auth");
         router.replace("/login");
       }
     },
@@ -111,7 +110,6 @@ export default function MyPage() {
       await logoutAdmin();
     } finally {
       clearSession();
-      window.localStorage.removeItem("chookjibup-admin-auth");
       router.replace("/login");
     }
   }

@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/Button";
 import type { Booth } from "./types";
 
 function BoothQueueUpdateBar({ booth }: { booth: Booth }) {
@@ -12,14 +11,17 @@ function BoothQueueUpdateBar({ booth }: { booth: Booth }) {
             <span className="body-small-bold text-zinc-950">{booth.name}</span>
           </div>
           <p className="body-caption text-zinc-500">
-            줄끝 조회·갱신 API가 없어 현재 이 기능을 사용할 수 없습니다.
+            혼잡도 {booth.congestionLevel ?? "미입력"} · 예상 대기시간{" "}
+            {booth.waitMinutes == null ? "미입력" : `${booth.waitMinutes}분`}
           </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <Button disabled>줄끝 갱신하기</Button>
-      </div>
+      {booth.lastQueueUpdater ? (
+        <p className="body-caption shrink-0 text-zinc-500">
+          최근 갱신: {booth.lastQueueUpdater.name}
+        </p>
+      ) : null}
     </div>
   );
 }

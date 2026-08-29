@@ -33,8 +33,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
     queryFn: () => getManagedFestival(festivalId as string),
     enabled: Boolean(festivalId),
   });
-  const festivalName =
-    festivalQuery.data?.festivalName ?? (festivalId === "demo" ? "김천김밥축제" : undefined);
+  const festivalName = festivalQuery.data?.festivalName;
   // 로그인 시점 세션에는 축제별 권한이 없다(계정은 축제마다 역할이 다를 수 있음).
   // 축제 범위 화면에서는 이 축제의 조회 응답에 담긴 role을 우선 쓰고,
   // 축제 범위 밖(메인홈 등)에서만 계정 세션의 role로 대체한다.

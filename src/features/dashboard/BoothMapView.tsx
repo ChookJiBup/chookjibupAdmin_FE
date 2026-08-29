@@ -23,8 +23,11 @@ function BoothPopup({ booth, onClose }: { booth: Booth; onClose: () => void }) {
         </div>
 
         <div className="mt-3 rounded-md bg-zinc-100 px-3 py-2">
+          <p className="body-small-bold text-zinc-950">
+            혼잡도 {booth.congestionLevel ?? "미입력"}
+          </p>
           <p className="body-caption text-zinc-500">
-            실시간 혼잡도와 줄끝 갱신 정보는 아직 제공되지 않습니다.
+            예상 대기시간 {booth.waitMinutes == null ? "미입력" : `${booth.waitMinutes}분`}
           </p>
         </div>
       </div>
@@ -39,6 +42,7 @@ export function BoothMapView({
   onSelectBooth,
   zoomStep = 0,
   center,
+  showPopup = true,
 }: {
   booths: Booth[];
   selectedBooth: Booth | null;
@@ -46,6 +50,8 @@ export function BoothMapView({
   /** 기본 확대 수준(4)에 대한 상대값. 낮을수록 확대된다. */
   zoomStep?: number;
   center: { lat: number; lng: number };
+  /** 마커를 누르면 상세 말풍선을 띄울지 여부. 선택 정보를 하단바로 보여주는 화면에서는 끈다. */
+  showPopup?: boolean;
 }) {
   const [loading, error] = useKakaoLoader({
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
@@ -75,6 +81,16 @@ export function BoothMapView({
     );
   }
 
+  // 좌표가 없는 부스는 지도에 찍을 수 없으므로 목록에서만 보여준다.
+  const pinnedBooths = booths.filter(
+    (booth): booth is Booth & { lat: number; lng: number } =>
+      booth.lat !== undefined && booth.lng !== undefined,
+  );
+  const pinnedSelectedBooth =
+    selectedBooth?.lat !== undefined && selectedBooth?.lng !== undefined
+      ? (selectedBooth as Booth & { lat: number; lng: number })
+      : null;
+
   return (
     <Map
       center={center}
@@ -90,7 +106,7 @@ export function BoothMapView({
         map.setMaxLevel(8);
       }}
     >
-      {booths.map((booth) => {
+      {pinnedBooths.map((booth) => {
         const isSelected = selectedBooth?.boothId === booth.boothId;
         return (
           <CustomOverlayMap
@@ -121,13 +137,13 @@ export function BoothMapView({
         );
       })}
 
-      {selectedBooth ? (
+      {showPopup && pinnedSelectedBooth ? (
         <CustomOverlayMap
-          position={{ lat: selectedBooth.lat, lng: selectedBooth.lng }}
+          position={{ lat: pinnedSelectedBooth.lat, lng: pinnedSelectedBooth.lng }}
           yAnchor={1}
           zIndex={30}
         >
-          <BoothPopup booth={selectedBooth} onClose={() => onSelectBooth(null)} />
+          <BoothPopup booth={pinnedSelectedBooth} onClose={() => onSelectBooth(null)} />
         </CustomOverlayMap>
       ) : null}
     </Map>
