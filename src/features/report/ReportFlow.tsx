@@ -9,6 +9,7 @@ import {
   getFestivalReportStatus,
   getFestivalVisitorCounts,
   updateDailyVisitorCount,
+  updateTotalVisitorCount,
 } from "./api";
 import { ReportPanel } from "./ReportPanel";
 import { VisitorCountForm } from "./VisitorCountForm";
@@ -36,10 +37,15 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
   }, [isGenerating, setHideNav, showForm]);
 
   const submitMutation = useMutation({
-    mutationFn: async (counts: number[]) => {
+    mutationFn: async (value: number[] | number) => {
+      if (typeof value === "number") {
+        await updateTotalVisitorCount(festivalId, value);
+        await generateFestivalReport(festivalId);
+        return;
+      }
       const days = visitorsQuery.data?.days ?? [];
       await Promise.all(
-        days.map((day, index) => updateDailyVisitorCount(festivalId, day.visitDate, counts[index])),
+        days.map((day, index) => updateDailyVisitorCount(festivalId, day.visitDate, value[index])),
       );
       await generateFestivalReport(festivalId);
     },
@@ -57,10 +63,19 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
   if (error) return <p className="body-small col-span-3 text-error">{getApiErrorMessage(error)}</p>;
 
   if (showForm && visitorsQuery.data) {
+    if (visitorsQuery.data.visitorCountInputMode === "UNSET") {
+      return (
+        <p className="body-small col-span-3 text-error">
+          방문 인원 집계 방식이 설정되지 않은 축제입니다. 축제 정보를 먼저 수정해 주세요.
+        </p>
+      );
+    }
     return (
       <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 flex items-center justify-center bg-dimmed p-8">
         <VisitorCountForm
           days={visitorsQuery.data.days}
+          mode={visitorsQuery.data.visitorCountInputMode}
+          initialTotal={visitorsQuery.data.totalOverrideVisitorCount}
           isPending={submitMutation.isPending}
           onSubmit={(counts) => submitMutation.mutate(counts)}
         />

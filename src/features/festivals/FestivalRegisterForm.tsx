@@ -13,7 +13,10 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
 import { DATE_DISPLAY_PATTERN, formatDateInput, toDisplayDate, toIsoDate } from "./dateFormat";
 import { createFestival, searchFestivalSeries } from "@/features/festivals/api";
-import type { FestivalSeriesSearchResult } from "@/features/festivals/types";
+import type {
+  FestivalSeriesSearchResult,
+  FestivalVisitorCountInputMode,
+} from "@/features/festivals/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import {
   createInitialLocationDrafts,
@@ -41,6 +44,8 @@ export function FestivalRegisterForm() {
   const [primaryKey, setPrimaryKey] = useState(() => locations[0].key);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [visitorCountInputMode, setVisitorCountInputMode] =
+    useState<FestivalVisitorCountInputMode>("DAILY");
   const [formError, setFormError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
@@ -143,6 +148,7 @@ export function FestivalRegisterForm() {
         // 디자인에 운영시간 입력이 추가되면 이 기본값을 실제 입력값으로 교체해야 한다.
         operationStartTime: "09:00:00",
         operationEndTime: "18:00:00",
+        visitorCountInputMode,
       };
 
       const festival = await createFestival(request);
@@ -271,6 +277,38 @@ export function FestivalRegisterForm() {
             onChange={(event) => setEndDate(formatDateInput(event.target.value))}
           />
         </div>
+
+        <fieldset className="flex flex-col gap-3">
+          <legend className="body-small-bold text-zinc-950">방문 인원 집계 방식</legend>
+          <div className="grid grid-cols-2 gap-3">
+            {(
+              [
+                ["DAILY", "일자별 입력", "축제 일차마다 방문 인원을 입력합니다."],
+                ["TOTAL", "총 방문객 입력", "축제 전체 방문 인원만 입력합니다."],
+              ] as const
+            ).map(([value, label, description]) => (
+              <label
+                key={value}
+                className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+                  visitorCountInputMode === value
+                    ? "border-primary bg-zinc-50"
+                    : "border-zinc-300 bg-white"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="visitorCountInputMode"
+                  value={value}
+                  checked={visitorCountInputMode === value}
+                  onChange={() => setVisitorCountInputMode(value)}
+                  className="sr-only"
+                />
+                <span className="body-small-bold text-zinc-950">{label}</span>
+                <span className="body-caption mt-1 block text-zinc-500">{description}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <Button
           type="button"

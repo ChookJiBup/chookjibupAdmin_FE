@@ -12,6 +12,7 @@ export type FestivalLocationType =
   | "OTHER";
 
 export type FestivalLocationSourceType = "MANUAL" | "API";
+export type FestivalVisitorCountInputMode = "DAILY" | "TOTAL";
 
 export const FESTIVAL_LOCATION_TYPE_LABEL: Record<FestivalLocationType, string> = {
   MAIN_VENUE: "메인 행사장",
@@ -74,6 +75,8 @@ export interface CreateFestivalRequest {
   operationStartTime: string;
   /** HH:mm:ss */
   operationEndTime: string;
+  /** 결과보고서 생성을 위한 방문객 집계 방식 */
+  visitorCountInputMode: FestivalVisitorCountInputMode;
 }
 
 export interface CreateFestivalResponse {
@@ -109,10 +112,17 @@ export interface ManagedFestivalDetail {
   endDate: string;
   operationStartTime: string;
   operationEndTime: string;
+  visitorCountInputMode: "UNSET" | FestivalVisitorCountInputMode;
   locations: FestivalLocationResponse[];
 }
 
-export type UpdateFestivalRequest = CreateFestivalRequest;
+export interface UpdateFestivalRequest extends Omit<
+  CreateFestivalRequest,
+  "seriesId" | "visitorCountInputMode"
+> {
+  /** 생략하면 기존 방문객 집계 방식을 유지한다. */
+  visitorCountInputMode?: FestivalVisitorCountInputMode;
+}
 
 /** "축제 등록" 화면에서 축제명으로 기존 축제 시리즈를 검색한 결과 한 건. */
 export interface FestivalSeriesSearchResult {
