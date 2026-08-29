@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Cross2Icon } from "@radix-ui/react-icons";
+import { cn } from "@/lib/utils";
 import { Button, type ButtonVariant } from "./Button";
 
 export interface ConfirmDialogProps {
@@ -18,6 +19,10 @@ export interface ConfirmDialogProps {
   confirmVariant?: ButtonVariant;
   onConfirm: () => void;
   confirmPending?: boolean;
+  /** 모달 본체에 덧붙일 클래스. 모바일 화면처럼 기본 480px 폭이 맞지 않을 때 사용한다. */
+  className?: string;
+  /** 딤 오버레이에 덧붙일 클래스. 기본값은 콘솔 상단바 아래만 덮는 위치다. */
+  overlayClassName?: string;
 }
 
 export function ConfirmDialog({
@@ -30,12 +35,21 @@ export function ConfirmDialog({
   confirmVariant = "destructive",
   onConfirm,
   confirmPending = false,
+  className,
+  overlayClassName,
 }: ConfirmDialogProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-x-0 top-[118px] bottom-0 z-30 bg-dimmed" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8">
+        <Dialog.Overlay
+          className={cn("fixed inset-x-0 top-[118px] bottom-0 z-30 bg-dimmed", overlayClassName)}
+        />
+        <Dialog.Content
+          className={cn(
+            "fixed top-1/2 left-1/2 z-30 w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8",
+            className,
+          )}
+        >
           <div className="flex h-14 items-center justify-end">
             <Dialog.Close asChild>
               <button type="button" aria-label="닫기" className="text-zinc-950">

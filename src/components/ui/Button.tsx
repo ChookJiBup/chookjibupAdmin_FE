@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 export type ButtonVariant = "primary" | "outline" | "destructive" | "link" | "ghost";
 export type ButtonSize = "default" | "lg" | "sm";
@@ -60,15 +61,14 @@ export function Button({
 }: ButtonProps) {
   const isGhostSelected = variant === "ghost" && selected;
 
-  const classes = [
+  // cn(twMerge)으로 합쳐야 호출부에서 넘긴 className이 기본 크기·색 클래스를 덮어쓸 수 있다.
+  const classes = cn(
     BASE_STYLES,
     isGhostSelected ? SIZE_STYLES_SELECTED[size] : SIZE_STYLES[size],
     VARIANT_STYLES[variant],
     isGhostSelected ? GHOST_SELECTED_STYLES : "",
-    className ?? "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+    className,
+  );
 
   return (
     <button type={type} className={classes} {...props}>

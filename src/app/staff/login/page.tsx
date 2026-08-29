@@ -28,7 +28,7 @@ export default function StaffLoginPage() {
     inviteError || (loginMutation.isError ? getApiErrorMessage(loginMutation.error) : undefined);
 
   return (
-    <main className="flex flex-1 flex-col justify-center">
+    <main className="flex flex-1 flex-col px-5 py-8">
       <div className="w-full">
         <div className="mb-8 text-center">
           <h1 className="heading-regular text-zinc-950">로그인</h1>
@@ -53,7 +53,7 @@ export default function StaffLoginPage() {
             type="text"
             required
             autoComplete="username"
-            placeholder="아이디를 입력해주세요"
+            placeholder="아이디"
             value={loginId}
             onChange={(event) => setLoginId(event.target.value)}
           />
@@ -62,7 +62,7 @@ export default function StaffLoginPage() {
             type="password"
             required
             autoComplete="current-password"
-            placeholder="비밀번호를 입력해주세요"
+            placeholder="비밀번호"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             errorText={errorMessage}
