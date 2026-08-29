@@ -1,62 +1,38 @@
-import { useSyncExternalStore } from "react";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import type { AdminSummary } from "@/features/auth/admin/types";
-
-if (typeof window !== "undefined") {
-  window.localStorage.removeItem("chookjibup-admin-auth");
-}
+import type { AdminAccountProfile, AdminSummary } from "@/features/auth/admin/types";
 
 interface AdminSession {
-  /** 토큰 만료 시각 (epoch ms) */
-  expiresAt: number;
   admin: AdminSummary;
 }
 
 interface AdminAuthState {
   session: AdminSession | null;
   setSession: (expiresIn: number, admin: AdminSummary) => void;
+  setProfile: (profile: AdminAccountProfile) => void;
   updateAdminProfile: (patch: Partial<AdminSummary>) => void;
   clearSession: () => void;
-  isSessionValid: () => boolean;
 }
 
-export const useAdminAuthStore = create<AdminAuthState>()(
-  persist(
-    (set, get) => ({
-      session: null,
-      setSession: (expiresIn, admin) =>
-        set({
-          session: {
-            expiresAt: Date.now() + expiresIn * 1000,
-            admin,
-          },
-        }),
-      updateAdminProfile: (patch) =>
-        set((state) => {
-          if (!state.session) return state;
-          return { session: { ...state.session, admin: { ...state.session.admin, ...patch } } };
-        }),
-      clearSession: () => set({ session: null }),
-      isSessionValid: () => {
-        const { session } = get();
-        return session !== null && session.expiresAt > Date.now();
-      },
-    }),
-    { name: "chookjibup-admin-session" },
-  ),
-);
-
-/**
- * localStorage에서 세션을 복원하는 zustand persist rehydration이 끝났는지 추적한다.
- * 이게 끝나기 전에 isSessionValid를 판단하면 로그인된 사용자도 새로고침 시
- * 순간적으로 미인증 상태로 보여 로그인 화면으로 잘못 리다이렉트될 수 있다.
- */
-export function useAdminAuthHasHydrated(): boolean {
-  return useSyncExternalStore(
-    (onStoreChange) => useAdminAuthStore.persist.onFinishHydration(onStoreChange),
-    () => useAdminAuthStore.persist.hasHydrated(),
-    // 서버에서는 storage가 없어 항상 hydrate되지 않은 상태로 취급한다.
-    () => false,
-  );
+function profileToSummary(profile: AdminAccountProfile): AdminSummary {
+  return {
+    ...profile,
+    festivalId: null,
+    role: null,
+    canInviteSubAdmin: false,
+    canModifyFestivalInfo: false,
+    canViewOperationReport: false,
+    canUpdateQueueTail: false,
+  };
 }
+
+/** HttpOnly 쿠키 인증 결과의 화면 표시용 메모리 상태. 브라우저 저장소에는 기록하지 않는다. */
+export const useAdminAuthStore = create<AdminAuthState>()((set) => ({
+  session: null,
+  setSession: (_expiresIn, admin) => set({ session: { admin } }),
+  setProfile: (profile) => set({ session: { admin: profileToSummary(profile) } }),
+  updateAdminProfile: (patch) =>
+    set((state) =>
+      state.session ? { session: { admin: { ...state.session.admin, ...patch } } } : state,
+    ),
+  clearSession: () => set({ session: null }),
+}));

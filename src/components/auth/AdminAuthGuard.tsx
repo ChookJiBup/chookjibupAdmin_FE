@@ -1,23 +1,26 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useAdminAuthHasHydrated, useAdminAuthStore } from "@/store/adminAuthStore";
+import { getAdminProfile } from "@/features/auth/admin/api";
+import { useAdminAuthStore } from "@/store/adminAuthStore";
 
 export function AdminAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const hasHydrated = useAdminAuthHasHydrated();
-  const isSessionValid = useAdminAuthStore((state) => state.isSessionValid());
+  const setProfile = useAdminAuthStore((state) => state.setProfile);
+  const profileQuery = useQuery({
+    queryKey: ["admin-profile"],
+    queryFn: getAdminProfile,
+    retry: false,
+  });
 
   useEffect(() => {
-    if (hasHydrated && !isSessionValid) {
-      router.replace("/login");
-    }
-  }, [hasHydrated, isSessionValid, router]);
+    if (profileQuery.data) setProfile(profileQuery.data);
+    if (profileQuery.isError) router.replace("/login");
+  }, [profileQuery.data, profileQuery.isError, router, setProfile]);
 
-  if (!hasHydrated || !isSessionValid) {
-    return null;
-  }
+  if (!profileQuery.data) return null;
 
   return <>{children}</>;
 }

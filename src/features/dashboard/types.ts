@@ -4,16 +4,18 @@ export interface Booth {
   boothId: string;
   name: string;
   zoneId: string;
-  /** Kakao 지도 위 부스 핀 좌표. */
-  lat: number;
-  lng: number;
+  /** Kakao 지도 위 부스 핀 좌표. 좌표가 등록되지 않은 부스는 비어 있다. */
+  lat?: number;
+  lng?: number;
   congestionLevel?: CongestionLevel;
   /** 예상 대기 시간(분). */
   waitMinutes?: number;
   /** 혼잡도 정보가 마지막으로 갱신된 시각(분 전). */
   updatedMinutesAgo?: number;
+  /** 혼잡도가 마지막으로 갱신된 시각(ISO-8601). */
+  congestionUpdatedAt?: string;
   /** 대기열 끝(줄끝)을 마지막으로 갱신한 사람. */
-  lastQueueUpdater?: { name: string; role: "STAFF" | "OPERATOR" };
+  lastQueueUpdater?: { name: string; role: ModifierType };
   /** 줄끝 갱신 시 선택 가능한 구역(존) 목록. */
   queueZones?: string[];
 }
@@ -40,6 +42,29 @@ export interface AiSuggestion {
   path?: { lat: number; lng: number }[];
 }
 
+export interface FestivalCongestion {
+  festivalId: string;
+  updatedAt: string | null;
+  activeQueueCount: number;
+  averageWaitMinutes: number;
+  booths: Array<{
+    boothId: number;
+    boothName: string;
+    congestionLevel: CongestionLevel;
+    waitMinutes: number;
+    updatedAt: string;
+  }>;
+}
+
+export interface FestivalOperationSuggestions {
+  suggestions: Array<{
+    suggestionId: string;
+    title: string;
+    description: string;
+    path: Array<{ lat: number; lng: number }>;
+  }>;
+}
+
 export interface FestivalDashboard {
   festivalId: string;
   dataAvailable: boolean;
@@ -53,12 +78,32 @@ export interface FestivalDashboard {
   averageWaitMinutes: number | null;
   updatedAt: string | null;
   booths: DashboardBooth[];
+  /** 로드맵 구역 목록. 좌표 전용 지도라 구역을 나누지 않았으면 빈 배열이다. */
+  zones: DashboardZone[];
 }
+
+/** 혼잡도를 마지막으로 갱신한 주체의 종류. */
+export type ModifierType = "ADMIN" | "STAFF";
 
 export interface DashboardBooth {
   boothId: number;
   boothName: string;
+  /** 구역(zone) 매칭에 쓰는 로드맵 노드 식별자. 좌표가 없는 부스는 null이다. */
+  roadmapNodePublicId: string | null;
+  lat: number | null;
+  lng: number | null;
   congestionLevel: CongestionLevel | null;
   waitMinutes: number | null;
   congestionUpdatedAt: string | null;
+  modifierType: ModifierType | null;
+  modifierAdminId: number | null;
+  modifierStaffId: number | null;
+  modifierName: string | null;
+}
+
+export interface DashboardZone {
+  zoneId: string;
+  name: string;
+  sortOrder: number;
+  boothNodeIds: string[];
 }

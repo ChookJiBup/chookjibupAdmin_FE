@@ -62,23 +62,32 @@ function ZoneSection({
   );
 }
 
-export function BoothTreeSidebar({
-  zones,
-  selectedBoothId,
-  onSelectBooth,
-  className,
-}: {
+export interface BoothZoneListProps {
   zones: BoothZone[];
   selectedBoothId: string | undefined;
   onSelectBooth: (booth: Booth) => void;
+  /** 목록 위에 표시할 제목. 기본값은 "축제부스". */
+  title?: string;
   className?: string;
-}) {
+}
+
+/**
+ * 구역(존)별로 접히는 부스 목록. 관리자 대시보드 사이드바와 스태프 부스 찾기 화면이
+ * 같은 목록을 쓰기 때문에 패널 셸과 분리해 둔다. 한 번에 한 구역만 펼쳐진다.
+ */
+export function BoothZoneList({
+  zones,
+  selectedBoothId,
+  onSelectBooth,
+  title = "축제부스",
+  className,
+}: BoothZoneListProps) {
   const [openZoneId, setOpenZoneId] = useState<string | null>(null);
 
   return (
-    <MapSidePanel className={className}>
+    <div className={cn("flex flex-col gap-3", className)}>
       <p className="body-large-bold px-2 py-1.5 text-zinc-950">
-        축제부스{" "}
+        {title}{" "}
         <span className="text-primary">
           {zones.reduce((total, zone) => total + zone.booths.length, 0)}
         </span>
@@ -95,6 +104,28 @@ export function BoothTreeSidebar({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+export function BoothTreeSidebar({
+  zones,
+  selectedBoothId,
+  onSelectBooth,
+  className,
+}: {
+  zones: BoothZone[];
+  selectedBoothId: string | undefined;
+  onSelectBooth: (booth: Booth) => void;
+  className?: string;
+}) {
+  return (
+    <MapSidePanel className={className}>
+      <BoothZoneList
+        zones={zones}
+        selectedBoothId={selectedBoothId}
+        onSelectBooth={onSelectBooth}
+      />
     </MapSidePanel>
   );
 }

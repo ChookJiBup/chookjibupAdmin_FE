@@ -328,9 +328,14 @@ function FestivalLocationMap({ locations }: { locations: FestivalLocationRespons
     appkey: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY ?? "",
   });
   const center = useMemo(() => primaryFestivalCenter(locations), [locations]);
-  const hasCoordinates = locations?.some(
-    (location) => location.latitude != null && location.longitude != null,
-  );
+
+  if (!center) {
+    return (
+      <div className="flex h-full min-h-[calc(100vh-252px)] items-center justify-center px-6">
+        <p className="body-small text-zinc-500">등록된 축제 위치 좌표가 없습니다.</p>
+      </div>
+    );
+  }
 
   if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY || error || loading) {
     return (
@@ -348,14 +353,9 @@ function FestivalLocationMap({ locations }: { locations: FestivalLocationRespons
 
   return (
     <Map center={center} isPanto={false} level={4} className="absolute inset-0">
-      {hasCoordinates ? (
-        <CustomOverlayMap position={center}>
-          <span
-            aria-label="축제 위치"
-            className="block size-3 rounded-full bg-point-600 shadow-sm"
-          />
-        </CustomOverlayMap>
-      ) : null}
+      <CustomOverlayMap position={center}>
+        <span aria-label="축제 위치" className="block size-3 rounded-full bg-point-600 shadow-sm" />
+      </CustomOverlayMap>
     </Map>
   );
 }

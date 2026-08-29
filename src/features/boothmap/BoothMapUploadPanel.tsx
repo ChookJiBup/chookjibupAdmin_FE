@@ -1,6 +1,5 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { BoothMapEditorFileRegisteredState } from "./BoothMapEditorFileRegisteredState";
 
 /**
@@ -8,12 +7,5 @@ import { BoothMapEditorFileRegisteredState } from "./BoothMapEditorFileRegistere
  * 쓰지 않고, 카카오맵에서 좌표를 찍는 화면만 연다.
  */
 export function BoothMapUploadPanel({ festivalId }: { festivalId: string }) {
-  const isMockReadyPreview = useSearchParams().get("preview") === "ready";
-
-  return (
-    <BoothMapEditorFileRegisteredState
-      festivalId={festivalId}
-      seedMockBooths={isMockReadyPreview}
-    />
-  );
+  return <BoothMapEditorFileRegisteredState festivalId={festivalId} />;
 }
