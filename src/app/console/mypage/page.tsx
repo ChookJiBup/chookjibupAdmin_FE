@@ -33,7 +33,7 @@ export default function MyPage() {
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
   const [organization, setOrganization] = useState("");
   const [rank, setRank] = useState("");
-  const [formReady, setFormReady] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [passwordConfirmOpen, setPasswordConfirmOpen] = useState(false);
 
   const profileQuery = useQuery({
@@ -80,6 +80,7 @@ export default function MyPage() {
       );
       toast.success("프로필이 수정되었습니다.");
       setPasswordConfirmOpen(false);
+      setIsEditing(false);
     },
   });
 
@@ -98,13 +99,6 @@ export default function MyPage() {
 
   const profile = profileQuery.data;
 
-  // 프로필 조회가 끝나자마자 폼 초기값을 한 번만 채운다(렌더 중 조정 — effect가 아니다).
-  if (profile && !formReady) {
-    setOrganization(profile.organization);
-    setRank(profile.rank ?? "");
-    setFormReady(true);
-  }
-
   async function handleLogout() {
     try {
       await logoutAdmin();
@@ -119,6 +113,12 @@ export default function MyPage() {
     setPasswordConfirmOpen(true);
   }
 
+  function handleEditStart() {
+    setOrganization(profile?.organization ?? admin?.organization ?? "");
+    setRank(profile?.rank ?? admin?.rank ?? "");
+    setIsEditing(true);
+  }
+
   if (!admin) return null;
 
   if (profileQuery.isLoading) {
@@ -127,10 +127,22 @@ export default function MyPage() {
 
   const accountKind = profile?.accountKind ?? admin.accountKind;
   const isContractor = accountKind === "CONTRACTOR";
+  const displayedOrganization = isEditing
+    ? organization
+    : (profile?.organization ?? admin.organization);
+  const displayedRank = isEditing ? rank : (profile?.rank ?? admin.rank ?? "");
 
   return (
-    <div className="col-span-2 flex flex-col gap-6 pb-[72px]">
+    <div className={`col-span-2 flex flex-col gap-6 ${isEditing ? "pb-[72px]" : ""}`}>
       <FormSection label="프로필 설정">
+        {!isEditing ? (
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={handleEditStart}>
+              수정하기
+            </Button>
+          </div>
+        ) : null}
+
         <Input label="이메일" disabled value={profile?.email ?? admin.email} />
         <Input label="이름" disabled value={profile?.name ?? admin.name} />
         <div className="flex gap-3">
@@ -140,8 +152,9 @@ export default function MyPage() {
             required
             minLength={2}
             maxLength={255}
+            disabled={!isEditing}
             wrapperClassName="flex-1"
-            value={organization}
+            value={displayedOrganization}
             onChange={(event) => setOrganization(event.target.value)}
           />
           {!isContractor ? (
@@ -150,8 +163,9 @@ export default function MyPage() {
               placeholder="예: 과장"
               required
               maxLength={50}
+              disabled={!isEditing}
               wrapperClassName="flex-1"
-              value={rank}
+              value={displayedRank}
               onChange={(event) => setRank(event.target.value)}
             />
           ) : null}
@@ -198,19 +212,20 @@ export default function MyPage() {
         ) : null}
       </FormSection>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-end border-t border-zinc-200 bg-white px-10">
-        <Button
-          disabled={
-            !formReady ||
-            !organization.trim() ||
-            (!isContractor && !rank.trim()) ||
-            profileUpdateMutation.isPending
-          }
-          onClick={handleProfileUpdate}
-        >
-          {profileUpdateMutation.isPending ? "수정 중..." : "수정하기"}
-        </Button>
-      </div>
+      {isEditing ? (
+        <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-end border-t border-zinc-200 bg-white px-10">
+          <Button
+            disabled={
+              !organization.trim() ||
+              (!isContractor && !rank.trim()) ||
+              profileUpdateMutation.isPending
+            }
+            onClick={handleProfileUpdate}
+          >
+            {profileUpdateMutation.isPending ? "수정 중..." : "수정하기"}
+          </Button>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmKind === "logout"}
@@ -225,6 +240,7 @@ export default function MyPage() {
       {passwordConfirmOpen ? (
         <PasswordConfirmDialog
           open
+          email={profile?.email ?? admin.email}
           onOpenChange={(open) => {
             setPasswordConfirmOpen(open);
             if (!open) passwordConfirmMutation.reset();

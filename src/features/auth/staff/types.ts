@@ -5,9 +5,16 @@ export interface StaffLoginRequest {
 }
 
 export interface StaffLoginResponse {
-  accessToken: string;
-  tokenType: string;
+  accessToken?: string;
+  tokenType?: string;
   expiresIn: number;
+  staffId: string;
+  festivalId: string;
+  loginId: string;
+  name: string;
+}
+
+export interface StaffSession {
   staffId: string;
   festivalId: string;
   loginId: string;

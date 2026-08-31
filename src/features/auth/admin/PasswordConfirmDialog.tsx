@@ -10,6 +10,7 @@ export interface PasswordConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (password: string) => void;
+  email: string;
   pending?: boolean;
   errorMessage?: string;
 }
@@ -18,6 +19,7 @@ export function PasswordConfirmDialog({
   open,
   onOpenChange,
   onConfirm,
+  email,
   pending = false,
   errorMessage,
 }: PasswordConfirmDialogProps) {
@@ -50,37 +52,25 @@ export function PasswordConfirmDialog({
             }}
           >
             <Dialog.Title className="heading-regular text-center text-zinc-950">
-              비밀번호를 입력해 주세요
+              비밀번호 재확인
             </Dialog.Title>
-            <Dialog.Description className="body-regular mt-3 text-center text-zinc-950">
-              안전한 정보 수정을 위해 본인 확인이 필요합니다.
-            </Dialog.Description>
 
-            <div className="mt-8">
+            <div className="mt-8 flex flex-col gap-5">
+              <Input type="email" label="이메일" disabled value={email} />
               <Input
                 type="password"
                 required
                 label="비밀번호"
-                placeholder="현재 비밀번호"
+                placeholder="비밀번호"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 errorText={errorMessage}
               />
             </div>
 
-            <div className="mt-8 flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="flex-1"
-                disabled={pending}
-                onClick={() => handleOpenChange(false)}
-              >
-                취소
-              </Button>
-              <Button type="submit" size="lg" className="flex-1" disabled={!password || pending}>
-                {pending ? "확인 중..." : "확인"}
+            <div className="mt-8">
+              <Button type="submit" size="lg" className="w-full" disabled={!password || pending}>
+                {pending ? "확인 중..." : "확인하기"}
               </Button>
             </div>
           </form>
