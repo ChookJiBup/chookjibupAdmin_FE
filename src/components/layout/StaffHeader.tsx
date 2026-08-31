@@ -3,20 +3,24 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { StaffBadge } from "@/components/ui/RoleBadge";
+import { logoutStaff } from "@/features/auth/staff/api";
 import { useStaffAuthStore } from "@/store/staffAuthStore";
 
 /** 스태프 전용 화면 상단바. 로그인한 뒤에만 부스 검색·로그아웃 액션이 보인다. */
 export function StaffHeader() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const session = useStaffAuthStore((state) => state.session);
   const clearSession = useStaffAuthStore((state) => state.clearSession);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const isLoggedIn = session !== null;
+  const logoutMutation = useMutation({ mutationFn: logoutStaff });
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-5">
@@ -57,9 +61,11 @@ export function StaffHeader() {
         confirmLabel="로그아웃"
         overlayClassName="top-0"
         className="p-6"
-        onConfirm={() => {
+        onConfirm={async () => {
+          await logoutMutation.mutateAsync();
           setLogoutOpen(false);
           clearSession();
+          queryClient.removeQueries({ queryKey: ["staff-session"] });
           router.replace("/staff/login");
         }}
       />

@@ -19,7 +19,12 @@ export default function StaffLoginPage() {
   const loginMutation = useMutation({
     mutationFn: loginStaff,
     onSuccess: (data) => {
-      setSession(data);
+      setSession({
+        staffId: data.staffId,
+        festivalId: data.festivalId,
+        loginId: data.loginId,
+        name: data.name,
+      });
       router.push("/staff/dashboard");
     },
   });
