@@ -41,9 +41,9 @@ const INITIAL_AGREEMENTS: Agreements = {
 };
 
 interface SignupFormProps {
-  accountKind: AccountKind;
+  initialAccountKind?: AccountKind;
   /** 회원가입이 성공적으로 완료됐을 때 호출된다. */
-  onComplete: () => void;
+  onComplete: (accountKind: AccountKind) => void;
 }
 
 function formatRemaining(seconds: number) {
@@ -52,7 +52,8 @@ function formatRemaining(seconds: number) {
   return `${mm}:${ss}`;
 }
 
-export function SignupForm({ accountKind, onComplete }: SignupFormProps) {
+export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: SignupFormProps) {
+  const [accountKind, setAccountKind] = useState<AccountKind>(initialAccountKind);
   const isGovernment = accountKind === "GOVERNMENT";
   const [step, setStep] = useState<Step>("agree");
   const [agreements, setAgreements] = useState<Agreements>(INITIAL_AGREEMENTS);
@@ -120,15 +121,38 @@ export function SignupForm({ accountKind, onComplete }: SignupFormProps) {
             password,
             passwordConfirm: password,
           }),
-    onSuccess: onComplete,
+    onSuccess: () => onComplete(accountKind),
   });
 
   const profileReady = Boolean(name && organization && password && (!isGovernment || rank));
 
   return (
-    <AuthCard title={isGovernment ? "공무원 회원가입" : "외부업자 회원가입"}>
+    <AuthCard title="회원가입">
       {step === "agree" && (
         <div className="mt-8 flex flex-col">
+          <div className="rounded-lg bg-zinc-100 p-1">
+            <div className="grid grid-cols-2 gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                selected={accountKind === "GOVERNMENT"}
+                className={accountKind === "GOVERNMENT" ? "bg-white" : ""}
+                onClick={() => setAccountKind("GOVERNMENT")}
+              >
+                공무원
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                selected={accountKind === "CONTRACTOR"}
+                className={accountKind === "CONTRACTOR" ? "bg-white" : ""}
+                onClick={() => setAccountKind("CONTRACTOR")}
+              >
+                일반
+              </Button>
+            </div>
+          </div>
+
           <label className="flex cursor-pointer items-center gap-2 py-2">
             <Checkbox
               checked={allAgreed}
@@ -187,14 +211,9 @@ export function SignupForm({ accountKind, onComplete }: SignupFormProps) {
             type="email"
             required
             label="이메일"
-            placeholder={isGovernment ? "이메일주소(공무원)" : "이메일 주소"}
+            placeholder={isGovernment ? "공무원 이메일" : "일반 이메일 주소"}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            helperText={
-              isGovernment
-                ? "공무원 공식 이메일(.go.kr, korea.kr)만 사용할 수 있습니다."
-                : "일반 이메일을 입력해 주세요. 공무원 공식 이메일은 사용할 수 없습니다."
-            }
           />
 
           {requestCodeMutation.isError && (

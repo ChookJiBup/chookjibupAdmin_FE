@@ -10,10 +10,12 @@ import { Input } from "@/components/ui/Input";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { loginAdmin } from "./api";
+import type { AccountKind } from "./types";
 
 export function LoginForm() {
   const router = useRouter();
   const setSession = useAdminAuthStore((state) => state.setSession);
+  const [accountKind, setAccountKind] = useState<AccountKind>("GOVERNMENT");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -34,11 +36,34 @@ export function LoginForm() {
           loginMutation.mutate({ email, password });
         }}
       >
+        <div className="rounded-lg bg-zinc-100 p-1">
+          <div className="grid grid-cols-2 gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              selected={accountKind === "GOVERNMENT"}
+              className={accountKind === "GOVERNMENT" ? "bg-white" : ""}
+              onClick={() => setAccountKind("GOVERNMENT")}
+            >
+              공무원
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              selected={accountKind === "CONTRACTOR"}
+              className={accountKind === "CONTRACTOR" ? "bg-white" : ""}
+              onClick={() => setAccountKind("CONTRACTOR")}
+            >
+              일반
+            </Button>
+          </div>
+        </div>
+
         <Input
           type="email"
           required
           label="이메일"
-          placeholder="가입한 이메일"
+          placeholder={accountKind === "GOVERNMENT" ? "공무원 이메일" : "가입한 이메일"}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
@@ -59,11 +84,9 @@ export function LoginForm() {
           {loginMutation.isPending ? "로그인 중..." : "로그인"}
         </Button>
 
-        <div className="body-small mx-auto flex items-center gap-3 text-zinc-950">
-          <Link href="/signup">회원가입</Link>
-          <span className="text-zinc-300">|</span>
-          <Link href="/forgot-password">비밀번호 찾기</Link>
-        </div>
+        <Link href="/forgot-password" className="body-small mx-auto text-zinc-950">
+          비밀번호 찾기
+        </Link>
       </form>
     </AuthCard>
   );
