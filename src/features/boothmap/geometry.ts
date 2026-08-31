@@ -122,6 +122,7 @@ export function boothMapObjectsToNodeChanges(
       y: clamp01(object.y / imageHeight),
       width: clamp01(object.width / imageWidth),
       height: clamp01(object.height / imageHeight),
+      rotation: 0,
     };
     return {
       nodeId: object.nodeId,
