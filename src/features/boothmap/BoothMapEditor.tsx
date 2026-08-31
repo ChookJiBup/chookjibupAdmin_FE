@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { deleteFestivalMap, getMapEditor, replaceFestivalMap, saveMapEditor } from "./api";
-import { BoothMapEditorReady } from "./BoothMapEditorReady";
+import { BoothMapEditorReady, type LocalZone } from "./BoothMapEditorReady";
 import { boothMapObjectsToNodeChanges, nodeToBoothMapObject } from "./geometry";
 import { useBoothMapStore } from "./store";
 
@@ -44,6 +44,7 @@ export function BoothMapEditor({
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [zones, setZones] = useState<LocalZone[]>([]);
 
   // 에디터를 새로 불러올 때만(mapId 변경, 최초 로드, 저장 후 재조회) 캔버스 상태를 채운다.
   // 편집 도중 objects가 바뀌어도 이 effect가 다시 돌아 덮어쓰지 않도록 dataUpdatedAt만 의존한다.
@@ -59,6 +60,18 @@ export function BoothMapEditor({
       .map((node) => nodeToBoothMapObject(node, imageWidth, imageHeight))
       .filter((object) => object !== null);
     loadObjects(loaded);
+    const loadedObjectIds = new Set(loaded.map((object) => object.id));
+    // 서버 재조회 시 구역 편집 상태도 같은 revision으로 맞춘다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setZones(
+      (editorQuery.data.zones ?? []).map((zone) => ({
+        id: zone.zoneId,
+        name: zone.name,
+        boothIds: zone.boothNodeIds
+          .map((nodeId) => `node-${nodeId}`)
+          .filter((objectId) => loadedObjectIds.has(objectId)),
+      })),
+    );
     setZoom(Math.min(1, MAX_DISPLAY_WIDTH / imageWidth) || 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorQuery.dataUpdatedAt]);
@@ -75,6 +88,18 @@ export function BoothMapEditor({
       return saveMapEditor(festivalId, mapId, {
         baseRevision: editorQuery.data.editRevision,
         nodes,
+        zones: zones.map((zone, sortOrder) => ({
+          zoneId: zone.id,
+          name: zone.name,
+          sortOrder,
+          boothNodeIds: zone.boothIds
+            .map((objectId) => objects.find((object) => object.id === objectId))
+            .flatMap((object) =>
+              object?.kind === "shape" && object.type === "BOOTH"
+                ? [object.nodeId ?? object.id]
+                : [],
+            ),
+        })),
       });
     },
     onSuccess: () => {
@@ -130,6 +155,8 @@ export function BoothMapEditor({
         imageWidth={imageWidth}
         imageHeight={imageHeight}
         displayImageUrl={displayImageUrl}
+        zones={zones}
+        onZonesChange={setZones}
         onSave={() => saveMutation.mutate()}
         saving={saveMutation.isPending}
         saveError={saveMutation.isError ? getApiErrorMessage(saveMutation.error) : null}

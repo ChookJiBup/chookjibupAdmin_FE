@@ -107,6 +107,7 @@ export function boothMapObjectsToNodeChanges(
       };
       return {
         nodeId: object.nodeId,
+        clientNodeId: object.nodeId ? null : object.id,
         nodeType: "QUEUE",
         name: object.label,
         geometryType: "POLYLINE",
@@ -124,6 +125,7 @@ export function boothMapObjectsToNodeChanges(
     };
     return {
       nodeId: object.nodeId,
+      clientNodeId: object.nodeId ? null : object.id,
       nodeType: object.type,
       name: object.label,
       geometryType: "RECTANGLE",
