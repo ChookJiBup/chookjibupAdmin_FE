@@ -22,7 +22,7 @@ import { useBoothMapStore } from "./store";
 import type { BoothMapShape } from "./types";
 import { ZoneListItem } from "./ZoneListItem";
 
-interface LocalZone {
+export interface LocalZone {
   id: string;
   name: string;
   boothIds: string[];
@@ -31,20 +31,20 @@ interface LocalZone {
 type Selection = { kind: "zone"; id: string } | { kind: "booth"; id: string };
 
 function createLocalId() {
-  return `zone-${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 /**
  * Figma "add - mapping result - start / make group / select zone" 화면들을
- * 구현한 부스맵 에디터의 "배치도 있음" 상태. 그룹화(구역 만들기)는
- * `demoAdmin_BE`에 상위구역/그룹 저장 API가 아직 없어([[project-boothmap-backend-gap]])
- * 이 컴포넌트 안의 로컬 상태로만 존재하고, 저장(`onSave`)에는 포함되지 않는다.
+ * 구현한 부스맵 에디터의 "배치도 있음" 상태.
  */
 export function BoothMapEditorReady({
   festivalId,
   imageWidth,
   imageHeight,
   displayImageUrl,
+  zones,
+  onZonesChange,
   onSave,
   saving,
   saveError,
@@ -60,6 +60,8 @@ export function BoothMapEditorReady({
   imageWidth: number;
   imageHeight: number;
   displayImageUrl: string;
+  zones: LocalZone[];
+  onZonesChange: React.Dispatch<React.SetStateAction<LocalZone[]>>;
   onSave: () => void;
   saving: boolean;
   saveError: string | null;
@@ -96,7 +98,6 @@ export function BoothMapEditorReady({
   const finishDraftLine = useBoothMapStore((state) => state.finishDraftLine);
 
   const [pendingBooth, setPendingBooth] = useState(false);
-  const [zones, setZones] = useState<LocalZone[]>([]);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [expandedZoneIds, setExpandedZoneIds] = useState<Set<string>>(new Set());
   const [groupPopoverOpen, setGroupPopoverOpen] = useState(false);
@@ -498,7 +499,7 @@ export function BoothMapEditorReady({
                     name,
                     boothIds: Array.from(checkedIds),
                   };
-                  setZones((prev) => [...prev, zone]);
+                  onZonesChange((prev) => [...prev, zone]);
                   setExpandedZoneIds((prev) => new Set(prev).add(zone.id));
                   setCheckedIds(new Set());
                   setGroupPopoverOpen(false);
@@ -518,14 +519,14 @@ export function BoothMapEditorReady({
                 initialName={selectedZone.name}
                 style={{ left: 288 + 24 + anchor.x, top: anchor.y }}
                 onConfirm={(name) => {
-                  setZones((prev) =>
+                  onZonesChange((prev) =>
                     prev.map((zone) => (zone.id === selectedZone.id ? { ...zone, name } : zone)),
                   );
                   setSelection(null);
                 }}
                 onCancel={() => setSelection(null)}
                 onDelete={() => {
-                  setZones((prev) => prev.filter((zone) => zone.id !== selectedZone.id));
+                  onZonesChange((prev) => prev.filter((zone) => zone.id !== selectedZone.id));
                   setSelection(null);
                 }}
               />

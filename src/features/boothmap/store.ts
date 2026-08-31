@@ -13,8 +13,8 @@ export function snapToGrid(value: number) {
   return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
 
-function createId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+function createId() {
+  return crypto.randomUUID();
 }
 
 interface BoothMapEditorState {
@@ -96,7 +96,7 @@ export const useBoothMapStore = create<BoothMapEditorState>((set, get) => ({
     const { width, height } = SHAPE_DEFAULT_SIZE[type];
     const shape: BoothMapShape = {
       kind: "shape",
-      id: createId("shape"),
+      id: createId(),
       nodeId: null,
       type,
       label: SHAPE_LABEL[type],
@@ -161,7 +161,7 @@ export const useBoothMapStore = create<BoothMapEditorState>((set, get) => ({
     }
     const line: BoothMapQueueLine = {
       kind: "line",
-      id: createId("line"),
+      id: createId(),
       nodeId: null,
       label: "대기열",
       points: draftLinePoints,
