@@ -45,9 +45,16 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
       }
       const days = visitorsQuery.data?.days ?? [];
       await Promise.all(
-        days.map((day, index) => updateDailyVisitorCount(festivalId, day.visitDate, value[index])),
+        days.flatMap((day, index) =>
+          day.inputAllowed
+            ? [updateDailyVisitorCount(festivalId, day.visitDate, value[index])]
+            : [],
+        ),
       );
-      await generateFestivalReport(festivalId);
+      const refreshed = await getFestivalVisitorCounts(festivalId);
+      if (refreshed.reportReadyToGenerate) {
+        await generateFestivalReport(festivalId);
+      }
     },
     onSuccess: async () => {
       await Promise.all([

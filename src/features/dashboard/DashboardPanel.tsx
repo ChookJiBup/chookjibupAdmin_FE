@@ -17,6 +17,7 @@ import {
   getFestivalCongestion,
   getFestivalDashboard,
   getFestivalOperationSuggestions,
+  getFestivalQueues,
 } from "./api";
 import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { BoothMapView } from "./BoothMapView";
@@ -60,6 +61,10 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     queryKey: ["festival-operation-suggestions", festivalId],
     queryFn: () => getFestivalOperationSuggestions(festivalId),
   });
+  const queuesQuery = useQuery({
+    queryKey: ["festival-queues", festivalId],
+    queryFn: () => getFestivalQueues(festivalId),
+  });
   const mapBooths = useMemo((): Booth[] => {
     const dashboardBooths = dashboardQuery.data?.booths ?? [];
     const zoneIdByNodeId = new Map<string, string>();
@@ -68,6 +73,9 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     );
     const congestionByBoothId = new Map(
       (congestionQuery.data?.booths ?? []).map((booth) => [booth.boothId, booth]),
+    );
+    const queueByBoothId = new Map(
+      (queuesQuery.data?.queues ?? []).map((queue) => [queue.boothId, queue]),
     );
     return (mapDataQuery.data?.editor.nodes ?? [])
       .filter((node) => node.nodeType === "BOOTH")
@@ -80,6 +88,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         const congestion = dashboardBooth
           ? congestionByBoothId.get(dashboardBooth.boothId)
           : undefined;
+        const queue = dashboardBooth ? queueByBoothId.get(dashboardBooth.boothId) : undefined;
         return {
           boothId: String(dashboardBooth?.boothId ?? pin.nodeId ?? pin.id),
           name: dashboardBooth?.boothName ?? pin.name,
@@ -92,8 +101,8 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
           congestionUpdatedAt:
             congestion?.updatedAt ?? dashboardBooth?.congestionUpdatedAt ?? undefined,
           lastQueueUpdater:
-            dashboardBooth?.modifierName && dashboardBooth.modifierType
-              ? { name: dashboardBooth.modifierName, role: dashboardBooth.modifierType }
+            queue?.lastModifierName && queue.lastModifierType
+              ? { name: queue.lastModifierName, role: queue.lastModifierType }
               : undefined,
         };
       });
@@ -102,6 +111,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     dashboardQuery.data?.booths,
     dashboardQuery.data?.zones,
     mapDataQuery.data?.editor.nodes,
+    queuesQuery.data?.queues,
   ]);
   const mapZones = useMemo((): BoothZone[] => {
     const zones = (dashboardQuery.data?.zones ?? [])
@@ -134,14 +144,19 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     mapDataQuery.isLoading ||
     dashboardQuery.isLoading ||
     congestionQuery.isLoading ||
-    suggestionsQuery.isLoading
+    suggestionsQuery.isLoading ||
+    queuesQuery.isLoading
   ) {
     return <DashboardState message="대시보드를 불러오는 중..." />;
   }
 
   // 지도를 못 불러와도 방문자수 등 운영 지표는 보여줘야 하므로 지도 실패는 화면 전체를 막지 않는다.
   const queryError =
-    festivalQuery.error ?? dashboardQuery.error ?? congestionQuery.error ?? suggestionsQuery.error;
+    festivalQuery.error ??
+    dashboardQuery.error ??
+    congestionQuery.error ??
+    suggestionsQuery.error ??
+    queuesQuery.error;
   if (queryError) {
     return (
       <DashboardState

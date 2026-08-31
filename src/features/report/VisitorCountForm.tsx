@@ -27,8 +27,12 @@ export function VisitorCountForm({
     days.map((day) => day.visitorCount?.toString() ?? ""),
   );
   const [totalCount, setTotalCount] = useState(initialTotal?.toString() ?? "");
+  const editableDayIndexes = days.flatMap((day, index) => (day.inputAllowed ? [index] : []));
 
-  const dailyValid = dailyCounts.every((value) => value.trim() !== "" && Number(value) >= 0);
+  const dailyValid = editableDayIndexes.every((index) => {
+    const value = dailyCounts[index];
+    return value.trim() !== "" && Number(value) >= 0;
+  });
   const dailyTotal = dailyCounts.reduce((sum, value) => sum + (Number(value) || 0), 0);
 
   function numbersOnly(value: string) {
