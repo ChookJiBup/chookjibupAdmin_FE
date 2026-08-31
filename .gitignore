@@ -34,6 +34,8 @@ yarn-error.log*
 
 # vercel
 .vercel
+/playwright-report/
+/test-results/
 
 # local reference docs (AGENTS.md: 커밋 대상에 남기지 않음)
 reference/
