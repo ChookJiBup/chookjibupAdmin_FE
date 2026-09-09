@@ -107,6 +107,22 @@ export async function publishBoothMap(
   return data.data;
 }
 
+/**
+ * 공개한 부스맵을 방문객 앱에서 다시 감춘다.
+ *
+ * 잘못 그린 채 공개했을 때 내릴 방법이 없으면 부스를 전부 지우는 수밖에 없다. 서버는
+ * 로드맵을 편집 상태로만 되돌리므로 그려 둔 부스·구역·경계·팜플렛은 그대로 남는다.
+ */
+export async function unpublishBoothMap(
+  festivalId: string,
+  mapId: string,
+): Promise<PublishRoadmapResponse> {
+  const { data } = await adminApiClient.delete<ApiResponse<PublishRoadmapResponse>>(
+    `/festivals/${festivalId}/maps/${mapId}/publish`,
+  );
+  return data.data;
+}
+
 export async function getMapReadUrl(
   festivalId: string,
   mapId: string,

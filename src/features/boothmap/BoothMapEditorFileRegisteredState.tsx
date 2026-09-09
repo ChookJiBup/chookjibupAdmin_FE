@@ -38,6 +38,7 @@ import {
   publishBoothMap,
   replaceFestivalMap,
   saveMapEditor,
+  unpublishBoothMap,
   uploadMapOverlay,
 } from "./api";
 import { isPanModifier, isTypingTarget } from "./editorGestures";
@@ -264,6 +265,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [kakaoMap, setKakaoMap] = useState<kakao.maps.Map | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [unpublishDialogOpen, setUnpublishDialogOpen] = useState(false);
   const [removePamphletOpen, setRemovePamphletOpen] = useState(false);
   const [clearQueuePathOpen, setClearQueuePathOpen] = useState(false);
   const [queueImportOpen, setQueueImportOpen] = useState(false);
@@ -603,8 +605,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       });
     },
     onSuccess: async (response) => {
-      // 서버가 저장을 «편집 중»으로 기록하므로, 저장 전에 공개돼 있었는지 먼저 기억해 둔다.
-      const wasPublished = editorQuery.data?.roadmapStatus === "PUBLISHED";
       setEditRevision(response.editRevision);
       setDeletedNodeIds([]);
       /*
@@ -644,18 +644,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       setSavedSnapshot(null);
       // 저장 직후 화면 상태를 "저장된 상태"로 다시 기준 잡는다.
       setSeedToken((token) => token + 1);
-      /*
-        공개돼 있던 부스맵은 이 저장으로 방문객에게서 다시 감춰진다. 알려 주지 않으면
-        관리자는 고친 내용이 그대로 방문객에게 반영된 줄로만 안다.
-      */
-      const approvedNotice =
-        approvedCount > 0 ? `부스 ${approvedCount}개를 운영 목록에 등록했습니다.` : null;
-      const unpublishedNotice =
-        wasPublished && editor.roadmapStatus !== "PUBLISHED"
-          ? "방문객 공개는 해제됐습니다. «방문객에게 공개»를 다시 눌러 주세요."
-          : null;
+      // 저장해도 공개는 그대로 유지된다(서버가 공개본을 방금 저장한 판으로 따라오게 한다).
       toast.success("부스맵과 표시 설정이 저장되었습니다.", {
-        description: [approvedNotice, unpublishedNotice].filter(Boolean).join(" ") || undefined,
+        description:
+          approvedCount > 0 ? `부스 ${approvedCount}개를 운영 목록에 등록했습니다.` : undefined,
       });
     },
     onError: async (error) => {
@@ -714,6 +706,24 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             ? "방문객에게 보일 부스가 없습니다. 부스를 찍어 저장한 뒤 다시 시도해 주세요."
             : undefined,
       }),
+  });
+
+  /*
+    잘못 그린 채 공개했을 때 내릴 방법이 없으면 부스를 전부 지우는 수밖에 없다. 서버는
+    로드맵을 편집 상태로 되돌리기만 하므로 그려 둔 내용은 그대로 남는다.
+  */
+  const unpublishMutation = useMutation({
+    mutationFn: () => {
+      if (!mapQuery.data?.mapId) throw new Error("지도 정보를 불러오지 못했습니다.");
+      return unpublishBoothMap(festivalId, mapQuery.data.mapId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["map-editor", festivalId] });
+      toast.success("부스맵 공개를 해제했습니다.", {
+        description: "방문객 앱 부스지도에서 더 이상 보이지 않습니다. 그려 둔 내용은 그대로입니다.",
+      });
+    },
+    onError: (error) => toast.error(getApiErrorMessage(error, "부스맵 공개 해제에 실패했습니다.")),
   });
 
   /*
@@ -812,9 +822,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const hasUnsavedChanges = savedSnapshot !== null && savedSnapshot.value !== currentSnapshot;
 
   /*
-    방문객 공개 상태. 저장할 때마다 서버가 다시 «편집 중»으로 되돌리므로, 편집한 내용을
-    방문객에게 보이려면 저장한 뒤 공개를 한 번 더 눌러야 한다. 공개는 서버에 저장된
-    내용을 기준으로 하니, 저장하지 않은 편집이 남아 있으면 공개를 막는다.
+    방문객 공개 상태. 저장해도 공개는 유지되고, 공개와 해제는 관리자가 버튼으로 직접 정한다.
+    공개는 서버에 저장된 내용을 기준으로 하니, 저장하지 않은 편집이 남아 있으면 공개를 막는다.
+    반대로 해제는 이미 공개된 것을 내리는 일이라 이 조건들이 필요 없다.
   */
   const isPublished = editorQuery.data?.roadmapStatus === "PUBLISHED";
   const publishLockReason = isCompleted
@@ -1526,6 +1536,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         isTypingTarget(event.target) ||
         saveDialogOpen ||
         publishDialogOpen ||
+        unpublishDialogOpen ||
         closeDialogOpen ||
         deleteBoundaryOpen ||
         saveMutation.isPending ||
@@ -1589,6 +1600,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     queueDraft,
     queueSaveMutation,
     publishDialogOpen,
+    unpublishDialogOpen,
     saveDialogOpen,
     saveMutation.isPending,
   ]);
@@ -2553,16 +2565,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </Button>
           {/*
             공개 여부는 방문객에게 보이는지를 가르는 유일한 신호라 항상 자리를 지킨다.
-            이미 공개된 지도는 버튼 대신 상태 표시로 두어 같은 동작을 반복하지 않게 한다.
+            공개된 지도도 눌러서 내릴 수 있어야 한다. 상태 표시로만 두면 잘못 그린 채
+            공개했을 때 부스를 전부 지우는 것 말고는 감출 방법이 없다.
           */}
           {isPublished ? (
-            <span
-              className="body-regular-bold flex items-center gap-2 rounded-md border border-primary-300 bg-primary-300/20 px-4 py-2 text-primary"
-              title="방문객 앱 부스지도에서 이 부스맵을 볼 수 있습니다."
+            <button
+              type="button"
+              className="body-regular-bold flex items-center gap-2 rounded-md border border-primary-300 bg-primary-300/20 px-4 py-2 text-primary disabled:opacity-50"
+              title="방문객 앱 부스지도에 보이는 중입니다. 눌러서 공개를 해제합니다."
+              disabled={unpublishMutation.isPending}
+              onClick={() => setUnpublishDialogOpen(true)}
             >
               <CheckCircledIcon className="size-4 shrink-0" />
-              공개됨
-            </span>
+              {unpublishMutation.isPending ? "해제하는 중..." : "공개됨"}
+            </button>
           ) : (
             <Button
               type="button"
@@ -2925,13 +2941,26 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         open={publishDialogOpen}
         onOpenChange={setPublishDialogOpen}
         title="방문객에게 공개할까요?"
-        description="저장된 부스와 구역, 부지 경계와 팜플렛이 방문객 앱 «부스지도»에 그대로 보입니다. 공개한 뒤 부스맵을 저장하면 다시 감춰지므로, 수정한 내용을 보이려면 저장 후 한 번 더 공개해야 합니다."
+        description="저장된 부스와 구역, 부지 경계와 팜플렛이 방문객 앱 «부스지도»에 그대로 보입니다."
         confirmLabel="공개"
         confirmVariant="primary"
         confirmPending={publishMutation.isPending}
         onConfirm={() => {
           setPublishDialogOpen(false);
           publishMutation.mutate();
+        }}
+      />
+      <ConfirmDialog
+        open={unpublishDialogOpen}
+        onOpenChange={setUnpublishDialogOpen}
+        title="공개를 해제할까요?"
+        description="방문객 앱 «부스지도»에서 이 부스맵이 더 이상 보이지 않습니다. 그려 둔 부스와 구역, 부지 경계와 팜플렛은 지워지지 않고 그대로 남습니다."
+        confirmLabel="공개 해제"
+        confirmVariant="destructive"
+        confirmPending={unpublishMutation.isPending}
+        onConfirm={() => {
+          setUnpublishDialogOpen(false);
+          unpublishMutation.mutate();
         }}
       />
       <ConfirmDialog
