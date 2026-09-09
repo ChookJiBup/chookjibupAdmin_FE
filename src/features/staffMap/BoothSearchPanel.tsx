@@ -40,12 +40,13 @@ export function BoothSearchPanel() {
           className="px-3 py-2.5 pr-10"
           onChange={(event) => setKeyword(event.target.value)}
         />
-        <span className="absolute top-1/2 right-3 -translate-y-1/2">
+        {/* 버튼이 인라인이면 글꼴 여백만큼 아이콘이 위로 뜬다(돋보기와 3px 어긋났다). */}
+        <span className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center">
           {trimmedKeyword ? (
             <button
               type="button"
               aria-label="검색어 지우기"
-              className="text-zinc-400"
+              className="flex text-zinc-400"
               onClick={() => setKeyword("")}
             >
               <CrossCircledIcon className="size-5" />

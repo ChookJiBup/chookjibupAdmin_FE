@@ -337,7 +337,11 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
                 <p className="body-caption mt-1 text-zinc-500">{mapErrorDescription}</p>
               </div>
             ) : null}
-            {isRealtimeScope ? (
+            {/*
+              부스를 고르면 뜨는 정보 팝업의 왼쪽 절반을 제안 카드가 덮어 혼잡도·대기시간
+              줄이 안 보였다. 부스를 보는 동안에는 제안을 접는다.
+            */}
+            {isRealtimeScope && !activeBooth ? (
               <AiSuggestionPanel
                 suggestions={suggestions}
                 onDismiss={(id) => setDismissedSuggestionIds((current) => [...current, id])}

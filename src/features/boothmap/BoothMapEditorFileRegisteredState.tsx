@@ -371,11 +371,31 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const shapeIdByBoothId = useMemo(() => {
     const map = new Map<string, string>();
     booths.forEach((booth) => {
+      // 구역 멤버로 저장되는 건 부스뿐이다(buildZoneChanges). 화장실·입구까지 세면
+      // 화면에는 「8」이 뜨는데 서버에는 4개만 들어가 숫자가 어긋난다.
+      if (booth.nodeType !== "BOOTH") return;
       const owner = polygonShapes.find((shape) => containsPoint(shape.points, booth));
       if (owner) map.set(booth.id, owner.id);
     });
     return map;
   }, [booths, polygonShapes]);
+  /*
+    저장하면 폴리곤이 구역으로도 저장되므로, 다시 불러오면 같은 구역이 zones와
+    polygonShapes 양쪽에 있다. 그대로 두면 목록에 두 번 나오고 지도에도 폴리곤 윤곽이
+    두 겹으로 그려진다. 폴리곤이 원본이므로 폴리곤 쪽만 남긴다.
+  */
+  const zoneIdsDrawnAsShape = useMemo(
+    () => new Set(polygonShapes.map((shape) => shape.nodeId ?? shape.id)),
+    [polygonShapes],
+  );
+  const boothOnlyCount = useMemo(
+    () => booths.filter((booth) => booth.nodeType === "BOOTH").length,
+    [booths],
+  );
+  const standaloneZones = useMemo(
+    () => zones.filter((zone) => !zoneIdsDrawnAsShape.has(zone.id)),
+    [zones, zoneIdsDrawnAsShape],
+  );
   const ungroupedBooths = useMemo(
     () =>
       booths.filter((booth) => !zoneIdByBoothId.has(booth.id) && !shapeIdByBoothId.has(booth.id)),
@@ -467,14 +487,22 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       const tools = mapToolsRef.current?.getBoundingClientRect();
       // 메뉴가 덮고 있는 부분을 제외한 지도 영역의 가운데에 선택한 핀을 둔다.
       const left = list?.width ? Math.max(0, list.right - bounds.left) : 0;
-      const right = tools?.width ? Math.min(bounds.width, tools.left - bounds.left) : bounds.width;
+      /*
+        좁은 화면에서는 버튼 줄이 지도 폭을 다 쓰므로 «버튼 줄 왼쪽»을 오른쪽 경계로
+        삼으면 남는 폭이 0이 된다. 그럴 땐 가로로는 비켜설 자리가 없으니 지도 전체를
+        쓴다(세로로 내려서 피한다).
+      */
+      const toolsLeft = tools?.width ? tools.left - bounds.left : bounds.width;
+      const right = toolsLeft > left ? Math.min(bounds.width, toolsLeft) : bounds.width;
       const targetX = (left + right) / 2;
       /*
         말풍선(높이 약 200px)이 대상 위쪽에 뜨므로, 화면이 낮으면 세로 가운데에 둬도
         상단 버튼 줄 밑으로 파고든다. 버튼 줄 아래에 말풍선이 들어갈 만큼은 내린다.
+        버튼 줄은 좁은 화면에서 두 줄로 접히므로 높이를 실제로 재서 쓴다 — 상수로 두면
+        접힌 만큼 말풍선이 버튼 아래로 파고들어 이름 입력칸이 가려진다.
       */
       const popoverRoom = 200;
-      const topBarBottom = 96;
+      const topBarBottom = tools ? Math.max(0, tools.bottom - bounds.top) : 96;
       const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
       const projection = kakaoMap.getProjection();
       const point = projection.containerPointFromCoords(
@@ -1103,6 +1131,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const selectedQueue =
     selectedOpsBoothId != null ? queueByBoothId.get(String(selectedOpsBoothId)) : undefined;
   const canEditQueue = Boolean(selectedQueue && selectedBooth?.nodeType === "BOOTH");
+  /*
+    「승인된 부스만…」이라고만 적어 두면 무엇을 해야 켜지는지 알 수 없다. 대기줄은 저장된
+    부스에 운영 대기열이 만들어진 뒤에야 그릴 수 있으므로 단계별로 알려 준다.
+  */
+  const queueToolDisabledReason = !selectedBooth
+    ? "부스를 먼저 선택해 주세요."
+    : selectedBooth.nodeType !== "BOOTH"
+      ? "부스 핀에만 대기줄을 그릴 수 있습니다."
+      : "저장한 뒤 대기열이 만들어진 부스에만 그릴 수 있습니다.";
   const panOverride = spaceHeld || modifierHeld;
   const queuePathItems = useMemo(() => {
     const items = boothsToQueuePathItems(
@@ -1857,7 +1894,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 ))}
               </>
             ) : null}
-            {zones
+            {standaloneZones
               .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
               .map((zone) => {
                 const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
@@ -2286,7 +2323,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       >
         <MapSidePanel className="h-full w-full">
           <p className="body-large-bold text-zinc-950">
-            축제부스 <span className="text-primary">{booths.length}</span>
+            {/* 공개 안내와 숫자가 어긋나지 않게 부스만 센다(입구·화장실 같은 시설은 뺀다). */}
+            축제부스 <span className="text-primary">{boothOnlyCount}</span>
             {reviewRequiredCount > 0 ? (
               <span className="body-small ml-2 text-secondary-600">
                 검수 필요 {reviewRequiredCount}
@@ -2319,7 +2357,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </div>
 
           <div className="flex flex-col gap-1">
-            {zones.map((zone) => {
+            {standaloneZones.map((zone) => {
               const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
               const expanded = expandedZoneIds.has(zone.id);
               return (
@@ -2616,7 +2654,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               }}
             />
           </span>
-          <span title={canEditQueue ? undefined : "승인된 부스만 대기줄을 그릴 수 있습니다."}>
+          <span title={canEditQueue ? undefined : queueToolDisabledReason}>
             <IconButton
               icon={<ClockIcon className="size-5" />}
               aria-label="대기줄 추가"

@@ -9,23 +9,8 @@ import { getApiErrorMessage } from "@/lib/api/httpError";
 import { QueueUpdateSheet } from "./QueueUpdateSheet";
 import { StaffBoothBar } from "./StaffBoothBar";
 import { StaffFestivalBar } from "./StaffFestivalBar";
-import { useStaffFestival, type StaffZone } from "./useStaffFestival";
+import { useStaffFestival } from "./useStaffFestival";
 import { distanceInMeters } from "./utils";
-
-/** 줄끝 좌표에서 가장 가까운 구역. 서버는 좌표만 저장하므로 구역 이름은 역으로 찾는다. */
-function zoneOfTail(
-  zones: StaffZone[],
-  tail: { lat: number; lng: number } | null,
-): StaffZone | null {
-  if (!tail) return null;
-  let nearest: { zone: StaffZone; meters: number } | null = null;
-  zones.forEach((zone) => {
-    if (!zone.center) return;
-    const meters = distanceInMeters(tail, zone.center);
-    if (!nearest || meters < nearest.meters) nearest = { zone, meters };
-  });
-  return nearest ? (nearest as { zone: StaffZone }).zone : null;
-}
 
 /*
   `BoothMapView`는 카카오 지도 레벨을 `2 + zoomStep`으로 계산한다. 스태프 화면은
@@ -75,13 +60,19 @@ export function StaffMapPanel() {
   const selectedQueue = selectedBooth
     ? festival.queueByBoothId.get(selectedBooth.boothId)
     : undefined;
-  const tailZone = useMemo(() => {
-    if (!selectedQueue?.tailLatitude || !selectedQueue.tailLongitude) return null;
-    return zoneOfTail(festival.zones, {
-      lat: selectedQueue.tailLatitude,
-      lng: selectedQueue.tailLongitude,
-    });
-  }, [festival.zones, selectedQueue]);
+  /*
+    저장된 거리를 그대로 쓰되, 옛 기록처럼 거리 없이 좌표만 있으면 부스에서 다시 잰다.
+  */
+  const tailMeters = useMemo(() => {
+    if (!selectedQueue) return null;
+    if (selectedQueue.queueTailMeters !== null) return selectedQueue.queueTailMeters;
+    if (selectedQueue.tailLatitude === null || selectedQueue.tailLongitude === null) return null;
+    if (selectedBooth?.lat === undefined || selectedBooth?.lng === undefined) return null;
+    return distanceInMeters(
+      { lat: selectedBooth.lat, lng: selectedBooth.lng },
+      { lat: selectedQueue.tailLatitude, lng: selectedQueue.tailLongitude },
+    );
+  }, [selectedBooth, selectedQueue]);
 
   if (festival.isLoading) {
     return <StaffMapState message="담당 축제 정보를 불러오는 중..." />;
@@ -153,7 +144,7 @@ export function StaffMapPanel() {
         <StaffBoothBar
           booth={selectedBooth}
           zoneName={selectedZone?.name ?? "구역 미지정"}
-          queueTailZoneName={tailZone?.name ?? null}
+          queueTailMeters={tailMeters}
           disabledReason={queueDisabledReason}
           onUpdateQueue={() => setQueueSheetOpen(true)}
         />

@@ -12,8 +12,8 @@ const METRIC_LABEL_CLASSES = "body-small text-zinc-500 [&_svg]:size-3";
 export interface StaffBoothBarProps {
   booth: Booth;
   zoneName: string;
-  /** 줄끝이 현재 어느 구역까지 왔는지. 아직 갱신된 적이 없으면 비어 있다. */
-  queueTailZoneName: string | null;
+  /** 부스에서 줄 끝까지의 거리(m). 아직 갱신된 적이 없으면 비어 있다. */
+  queueTailMeters: number | null;
   /** 대기열이 만들어지지 않아 줄끝을 갱신할 수 없을 때의 안내 문구. */
   disabledReason: string | null;
   onUpdateQueue: () => void;
@@ -23,7 +23,7 @@ export interface StaffBoothBarProps {
 export function StaffBoothBar({
   booth,
   zoneName,
-  queueTailZoneName,
+  queueTailMeters,
   disabledReason,
   onUpdateQueue,
 }: StaffBoothBarProps) {
@@ -74,11 +74,24 @@ export function StaffBoothBar({
           description="이 부스의 최신 혼잡도입니다."
         />
         <MapMetric
-          value={queueTailZoneName ?? <span className="body-small text-zinc-400">미입력</span>}
+          /*
+            줄 끝은 지도 아무 데나 찍을 수 있는데 이 칸만 구역명을 보여 줘서, 안전 구역
+            부스의 줄끝이 「메인」·「푸드」로 나오고 정작 저장한 66m는 화면 어디에도
+            없었다. 저장한 값 그대로 거리로 적는다.
+          */
+          value={
+            queueTailMeters === null ? (
+              <span className="body-small text-zinc-400">미입력</span>
+            ) : (
+              <>
+                <span className="body-regular-bold">{queueTailMeters}</span>m
+              </>
+            )
+          }
           valueClassName="body-regular"
           labelClassName={METRIC_LABEL_CLASSES}
           label="줄끝"
-          description="대기 줄의 끝이 마지막으로 기록된 구역입니다."
+          description="부스에서 대기 줄 끝까지의 거리입니다."
         />
         <MapMetric
           value={
@@ -86,7 +99,7 @@ export function StaffBoothBar({
               formatWaitMinutes(null)
             ) : (
               <>
-                <span className="body-regular-bold">{booth.waitMinutes}</span> 분
+                <span className="body-regular-bold">{booth.waitMinutes}</span>분
               </>
             )
           }
