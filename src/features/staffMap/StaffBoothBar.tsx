@@ -49,7 +49,7 @@ export function StaffBoothBar({
           variant="outline"
           size="sm"
           // 아이콘 14px, 아이콘–글자 간격 4, 안쪽 여백 좌우 16·상하 7.5.
-          className="gap-1 px-4 py-[7.5px] [&_svg]:size-3.5"
+          className="gap-1 px-4 py-1 [&_svg]:size-3.5"
           icon={<Pencil2Icon />}
           disabled={Boolean(disabledReason)}
           title={disabledReason ?? undefined}

@@ -151,6 +151,7 @@ export function StaffMapPanel() {
           queue={selectedQueue}
           zones={selectableZones}
           onClose={() => setQueueSheetOpen(false)}
+          refreshing={festival.isRefetching}
           onUpdated={festival.refetch}
         />
       ) : selectedBooth ? (

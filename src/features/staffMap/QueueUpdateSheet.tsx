@@ -28,6 +28,8 @@ export interface QueueUpdateSheetProps {
   queue: FestivalQueue;
   /** 줄끝 위치로 고를 수 있는 구역(중심 좌표가 있는 구역만). */
   zones: StaffZone[];
+  /** 최신 정보를 다시 받아오는 중인지. 참이면 새로고침 아이콘이 돈다. */
+  refreshing?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 }
@@ -43,6 +45,7 @@ export function QueueUpdateSheet({
   booth,
   queue,
   zones,
+  refreshing = false,
   onClose,
   onUpdated,
 }: QueueUpdateSheetProps) {
@@ -105,7 +108,9 @@ export function QueueUpdateSheet({
             size="sm"
             aria-label="혼잡도 정보 새로고침"
             icon={<UpdateIcon />}
-            iconClassName="text-zinc-500"
+            // 눌러도 화면이 그대로면 먹은 건지 알 수 없어, 받아오는 동안 아이콘을 돌린다.
+            iconClassName={`text-zinc-500 ${refreshing ? "animate-spin" : ""}`}
+            disabled={refreshing}
             onClick={onUpdated}
           />
         </div>
@@ -113,34 +118,34 @@ export function QueueUpdateSheet({
 
       <dl className="mt-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <dt className="body-regular text-zinc-950">혼잡도</dt>
+          <dt className="body-small text-zinc-950">혼잡도</dt>
           <dd>
             {booth.congestionLevel ? (
-              <CongestionText level={booth.congestionLevel} className="body-regular-bold" />
+              <CongestionText level={booth.congestionLevel} className="body-small-bold" />
             ) : (
-              <span className="body-regular text-zinc-400">미입력</span>
+              <span className="body-small text-zinc-400">미입력</span>
             )}
           </dd>
         </div>
         <div className="flex items-center justify-between">
-          <dt className="body-regular text-zinc-950">마지막 줄끝갱신자</dt>
+          <dt className="body-small text-zinc-950">마지막 줄끝갱신자</dt>
           <dd className="flex items-center gap-2">
             {queue.lastModifierType ? (
               <>
                 {queue.lastModifierName ? (
-                  <span className="body-regular-bold text-zinc-950">{queue.lastModifierName}</span>
+                  <span className="body-small-bold text-zinc-950">{queue.lastModifierName}</span>
                 ) : null}
                 {queue.lastModifierType === "STAFF" ? <StaffBadge /> : <AdminBadge />}
               </>
             ) : (
-              <span className="body-regular text-zinc-400">기록 없음</span>
+              <span className="body-small text-zinc-400">기록 없음</span>
             )}
           </dd>
         </div>
       </dl>
 
       <form
-        className="mt-5 flex items-center gap-3"
+        className="mt-6 flex items-center gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           updateMutation.mutate();
@@ -164,7 +169,7 @@ export function QueueUpdateSheet({
         </Select>
         <Button
           type="submit"
-          className="shrink-0 py-1"
+          className="shrink-0"
           disabled={!tailPoint || updateMutation.isPending}
         >
           {updateMutation.isPending ? "갱신 중..." : "줄끝 갱신하기"}
