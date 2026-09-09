@@ -15,6 +15,7 @@ import { getManagedFestival } from "@/features/festivals/api";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { createFieldStaff, deleteFieldStaffBulk, getFieldStaffList } from "./api";
 import type { CreateFieldStaffResult } from "./types";
+import { staffLoginPath } from "@/features/auth/staff/loginPath";
 import { staffLoginPeriodNotice } from "./validPeriod";
 
 function formatPhoneNumber(value: string) {
@@ -25,6 +26,15 @@ function formatPhoneNumber(value: string) {
 }
 
 export function StaffsPanel({ festivalId }: { festivalId: string }) {
+  /*
+    스태프 로그인은 담당 축제 ID가 실린 초대 링크로만 된다. 아이디와 임시 비밀번호만
+    받은 스태프가 그냥 /staff/login에 들어가면 「초대 링크로 접속해주세요」에 막히므로,
+    관리자가 그대로 전달할 수 있는 전체 주소를 함께 보여준다.
+  */
+  const staffLoginUrl =
+    typeof window === "undefined"
+      ? staffLoginPath({ festivalId })
+      : `${window.location.origin}${staffLoginPath({ festivalId })}`;
   const queryClient = useQueryClient();
   const [loginId, setLoginId] = useState(() => `staff-${crypto.randomUUID().slice(0, 8)}`);
   const [name, setName] = useState("");
@@ -123,7 +133,8 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
             <TemporaryPasswordCard
               title={`${created.name}(${created.loginId}) 스태프 계정이 생성되었습니다.`}
               temporaryPassword={created.temporaryPassword}
-              warning="임시 비밀번호는 지금만 확인할 수 있습니다. 스태프에게 아이디와 함께 바로 전달해주세요."
+              loginUrl={staffLoginUrl}
+              warning="임시 비밀번호는 지금만 확인할 수 있습니다. 스태프에게 아이디·접속 주소와 함께 바로 전달해주세요."
               note={staffLoginPeriodNotice(created.validFrom, created.validUntil)}
             />
           ) : null}

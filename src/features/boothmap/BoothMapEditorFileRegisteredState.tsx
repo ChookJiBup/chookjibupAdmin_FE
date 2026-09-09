@@ -258,6 +258,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const boothListRef = useRef<HTMLDivElement>(null);
   const mapToolsRef = useRef<HTMLDivElement>(null);
+  /** 지도 위쪽 버튼 줄. 말풍선이 그 아래로 들어가도록 높이를 잰다. */
+  const topActionBarRef = useRef<HTMLDivElement>(null);
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
   const overlayFileInputRef = useRef<HTMLInputElement>(null);
   const localImageFiles = useRef(new Map<string, File>());
@@ -487,6 +489,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       const bounds = wrapper.getBoundingClientRect();
       const list = boothListRef.current?.getBoundingClientRect();
       const tools = mapToolsRef.current?.getBoundingClientRect();
+      const topBar = topActionBarRef.current?.getBoundingClientRect();
       // 메뉴가 덮고 있는 부분을 제외한 지도 영역의 가운데에 선택한 핀을 둔다.
       const left = list?.width ? Math.max(0, list.right - bounds.left) : 0;
       /*
@@ -502,9 +505,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         상단 버튼 줄 밑으로 파고든다. 버튼 줄 아래에 말풍선이 들어갈 만큼은 내린다.
         버튼 줄은 좁은 화면에서 두 줄로 접히므로 높이를 실제로 재서 쓴다 — 상수로 두면
         접힌 만큼 말풍선이 버튼 아래로 파고들어 이름 입력칸이 가려진다.
+
+        재는 대상은 «위쪽» 버튼 줄이다. mapToolsRef는 오른쪽 «아래» 도구 열이라, 그쪽
+        bottom을 쓰면 지도 높이만큼 더 내려보내 핀과 말풍선이 화면 밖으로 나간다.
       */
       const popoverRoom = 200;
-      const topBarBottom = tools ? Math.max(0, tools.bottom - bounds.top) : 96;
+      const topBarBottom = topBar ? Math.max(0, topBar.bottom - bounds.top) : 96;
       const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
       const projection = kakaoMap.getProjection();
       const point = projection.containerPointFromCoords(
@@ -524,6 +530,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     const observer = new ResizeObserver(centerSelectedBooth);
     observer.observe(wrapper);
     if (boothListRef.current) observer.observe(boothListRef.current);
+    // 버튼 줄이 좁은 화면에서 접히면 높이가 달라지므로 같이 지켜본다.
+    if (topActionBarRef.current) observer.observe(topActionBarRef.current);
     return () => observer.disconnect();
   }, [selectedId, selectedShapeId, selectedLatitude, selectedLongitude, kakaoMap, boothListOpen]);
 
@@ -2474,6 +2482,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       </div>
 
       <div
+        ref={topActionBarRef}
         data-map-tools
         className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-end gap-2 lg:top-10 lg:right-8 lg:left-auto lg:gap-4"
       >
