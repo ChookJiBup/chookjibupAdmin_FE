@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import { DATE_DISPLAY_PATTERN, formatDateInput, toIsoDate } from "./dateFormat";
+import { formatDateInput, isRealDate, toIsoDate } from "./dateFormat";
 import {
   createFestival,
   createFestivalWithMap,
@@ -243,8 +243,8 @@ export function FestivalRegisterForm() {
       setFormError("축제 설명을 입력해 주세요.");
       return;
     }
-    if (!DATE_DISPLAY_PATTERN.test(startDate) || !DATE_DISPLAY_PATTERN.test(endDate)) {
-      setFormError("날짜는 YYYY.mm.dd 형식으로 입력해 주세요.");
+    if (!isRealDate(startDate) || !isRealDate(endDate)) {
+      setFormError("날짜는 YYYY.mm.dd 형식의 실제 날짜로 입력해 주세요.");
       return;
     }
     if (toIsoDate(startDate) > toIsoDate(endDate)) {
@@ -252,7 +252,7 @@ export function FestivalRegisterForm() {
       return;
     }
     if (locations.some((location) => !isLocationDraftComplete(location))) {
-      setFormError("모든 장소에 이름과 주소를 입력해 주세요.");
+      setFormError("모든 장소의 주소를 입력해 주세요.");
       return;
     }
 
@@ -423,7 +423,6 @@ export function FestivalRegisterForm() {
         >
           장소 추가
         </Button>
-        {formError ? <p className="body-caption text-error">{formError}</p> : null}
       </FormSection>
 
       <FormSection label="축제부스지도 첨부">
@@ -440,6 +439,12 @@ export function FestivalRegisterForm() {
           disabled={createMutation.isPending}
         />
       </FormSection>
+
+      {/*
+        「축제명을 입력해 주세요」가 상세정보 카드 맨 아래(장소 추가 밑)에 떠서, 정작
+        비어 있는 축제명 칸과 카드 하나만큼 떨어져 있었다. 등록 버튼 바로 위로 옮긴다.
+      */}
+      {formError ? <p className="body-small text-error">{formError}</p> : null}
 
       {createMutation.isError ? (
         <p className="body-small text-error">{getApiErrorMessage(createMutation.error)}</p>

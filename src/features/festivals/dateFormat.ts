@@ -31,3 +31,16 @@ export function formatDateInput(raw: string) {
   const digits = raw.replace(/\D/g, "").slice(0, 8);
   return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join(".");
 }
+
+/**
+ * 달력에 실제로 있는 날짜인지 확인한다.
+ *
+ * <p>형식만 보면 `2026.13.45`도 통과해 등록 확인 모달까지 넘어갔다. 월·일 범위와
+ * 윤년까지 보려면 실제 Date로 되돌려 같은 날인지 비교하는 편이 확실하다.</p>
+ */
+export function isRealDate(displayDate: string) {
+  if (!DATE_DISPLAY_PATTERN.test(displayDate)) return false;
+  const [year, month, day] = displayDate.split(".").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}

@@ -21,7 +21,7 @@ import {
   updateFestival,
   updateFestivalVisitorCountInputMode,
 } from "./api";
-import { DATE_DISPLAY_PATTERN, formatDateInput, toDisplayDate, toIsoDate } from "./dateFormat";
+import { formatDateInput, isRealDate, toDisplayDate, toIsoDate } from "./dateFormat";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
 import {
   FESTIVAL_SEARCH_HELPER_ITEMS,
@@ -184,11 +184,8 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
       setFormError("축제 내용은 1~1000자로 입력해 주세요.");
       return;
     }
-    if (
-      !DATE_DISPLAY_PATTERN.test(displayStartDate) ||
-      !DATE_DISPLAY_PATTERN.test(displayEndDate)
-    ) {
-      setFormError("날짜는 YYYY.mm.dd 형식으로 입력해 주세요.");
+    if (!isRealDate(displayStartDate) || !isRealDate(displayEndDate)) {
+      setFormError("날짜는 YYYY.mm.dd 형식의 실제 날짜로 입력해 주세요.");
       return;
     }
     if (toIsoDate(displayStartDate) > toIsoDate(displayEndDate)) {
