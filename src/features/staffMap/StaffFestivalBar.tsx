@@ -45,7 +45,7 @@ export function StaffFestivalBar({
             ) : (
               <>
                 {/* 숫자가 먼저 읽혀야 해서 단위보다 굵게 둔다. */}
-                <span className="body-regular-bold">{averageWaitMinutes}</span> 분
+                <span className="body-regular-bold">{averageWaitMinutes}</span>분
               </>
             )
           }

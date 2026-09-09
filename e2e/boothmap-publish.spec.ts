@@ -5,11 +5,11 @@ const mapId = "00000000-0000-0000-0000-0000000000d0";
 const boothmapPath = `/console/festivals/${festivalId}/boothmap`;
 
 /**
- * 부스맵 공개 흐름 목킹.
+ * 부스맵 공개·해제 흐름 목킹.
  *
- * 사용자 앱은 로드맵이 PUBLISHED일 때만 부스지도를 채우므로, 관리자 화면에 공개 버튼이
- * 실제로 있고 서버로 요청이 나가는지가 이 화면의 핵심이다. 공개 요청이 한 번 들어오면
- * 그 뒤의 편집기 조회는 PUBLISHED를 돌려주도록 해 화면 전환까지 확인한다.
+ * 사용자 앱은 로드맵이 PUBLISHED일 때만 부스지도를 채우므로, 관리자 화면에서 공개와 해제를
+ * 모두 눌러 서버로 요청이 나가는지가 이 화면의 핵심이다. 요청이 들어오면 그 뒤의 편집기
+ * 조회 상태도 함께 바꿔 화면 전환까지 확인한다.
  */
 async function mockBoothMap(page: Page, initialStatus: "EDITING" | "PUBLISHED") {
   const publishCalls: string[] = [];
@@ -20,9 +20,13 @@ async function mockBoothMap(page: Page, initialStatus: "EDITING" | "PUBLISHED") 
     let data: unknown;
     let code = 0;
     if (request.method() === "POST" && path.endsWith("/publish")) {
-      publishCalls.push(path);
+      publishCalls.push(`POST ${path}`);
       status = "PUBLISHED";
       data = { roadmapStatus: "PUBLISHED", publishedVersion: 3, publishedBoothCount: 2 };
+    } else if (request.method() === "DELETE" && path.endsWith("/publish")) {
+      publishCalls.push(`DELETE ${path}`);
+      status = "EDITING";
+      data = { roadmapStatus: "EDITING", publishedVersion: 0, publishedBoothCount: 0 };
     } else if (path === "/api/admin/me") {
       data = {
         adminId: "00000000-0000-0000-0000-000000000001",
@@ -120,17 +124,25 @@ test("편집 중인 부스맵은 확인 모달을 거쳐 방문객에게 공개�
   ).toBeVisible();
   await page.getByRole("button", { name: "공개", exact: true }).click();
 
-  await expect(page.getByText("공개됨", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "공개됨", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "방문객에게 공개", exact: true })).toHaveCount(0);
-  expect(publishCalls).toEqual([`/api/festivals/${festivalId}/maps/${mapId}/publish`]);
+  expect(publishCalls).toEqual([`POST /api/festivals/${festivalId}/maps/${mapId}/publish`]);
 });
 
-test("이미 공개된 부스맵은 버튼 대신 공개됨 표시만 남는다", async ({ page }) => {
+test("공개된 부스맵은 «공개됨»을 눌러 확인 모달을 거쳐 다시 감춘다", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const publishCalls = await mockBoothMap(page, "PUBLISHED");
   await page.goto(boothmapPath);
 
-  await expect(page.getByText("공개됨", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "방문객에게 공개", exact: true })).toHaveCount(0);
-  expect(publishCalls).toEqual([]);
+  const publishedButton = page.getByRole("button", { name: "공개됨", exact: true });
+  await expect(publishedButton).toBeEnabled();
+  await publishedButton.click();
+
+  // 그려 둔 내용까지 사라지는 줄 알면 해제를 못 누른다. 무엇이 남는지 먼저 알린다.
+  await expect(page.getByText("더 이상 보이지 않습니다", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "공개 해제", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: "방문객에게 공개", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "공개됨", exact: true })).toHaveCount(0);
+  expect(publishCalls).toEqual([`DELETE /api/festivals/${festivalId}/maps/${mapId}/publish`]);
 });
