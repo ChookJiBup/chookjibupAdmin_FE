@@ -150,7 +150,6 @@ export function StaffMapPanel() {
           booth={selectedBooth}
           queue={selectedQueue}
           zones={selectableZones}
-          mapCenter={festival.mapCenter}
           onClose={() => setQueueSheetOpen(false)}
           onUpdated={festival.refetch}
         />
