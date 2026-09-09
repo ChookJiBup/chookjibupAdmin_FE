@@ -1,33 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { Cross2Icon, UpdateIcon } from "@radix-ui/react-icons";
+import { useEffect, useRef, useState } from "react";
+import { Cross2Icon, DrawingPinIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { IconButton } from "@/components/ui/IconButton";
 import { AdminBadge, StaffBadge } from "@/components/ui/RoleBadge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { Booth } from "@/features/dashboard/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { updateQueueTail } from "./api";
+import { QueueTailPicker, type QueueTailPoint } from "./QueueTailPicker";
 import type { FestivalQueue } from "./types";
-import type { StaffZone } from "./useStaffFestival";
 import { distanceInMeters, formatRelativeTime } from "./utils";
 
 export interface QueueUpdateSheetProps {
   festivalId: string;
   booth: Booth;
   queue: FestivalQueue;
-  /** 줄끝 위치로 고를 수 있는 구역(중심 좌표가 있는 구역만). */
-  zones: StaffZone[];
+  /** 지도 초기 중심. 부스 좌표가 없어도 줄 끝을 찍을 수 있게 축제 중심을 받는다. */
+  mapCenter: QueueTailPoint;
   /** 최신 정보를 다시 받아오는 중인지. 참이면 새로고침 아이콘이 돈다. */
   refreshing?: boolean;
   onClose: () => void;
@@ -37,24 +30,37 @@ export interface QueueUpdateSheetProps {
 /**
  * 선택한 부스의 줄끝 위치를 갱신하는 하단 시트.
  *
- * 스태프는 줄 끝이 어디까지 왔는지만 고른다. 혼잡도와 예상 대기시간은 서버가 부스에서
- * 줄 끝까지의 거리로 환산하므로(BoothCongestionEstimator) 여기서는 결과만 보여준다.
+ * 스태프는 줄이 끝나는 자리를 지도에서 찍기만 한다. 혼잡도와 예상 대기시간은 서버가
+ * 부스에서 줄 끝까지의 거리로 환산하므로(BoothCongestionEstimator) 결과만 보여준다.
+ * 백엔드 계약에는 «존» 같은 구분이 없고 줄 끝 좌표와 거리만 오간다.
  */
 export function QueueUpdateSheet({
   festivalId,
   booth,
   queue,
-  zones,
+  mapCenter,
   refreshing = false,
   onClose,
   onUpdated,
 }: QueueUpdateSheetProps) {
-  const [zoneId, setZoneId] = useState<string>("");
+  const [pickedTail, setPickedTail] = useState<QueueTailPoint | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /*
+    받아오는 일이 워낙 빨리 끝나 아이콘이 도는지 알아볼 수 없었다. 눌렀다는 것이
+    보이도록 잠시 더 돌린다.
+  */
+  const [spinning, setSpinning] = useState(false);
+  const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (spinTimer.current) clearTimeout(spinTimer.current);
+    },
+    [],
+  );
 
   const boothPoint =
     booth.lat !== undefined && booth.lng !== undefined ? { lat: booth.lat, lng: booth.lng } : null;
-  const selectedZone = zones.find((zone) => zone.zoneId === zoneId) ?? null;
-  const tailPoint = selectedZone?.center ?? null;
+  const tailPoint = pickedTail;
   const tailMeters = boothPoint && tailPoint ? distanceInMeters(boothPoint, tailPoint) : null;
 
   const updateMutation = useMutation({
@@ -109,9 +115,14 @@ export function QueueUpdateSheet({
             aria-label="혼잡도 정보 새로고침"
             icon={<UpdateIcon />}
             // 눌러도 화면이 그대로면 먹은 건지 알 수 없어, 받아오는 동안 아이콘을 돌린다.
-            iconClassName={`text-zinc-500 ${refreshing ? "animate-spin" : ""}`}
-            disabled={refreshing}
-            onClick={onUpdated}
+            iconClassName={`text-zinc-500 ${refreshing || spinning ? "animate-spin" : ""}`}
+            disabled={refreshing || spinning}
+            onClick={() => {
+              setSpinning(true);
+              if (spinTimer.current) clearTimeout(spinTimer.current);
+              spinTimer.current = setTimeout(() => setSpinning(false), 700);
+              onUpdated();
+            }}
           />
         </div>
       </div>
@@ -151,22 +162,22 @@ export function QueueUpdateSheet({
           updateMutation.mutate();
         }}
       >
-        <Select
-          value={zoneId}
-          onValueChange={setZoneId}
-          disabled={zones.length === 0 || updateMutation.isPending}
+        <Button
+          type="button"
+          variant="outline"
+          className="min-w-0 flex-1 justify-start"
+          icon={<DrawingPinIcon />}
+          disabled={updateMutation.isPending}
+          onClick={() => setPickerOpen(true)}
         >
-          <SelectTrigger className="h-11 min-w-0 flex-1 flex-row-reverse justify-end gap-2">
-            <SelectValue placeholder={zones.length === 0 ? "구역 없음" : "줄 끝 구역"} />
-          </SelectTrigger>
-          <SelectContent>
-            {zones.map((zone) => (
-              <SelectItem key={zone.zoneId} value={zone.zoneId}>
-                {zone.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <span className="truncate">
+            {tailPoint
+              ? tailMeters === null
+                ? "줄 끝 지점 선택함"
+                : `부스에서 약 ${tailMeters}m`
+              : "지도에서 줄 끝 찍기"}
+          </span>
+        </Button>
         <Button
           type="submit"
           className="shrink-0"
@@ -180,6 +191,25 @@ export function QueueUpdateSheet({
         <p className="body-caption mt-2 text-error">
           {getApiErrorMessage(updateMutation.error, "줄끝 위치를 갱신하지 못했습니다.")}
         </p>
+      ) : null}
+
+      {pickerOpen ? (
+        <QueueTailPicker
+          boothName={booth.name}
+          boothPoint={boothPoint}
+          center={pickedTail ?? boothPoint ?? mapCenter}
+          initialTail={
+            pickedTail ??
+            (queue.tailLatitude !== null && queue.tailLongitude !== null
+              ? { lat: queue.tailLatitude, lng: queue.tailLongitude }
+              : null)
+          }
+          onCancel={() => setPickerOpen(false)}
+          onConfirm={(point) => {
+            setPickedTail(point);
+            setPickerOpen(false);
+          }}
+        />
       ) : null}
     </div>
   );

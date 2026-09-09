@@ -75,11 +75,6 @@ export function StaffMapPanel() {
   const selectedQueue = selectedBooth
     ? festival.queueByBoothId.get(selectedBooth.boothId)
     : undefined;
-  const selectableZones = useMemo(
-    () => festival.zones.filter((zone) => zone.center !== null),
-    [festival.zones],
-  );
-
   const tailZone = useMemo(() => {
     if (!selectedQueue?.tailLatitude || !selectedQueue.tailLongitude) return null;
     return zoneOfTail(festival.zones, {
@@ -144,12 +139,12 @@ export function StaffMapPanel() {
 
       {selectedBooth && selectedQueue && queueSheetOpen ? (
         <QueueUpdateSheet
-          // 부스가 바뀌면 구역 선택을 초기화하기 위해 새로 마운트한다.
+          // 부스가 바뀌면 찍어 둔 줄 끝을 초기화하기 위해 새로 마운트한다.
           key={selectedBooth.boothId}
           festivalId={festival.festivalId}
           booth={selectedBooth}
           queue={selectedQueue}
-          zones={selectableZones}
+          mapCenter={festival.mapCenter}
           onClose={() => setQueueSheetOpen(false)}
           refreshing={festival.isRefetching}
           onUpdated={festival.refetch}
