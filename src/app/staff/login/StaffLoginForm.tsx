@@ -62,6 +62,12 @@ export function StaffLoginForm({ festivalId, sessionExpired = false }: StaffLogi
   const errorMessage =
     inviteError || (loginMutation.isError ? getApiErrorMessage(loginMutation.error) : undefined);
 
+  /*
+    축제 ID가 없으면 무엇을 입력해도 로그인할 수 없다. 아이디·비밀번호를 다 치고
+    누른 뒤에야 알려주면 스태프는 자기 계정이 잘못된 줄 안다. 들어온 순간 알려 준다.
+  */
+  const missingInvite = !festivalId?.trim();
+
   return (
     /* 로그인은 배경을 화면 끝까지 채운다 — 공통 여백(20)을 되돌린다. */
     <main className="bg-dimmed -m-5 flex flex-1 flex-col justify-center px-5 py-8">
@@ -72,6 +78,12 @@ export function StaffLoginForm({ festivalId, sessionExpired = false }: StaffLogi
           {sessionExpired ? (
             <p role="status" className="body-small mt-2 text-zinc-950">
               로그인이 만료되었습니다. 다시 로그인해 주세요.
+            </p>
+          ) : null}
+          {missingInvite ? (
+            <p role="status" className="body-small mt-2 text-error">
+              축제 운영자가 전달한 접속 주소로 들어와야 로그인할 수 있습니다. 받은 주소를 다시
+              확인해 주세요.
             </p>
           ) : null}
         </div>
@@ -122,7 +134,7 @@ export function StaffLoginForm({ festivalId, sessionExpired = false }: StaffLogi
             type="submit"
             size="lg"
             className="mt-1 w-full"
-            disabled={loginMutation.isPending}
+            disabled={loginMutation.isPending || missingInvite}
           >
             {loginMutation.isPending ? "로그인 중..." : "로그인"}
           </Button>
