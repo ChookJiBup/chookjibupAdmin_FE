@@ -75,11 +75,6 @@ export function StaffMapPanel() {
   const selectedQueue = selectedBooth
     ? festival.queueByBoothId.get(selectedBooth.boothId)
     : undefined;
-  const selectableZones = useMemo(
-    () => festival.zones.filter((zone) => zone.center !== null),
-    [festival.zones],
-  );
-
   const tailZone = useMemo(() => {
     if (!selectedQueue?.tailLatitude || !selectedQueue.tailLongitude) return null;
     return zoneOfTail(festival.zones, {
@@ -114,7 +109,8 @@ export function StaffMapPanel() {
 
   // 화면설계서 MAIN01/EDIT01은 지도를 화면 전체로 깔고 그 위에 하단바·줄끝갱신 모달을 얹는다.
   return (
-    <div className="relative min-h-0 flex-1">
+    // 공통 여백(20)을 되돌려 지도를 화면 끝까지 채운다.
+    <div className="relative -m-5 min-h-0 flex-1">
       <BoothMapView
         booths={festival.booths}
         facilities={festival.facilities}
@@ -143,14 +139,14 @@ export function StaffMapPanel() {
 
       {selectedBooth && selectedQueue && queueSheetOpen ? (
         <QueueUpdateSheet
-          // 부스가 바뀌면 구역 선택을 초기화하기 위해 새로 마운트한다.
+          // 부스가 바뀌면 찍어 둔 줄 끝을 초기화하기 위해 새로 마운트한다.
           key={selectedBooth.boothId}
           festivalId={festival.festivalId}
           booth={selectedBooth}
           queue={selectedQueue}
-          zones={selectableZones}
           mapCenter={festival.mapCenter}
           onClose={() => setQueueSheetOpen(false)}
+          refreshing={festival.isRefetching}
           onUpdated={festival.refetch}
         />
       ) : selectedBooth ? (

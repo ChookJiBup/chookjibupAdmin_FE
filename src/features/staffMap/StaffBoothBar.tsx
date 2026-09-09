@@ -1,13 +1,13 @@
 "use client";
 
-import { UpdateIcon } from "@radix-ui/react-icons";
+import { Pencil2Icon } from "@radix-ui/react-icons";
 import { MapMetric } from "@/components/map/MapMetric";
 import { Button } from "@/components/ui/Button";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import type { Booth } from "@/features/dashboard/types";
 
-const METRIC_LABEL_CLASSES = "body-caption [&_svg]:size-3.5";
+const METRIC_LABEL_CLASSES = "body-small text-zinc-500 [&_svg]:size-3";
 
 export interface StaffBoothBarProps {
   booth: Booth;
@@ -28,15 +28,18 @@ export function StaffBoothBar({
   onUpdateQueue,
 }: StaffBoothBarProps) {
   return (
-    <div className="absolute inset-x-5 bottom-5 z-10 rounded-2xl bg-white p-4 shadow-lg">
+    <div className="absolute inset-x-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-10 rounded-2xl bg-white px-4 py-3 shadow-lg">
       <div className="flex items-start justify-between gap-3">
         <MapMetric
           value={
             <span className="truncate">
-              {zoneName} &gt; {booth.name}
+              {/* 구역은 거들고 부스 이름이 먼저 읽혀야 한다. */}
+              <span className="body-regular">{zoneName}</span>{" "}
+              <span className="text-[16px] leading-none">&gt;</span>{" "}
+              <span className="body-regular-bold">{booth.name}</span>
             </span>
           }
-          valueClassName="body-small-bold min-w-0"
+          valueClassName="min-w-0 text-zinc-950"
           labelClassName={METRIC_LABEL_CLASSES}
           label="위치"
           description="선택한 부스가 속한 구역과 부스명입니다."
@@ -45,7 +48,9 @@ export function StaffBoothBar({
         <Button
           variant="outline"
           size="sm"
-          icon={<UpdateIcon />}
+          // 아이콘 14px, 아이콘–글자 간격 4, 안쪽 여백 좌우 16·상하 7.5.
+          className="gap-1 px-4 py-1 [&_svg]:size-3.5"
+          icon={<Pencil2Icon />}
           disabled={Boolean(disabledReason)}
           title={disabledReason ?? undefined}
           onClick={onUpdateQueue}
@@ -63,21 +68,29 @@ export function StaffBoothBar({
               <span className="body-small text-zinc-400">미입력</span>
             )
           }
-          valueClassName="body-small-bold"
+          valueClassName="body-regular-bold"
           labelClassName={METRIC_LABEL_CLASSES}
           label="혼잡도"
           description="이 부스의 최신 혼잡도입니다."
         />
         <MapMetric
           value={queueTailZoneName ?? <span className="body-small text-zinc-400">미입력</span>}
-          valueClassName="body-small-bold"
+          valueClassName="body-regular"
           labelClassName={METRIC_LABEL_CLASSES}
           label="줄끝"
           description="대기 줄의 끝이 마지막으로 기록된 구역입니다."
         />
         <MapMetric
-          value={formatWaitMinutes(booth.waitMinutes ?? null)}
-          valueClassName="body-small-bold"
+          value={
+            booth.waitMinutes == null ? (
+              formatWaitMinutes(null)
+            ) : (
+              <>
+                <span className="body-regular-bold">{booth.waitMinutes}</span> 분
+              </>
+            )
+          }
+          valueClassName="body-regular"
           labelClassName={METRIC_LABEL_CLASSES}
           label="예상 대기시간"
           description="이 부스의 최신 예상 대기시간입니다."

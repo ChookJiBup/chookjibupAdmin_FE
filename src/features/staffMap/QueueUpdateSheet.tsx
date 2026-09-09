@@ -1,132 +1,110 @@
 "use client";
 
-import { useState } from "react";
-import { Cross2Icon, DrawingPinIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { useEffect, useRef, useState } from "react";
+import { Cross2Icon, DrawingPinIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
-import { CONGESTION_LABEL, CONGESTION_SOLID_CLASSES } from "@/components/ui/CongestionBadge";
+import { CongestionText } from "@/components/ui/CongestionBadge";
 import { IconButton } from "@/components/ui/IconButton";
-import { Input } from "@/components/ui/Input";
 import { AdminBadge, StaffBadge } from "@/components/ui/RoleBadge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { Booth, CongestionLevel } from "@/features/dashboard/types";
+import type { Booth } from "@/features/dashboard/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { updateBoothCongestion, updateQueueTail } from "./api";
+import { updateQueueTail } from "./api";
 import { QueueTailPicker, type QueueTailPoint } from "./QueueTailPicker";
 import type { FestivalQueue } from "./types";
-import type { StaffZone } from "./useStaffFestival";
 import { distanceInMeters, formatRelativeTime } from "./utils";
-
-const CONGESTION_LEVELS: CongestionLevel[] = ["LOW", "MEDIUM", "HIGH"];
 
 export interface QueueUpdateSheetProps {
   festivalId: string;
   booth: Booth;
   queue: FestivalQueue;
-  /** 줄끝 위치로 빠르게 고를 수 있는 구역(중심 좌표가 있는 구역만). */
-  zones: StaffZone[];
   /** 지도 초기 중심. 부스 좌표가 없어도 줄 끝을 찍을 수 있게 축제 중심을 받는다. */
   mapCenter: QueueTailPoint;
+  /** 최신 정보를 다시 받아오는 중인지. 참이면 새로고침 아이콘이 돈다. */
+  refreshing?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 }
 
 /**
- * 선택한 부스의 줄끝 위치와 혼잡도를 갱신하는 하단 시트.
+ * 선택한 부스의 줄끝 위치를 갱신하는 하단 시트.
  *
- * 줄끝만 보내면 서버가 줄 길이로 혼잡도와 대기시간을 자동 환산한다. 현장에서는 그
- * 환산이 맞지 않는 경우가 있어 스태프가 직접 등급과 대기시간을 정할 수 있고,
- * 직접 정한 값이 자동 환산값을 덮어쓰도록 줄끝을 먼저 보낸 뒤 혼잡도를 보낸다.
+ * 스태프는 줄이 끝나는 자리를 지도에서 찍기만 한다. 혼잡도와 예상 대기시간은 서버가
+ * 부스에서 줄 끝까지의 거리로 환산하므로(BoothCongestionEstimator) 결과만 보여준다.
+ * 백엔드 계약에는 «존» 같은 구분이 없고 줄 끝 좌표와 거리만 오간다.
  */
 export function QueueUpdateSheet({
   festivalId,
   booth,
   queue,
-  zones,
   mapCenter,
+  refreshing = false,
   onClose,
   onUpdated,
 }: QueueUpdateSheetProps) {
-  const [zoneId, setZoneId] = useState<string>("");
   const [pickedTail, setPickedTail] = useState<QueueTailPoint | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  // 자동 환산값을 기본값으로 채워 두고, 스태프가 건드린 경우에만 서버로 보낸다.
-  const [congestionLevel, setCongestionLevel] = useState<CongestionLevel | null>(
-    booth.congestionLevel ?? null,
+  /*
+    받아오는 일이 워낙 빨리 끝나 아이콘이 도는지 알아볼 수 없었다. 눌렀다는 것이
+    보이도록 잠시 더 돌린다.
+  */
+  const [spinning, setSpinning] = useState(false);
+  const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (spinTimer.current) clearTimeout(spinTimer.current);
+    },
+    [],
   );
-  const [waitMinutes, setWaitMinutes] = useState<string>(
-    booth.waitMinutes === undefined ? "" : String(booth.waitMinutes),
-  );
-  const [congestionEdited, setCongestionEdited] = useState(false);
-  const [validationError, setValidationError] = useState("");
 
   const boothPoint =
     booth.lat !== undefined && booth.lng !== undefined ? { lat: booth.lat, lng: booth.lng } : null;
-  const selectedZone = zones.find((zone) => zone.zoneId === zoneId) ?? null;
-  const tailPoint = pickedTail ?? selectedZone?.center ?? null;
+  const tailPoint = pickedTail;
   const tailMeters = boothPoint && tailPoint ? distanceInMeters(boothPoint, tailPoint) : null;
-  const parsedWaitMinutes = Number(waitMinutes);
-  const hasValidWaitMinutes =
-    waitMinutes.trim() !== "" && Number.isInteger(parsedWaitMinutes) && parsedWaitMinutes >= 0;
-  const canSubmit = Boolean(tailPoint) || congestionEdited;
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      // 줄끝 갱신이 혼잡도를 다시 계산하므로 스태프가 고른 값보다 먼저 보낸다.
-      if (tailPoint) {
-        await updateQueueTail(festivalId, queue.queueId, {
-          tailLatitude: tailPoint.lat,
-          tailLongitude: tailPoint.lng,
-          queueTailMeters: tailMeters ?? undefined,
-        });
-      }
-      if (congestionEdited && congestionLevel) {
-        await updateBoothCongestion(festivalId, booth.boothId, {
-          waitMinutes: parsedWaitMinutes,
-          congestionLevel,
-        });
-      }
+      if (!tailPoint) return;
+      await updateQueueTail(festivalId, queue.queueId, {
+        tailLatitude: tailPoint.lat,
+        tailLongitude: tailPoint.lng,
+        queueTailMeters: tailMeters ?? undefined,
+      });
     },
     onSuccess: () => {
-      toast.success(
-        tailPoint && congestionEdited
-          ? "줄끝 위치와 혼잡도를 갱신했습니다."
-          : tailPoint
-            ? "줄끝 위치를 갱신했습니다."
-            : "혼잡도를 갱신했습니다.",
-      );
+      toast.success("줄끝 위치를 갱신했습니다.");
       onUpdated();
       // 갱신된 값은 부스 바에서 다시 확인할 수 있으므로 시트는 닫는다.
       onClose();
     },
     onError: (error) => {
-      toast.error(getApiErrorMessage(error, "현장 정보를 갱신하지 못했습니다."));
+      toast.error(getApiErrorMessage(error, "줄끝 위치를 갱신하지 못했습니다."));
     },
   });
 
   return (
     // 화면설계서 EDIT01: 지도 위에 화면 폭 전체로 올라오는 하단 모달.
     <div className="absolute inset-x-0 bottom-0 z-20 max-h-full overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white px-4 pt-3 pb-8 shadow-lg">
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 pb-3">
-        <p className="body-regular-bold min-w-0 truncate text-zinc-950">{booth.name}</p>
+      {/* 부스명은 가운데, 닫기는 오른쪽 끝에 둔다. */}
+      <div className="relative flex items-center justify-center">
+        <p className="body-large-bold min-w-0 truncate px-8 text-center text-zinc-950">
+          {booth.name}
+        </p>
         <IconButton
           variant="ghost"
           size="sm"
           aria-label="닫기"
           icon={<Cross2Icon />}
           onClick={onClose}
+          className="absolute top-0 right-0"
+          iconClassName="size-3 [&_svg]:size-3"
         />
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
-        <p className="body-caption text-zinc-500">실시간 혼잡도정보</p>
+      {/* 화면설계서처럼 좌우로 꽉 찬 회색 띠에 담는다(시트 여백을 되돌려 끝까지 채운다). */}
+      <div className="-mx-4 mt-[12.5px] flex items-center justify-between border-y border-zinc-200 bg-zinc-50 px-4 py-1">
+        <p className="body-caption text-zinc-950">실시간 혼잡도정보</p>
         <div className="flex items-center gap-1">
           <span className="body-caption text-zinc-500">
             {formatRelativeTime(booth.congestionUpdatedAt)}
@@ -135,24 +113,28 @@ export function QueueUpdateSheet({
             variant="ghost"
             size="sm"
             aria-label="혼잡도 정보 새로고침"
-            icon={<ReloadIcon />}
-            iconClassName="text-zinc-500"
-            onClick={onUpdated}
+            icon={<UpdateIcon />}
+            // 눌러도 화면이 그대로면 먹은 건지 알 수 없어, 받아오는 동안 아이콘을 돌린다.
+            iconClassName={`text-zinc-500 ${refreshing || spinning ? "animate-spin" : ""}`}
+            disabled={refreshing || spinning}
+            onClick={() => {
+              setSpinning(true);
+              if (spinTimer.current) clearTimeout(spinTimer.current);
+              spinTimer.current = setTimeout(() => setSpinning(false), 700);
+              onUpdated();
+            }}
           />
         </div>
       </div>
 
-      <dl className="mt-2 flex flex-col gap-2">
+      <dl className="mt-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <dt className="body-small text-zinc-950">마지막 혼잡도 갱신자</dt>
-          <dd className="flex items-center gap-2">
-            {booth.lastQueueUpdater ? (
-              <>
-                <span className="body-small text-zinc-950">{booth.lastQueueUpdater.name}</span>
-                {booth.lastQueueUpdater.role === "STAFF" ? <StaffBadge /> : <AdminBadge />}
-              </>
+          <dt className="body-small text-zinc-950">혼잡도</dt>
+          <dd>
+            {booth.congestionLevel ? (
+              <CongestionText level={booth.congestionLevel} className="body-small-bold" />
             ) : (
-              <span className="body-small text-zinc-400">기록 없음</span>
+              <span className="body-small text-zinc-400">미입력</span>
             )}
           </dd>
         </div>
@@ -162,7 +144,7 @@ export function QueueUpdateSheet({
             {queue.lastModifierType ? (
               <>
                 {queue.lastModifierName ? (
-                  <span className="body-small text-zinc-950">{queue.lastModifierName}</span>
+                  <span className="body-small-bold text-zinc-950">{queue.lastModifierName}</span>
                 ) : null}
                 {queue.lastModifierType === "STAFF" ? <StaffBadge /> : <AdminBadge />}
               </>
@@ -174,120 +156,40 @@ export function QueueUpdateSheet({
       </dl>
 
       <form
-        className="mt-5 flex flex-col gap-5"
+        className="mt-6 flex items-center gap-3"
         onSubmit={(event) => {
           event.preventDefault();
-          if (congestionEdited && !congestionLevel) {
-            setValidationError("혼잡도를 선택해주세요.");
-            return;
-          }
-          if (congestionEdited && !hasValidWaitMinutes) {
-            setValidationError("예상 대기시간은 0 이상의 정수로 입력해주세요.");
-            return;
-          }
-          setValidationError("");
           updateMutation.mutate();
         }}
       >
-        <fieldset className="flex flex-col gap-2">
-          <legend className="body-small-bold text-zinc-950">줄 끝 위치</legend>
-          <p className="body-caption text-zinc-500">
+        <Button
+          type="button"
+          variant="outline"
+          className="min-w-0 flex-1 justify-start"
+          icon={<DrawingPinIcon />}
+          disabled={updateMutation.isPending}
+          onClick={() => setPickerOpen(true)}
+        >
+          <span className="truncate">
             {tailPoint
               ? tailMeters === null
-                ? pickedTail
-                  ? "지도에서 찍은 지점으로 갱신합니다."
-                  : `${selectedZone?.name} 구역 중심으로 갱신합니다.`
-                : pickedTail
-                  ? `지도에서 찍은 지점(부스에서 약 ${tailMeters}m)으로 갱신합니다.`
-                  : `${selectedZone?.name} 구역 중심(부스에서 약 ${tailMeters}m)으로 갱신합니다.`
-              : "고르지 않으면 줄 끝 위치는 그대로 둡니다."}
-          </p>
-          <Button
-            variant="outline"
-            className="w-full"
-            icon={<DrawingPinIcon />}
-            onClick={() => setPickerOpen(true)}
-          >
-            지도에서 줄 끝 찍기
-          </Button>
-          {zones.length > 0 ? (
-            <Select
-              value={zoneId}
-              onValueChange={(value) => {
-                setZoneId(value);
-                // 구역을 고르면 지도에서 찍은 지점 대신 그 구역 중심을 쓴다.
-                setPickedTail(null);
-              }}
-            >
-              <SelectTrigger className="h-10 w-full flex-row-reverse justify-end gap-2">
-                <SelectValue placeholder="구역으로 빠르게 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                {zones.map((zone) => (
-                  <SelectItem key={zone.zoneId} value={zone.zoneId}>
-                    {zone.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-        </fieldset>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="body-small-bold text-zinc-950">혼잡도</legend>
-          <p className="body-caption text-zinc-500">
-            줄 길이로 자동 환산된 값입니다. 바꾸면 직접 정한 값이 저장됩니다.
-          </p>
-          <div className="flex gap-2">
-            {CONGESTION_LEVELS.map((level) => {
-              const selected = congestionLevel === level;
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  aria-pressed={selected}
-                  className={`flex-1 rounded-md border py-2 body-small-bold transition-colors ${
-                    selected
-                      ? `border-transparent ${CONGESTION_SOLID_CLASSES[level]}`
-                      : "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-100"
-                  }`}
-                  onClick={() => {
-                    setCongestionLevel(level);
-                    setCongestionEdited(true);
-                    setValidationError("");
-                  }}
-                >
-                  {CONGESTION_LABEL[level]}
-                </button>
-              );
-            })}
-          </div>
-          <Input
-            label="예상 대기시간(분)"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1}
-            placeholder="0"
-            value={waitMinutes}
-            onChange={(event) => {
-              setWaitMinutes(event.target.value);
-              setCongestionEdited(true);
-              setValidationError("");
-            }}
-          />
-        </fieldset>
-
-        <Button type="submit" disabled={!canSubmit || updateMutation.isPending}>
-          {updateMutation.isPending ? "갱신 중..." : "갱신하기"}
+                ? "줄 끝 지점 선택함"
+                : `부스에서 약 ${tailMeters}m`
+              : "지도에서 줄 끝 찍기"}
+          </span>
+        </Button>
+        <Button
+          type="submit"
+          className="shrink-0"
+          disabled={!tailPoint || updateMutation.isPending}
+        >
+          {updateMutation.isPending ? "갱신 중..." : "줄끝 갱신하기"}
         </Button>
       </form>
 
-      {validationError ? <p className="body-caption mt-2 text-error">{validationError}</p> : null}
-
       {updateMutation.isError ? (
         <p className="body-caption mt-2 text-error">
-          {getApiErrorMessage(updateMutation.error, "현장 정보를 갱신하지 못했습니다.")}
+          {getApiErrorMessage(updateMutation.error, "줄끝 위치를 갱신하지 못했습니다.")}
         </p>
       ) : null}
 
@@ -305,8 +207,6 @@ export function QueueUpdateSheet({
           onCancel={() => setPickerOpen(false)}
           onConfirm={(point) => {
             setPickedTail(point);
-            // 지도에서 직접 찍은 지점이 구역 중심보다 우선한다.
-            setZoneId("");
             setPickerOpen(false);
           }}
         />

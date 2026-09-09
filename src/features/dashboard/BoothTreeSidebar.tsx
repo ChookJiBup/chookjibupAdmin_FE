@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDownIcon, ChevronRightIcon, TargetIcon } from "@radix-ui/react-icons";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  Crosshair2Icon,
+  DesktopIcon,
+} from "@radix-ui/react-icons";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
 import { cn } from "@/lib/utils";
@@ -26,12 +31,13 @@ function ZoneSection({
       onOpenChange={onOpenChange}
       className="border-b border-zinc-200 last:border-b-0"
     >
-      <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-lg px-2 py-3 text-left hover:bg-zinc-100">
+      <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-lg py-3 text-left hover:bg-zinc-100">
         {open ? (
           <ChevronDownIcon className="size-5 shrink-0 text-zinc-950" />
         ) : (
           <ChevronRightIcon className="size-5 shrink-0 text-zinc-950" />
         )}
+        <DesktopIcon className="size-4 shrink-0 text-primary" />
         <span className="body-regular-bold text-zinc-950">{zone.name}</span>
         <span className="body-regular-bold text-primary">{zone.booths.length}</span>
       </CollapsibleTrigger>
@@ -46,11 +52,11 @@ function ZoneSection({
                   type="button"
                   onClick={() => onSelectBooth(booth)}
                   className={cn(
-                    "flex w-full items-center gap-1.5 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-100",
+                    "flex w-full items-center gap-1.5 rounded-lg py-2.5 text-left hover:bg-zinc-100",
                     isSelected && "bg-zinc-100",
                   )}
                 >
-                  <TargetIcon className="size-4 shrink-0 text-primary" />
+                  <Crosshair2Icon className="size-4 shrink-0 text-primary" />
                   <span className="body-regular truncate text-zinc-950">{booth.name}</span>
                 </button>
               </li>
@@ -90,7 +96,7 @@ export function BoothZoneList({
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <p className="body-large-bold px-2 py-1.5 text-zinc-950">
+      <p className="body-large-bold py-1.5 text-zinc-950">
         {title} <span className="text-primary">{boothCount}</span>
       </p>
       {boothCount === 0 ? (

@@ -131,39 +131,23 @@ test("부스검색에서 고른 부스가 지도 화면 하단바에 반영된�
   await expect(page.getByText("체험 구역 > 솜사탕 부스")).toBeVisible();
 });
 
-test("줄끝 갱신 시트에서 혼잡도와 대기시간을 직접 정해 저장한다", async ({ page }) => {
+test("줄끝 갱신 시트는 자동 환산된 혼잡도를 보여주고 줄 끝은 지도에서 찍는다", async ({ page }) => {
   const requests = await mockStaffApis(page);
   await page.goto(`/staff/dashboard?boothId=1`);
 
   await page.getByRole("button", { name: "줄끝 갱신" }).click();
 
-  // 자동 환산값이 기본으로 채워져 있고, 마지막 갱신자도 남아 있다.
-  await expect(page.getByRole("button", { name: "혼잡", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByLabel("예상 대기시간(분)")).toHaveValue("30");
-  await expect(page.getByText("마지막 혼잡도 갱신자")).toBeVisible();
+  // 혼잡도·대기시간은 서버가 줄 끝 거리로 환산하므로 결과만 보여준다.
+  await expect(page.getByRole("button", { name: "여유", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("예상 대기시간(분)")).toHaveCount(0);
+  await expect(page.getByText("마지막 줄끝갱신자")).toBeVisible();
 
-  await page.getByRole("button", { name: "여유", exact: true }).click();
-  await page.getByLabel("예상 대기시간(분)").fill("5");
-  await page.getByRole("button", { name: "갱신하기" }).click();
+  // 줄 끝은 지도에서 찍는다. 찍기 전에는 갱신할 수 없다.
+  await expect(page.getByRole("button", { name: "지도에서 줄 끝 찍기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "줄끝 갱신하기" })).toBeDisabled();
 
-  await expect
-    .poll(() =>
-      requests
-        .filter((request) => request.method() === "PUT")
-        .map((request) => new URL(request.url()).pathname),
-    )
-    .toEqual([`/api/festivals/${festivalId}/booths/1/congestion`]);
-
-  const congestionRequest = requests.find((request) => request.method() === "PUT");
-  expect(congestionRequest?.postDataJSON()).toEqual({
-    waitMinutes: 5,
-    congestionLevel: "LOW",
-  });
-  // 혼잡도만 고쳤으므로 줄끝 갱신 요청은 나가지 않는다.
-  expect(requests.filter((request) => request.method() === "PATCH")).toEqual([]);
+  // 혼잡도는 서버가 계산하므로 프런트가 직접 보내지 않는다.
+  expect(requests.filter((request) => request.method() === "PUT")).toEqual([]);
 });
 
 /*

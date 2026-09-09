@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Cross2Icon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import { CrossCircledIcon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { Input } from "@/components/ui/Input";
 import { BoothZoneList } from "@/features/dashboard/BoothTreeSidebar";
 import { getApiErrorMessage } from "@/lib/api/httpError";
@@ -28,7 +28,7 @@ export function BoothSearchPanel() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 py-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <h1 className="heading-small text-zinc-950">부스 찾기</h1>
 
       <div className="relative">
@@ -37,7 +37,7 @@ export function BoothSearchPanel() {
           placeholder="부스명을 입력하세요"
           aria-label="부스명 검색"
           value={keyword}
-          className="pr-10"
+          className="px-3 py-2.5 pr-10"
           onChange={(event) => setKeyword(event.target.value)}
         />
         <span className="absolute top-1/2 right-3 -translate-y-1/2">
@@ -45,13 +45,13 @@ export function BoothSearchPanel() {
             <button
               type="button"
               aria-label="검색어 지우기"
-              className="text-zinc-500"
+              className="text-zinc-400"
               onClick={() => setKeyword("")}
             >
-              <Cross2Icon className="size-4" />
+              <CrossCircledIcon className="size-5" />
             </button>
           ) : (
-            <MagnifyingGlassIcon className="size-4 text-zinc-500" />
+            <MagnifyingGlassIcon className="size-5 text-zinc-600" />
           )}
         </span>
       </div>
@@ -70,18 +70,18 @@ export function BoothSearchPanel() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {trimmedKeyword ? (
             <>
-              <p className="body-large-bold px-2 py-1.5 text-zinc-950">
+              <p className="body-large-bold py-1.5 text-zinc-950">
                 검색결과 <span className="text-primary">{matched.length}</span>
               </p>
               {matched.length === 0 ? (
-                <p className="body-small px-2 py-4 text-zinc-500">검색 결과가 없습니다.</p>
+                <p className="body-small py-4 text-zinc-500">검색 결과가 없습니다.</p>
               ) : (
                 <ul className="flex flex-col">
                   {matched.map(({ booth, zoneName }) => (
                     <li key={booth.boothId} className="border-b border-zinc-200">
                       <button
                         type="button"
-                        className="flex w-full flex-col gap-0.5 px-2 py-3 text-left hover:bg-zinc-100"
+                        className="flex w-full flex-col gap-0.5 py-3 text-left hover:bg-zinc-100"
                         onClick={() => openBooth(booth.boothId)}
                       >
                         <span className="body-regular-bold text-zinc-950">{booth.name}</span>
