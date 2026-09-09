@@ -487,14 +487,22 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       const tools = mapToolsRef.current?.getBoundingClientRect();
       // 메뉴가 덮고 있는 부분을 제외한 지도 영역의 가운데에 선택한 핀을 둔다.
       const left = list?.width ? Math.max(0, list.right - bounds.left) : 0;
-      const right = tools?.width ? Math.min(bounds.width, tools.left - bounds.left) : bounds.width;
+      /*
+        좁은 화면에서는 버튼 줄이 지도 폭을 다 쓰므로 «버튼 줄 왼쪽»을 오른쪽 경계로
+        삼으면 남는 폭이 0이 된다. 그럴 땐 가로로는 비켜설 자리가 없으니 지도 전체를
+        쓴다(세로로 내려서 피한다).
+      */
+      const toolsLeft = tools?.width ? tools.left - bounds.left : bounds.width;
+      const right = toolsLeft > left ? Math.min(bounds.width, toolsLeft) : bounds.width;
       const targetX = (left + right) / 2;
       /*
         말풍선(높이 약 200px)이 대상 위쪽에 뜨므로, 화면이 낮으면 세로 가운데에 둬도
         상단 버튼 줄 밑으로 파고든다. 버튼 줄 아래에 말풍선이 들어갈 만큼은 내린다.
+        버튼 줄은 좁은 화면에서 두 줄로 접히므로 높이를 실제로 재서 쓴다 — 상수로 두면
+        접힌 만큼 말풍선이 버튼 아래로 파고들어 이름 입력칸이 가려진다.
       */
       const popoverRoom = 200;
-      const topBarBottom = 96;
+      const topBarBottom = tools ? Math.max(0, tools.bottom - bounds.top) : 96;
       const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
       const projection = kakaoMap.getProjection();
       const point = projection.containerPointFromCoords(

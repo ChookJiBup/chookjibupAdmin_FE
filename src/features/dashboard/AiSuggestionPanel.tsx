@@ -18,11 +18,16 @@ export function AiSuggestionPanel({
   if (suggestions.length === 0) return null;
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    /*
+      카드가 지도 위를 덮고 있어서 그 아래 부스 마커를 아예 누를 수 없었다. 카드 자체는
+      읽기만 하는 안내이므로 클릭을 통과시키고, 닫기 버튼만 눌리게 둔다.
+    */
+    <div className={cn("pointer-events-none flex flex-col gap-2", className)}>
       {suggestions.map((suggestion) => (
         <MapNoticeCard
           key={suggestion.id}
           className="w-full"
+          closeButtonClassName="pointer-events-auto"
           title={suggestion.title}
           description={suggestion.description}
           descriptionIcon={<ExclamationTriangleIcon className="size-4 text-zinc-950" />}

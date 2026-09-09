@@ -11,6 +11,8 @@ export interface MapNoticeCardProps {
   onClose: () => void;
   descriptionIcon?: ReactNode;
   className?: string;
+  /** 카드 전체를 클릭 통과로 둘 때, 닫기 버튼만 다시 눌리게 하는 데 쓴다. */
+  closeButtonClassName?: string;
 }
 
 /** 지도 위에 노출되는 안내·AI 제안 카드의 공통 셸. */
@@ -20,6 +22,7 @@ export function MapNoticeCard({
   onClose,
   descriptionIcon,
   className,
+  closeButtonClassName,
 }: MapNoticeCardProps) {
   return (
     <div
@@ -35,7 +38,7 @@ export function MapNoticeCard({
           icon={<Cross1Icon />}
           aria-label="안내 닫기"
           onClick={onClose}
-          className="-mt-1 -mr-1 shrink-0 text-zinc-500"
+          className={cn("-mt-1 -mr-1 shrink-0 text-zinc-500", closeButtonClassName)}
         />
       </div>
       <div className="mt-1 flex items-center gap-2.5">
