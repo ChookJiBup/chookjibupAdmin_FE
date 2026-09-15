@@ -181,3 +181,22 @@ test("지도 확대 버튼은 최대 확대 상태에서 비활성화된다", as
   await zoomOut.click();
   await expect(zoomIn).toBeEnabled();
 });
+
+test("줄 끝 선택 지도에서 확대 버튼을 누르고 지점을 지정할 수 있다", async ({ page }) => {
+  await mockStaffApis(page);
+  await page.goto("/staff/dashboard?boothId=1");
+  await page.getByRole("button", { name: "줄끝 갱신", exact: true }).click();
+  await page.getByRole("button", { name: "지도에서 줄 끝 찍기", exact: true }).click();
+  const picker = page
+    .locator("div.fixed")
+    .filter({ has: page.getByRole("button", { name: "줄 끝 선택 닫기" }) })
+    .last();
+  await expect(picker.locator(".leaflet-container")).toBeVisible();
+  const zoomOut = picker.getByRole("button", { name: "지도 축소", exact: true });
+  await zoomOut.click();
+  await expect(picker.getByRole("button", { name: "지도 확대", exact: true })).toBeEnabled();
+  await picker.locator(".leaflet-container").click({ position: { x: 150, y: 200 } });
+  await expect(picker.getByRole("img", { name: "선택한 줄 끝 위치" })).toBeVisible();
+  await picker.getByRole("button", { name: "이 지점으로 지정", exact: true }).click();
+  await expect(page.getByRole("button", { name: "줄끝 갱신하기", exact: true })).toBeEnabled();
+});

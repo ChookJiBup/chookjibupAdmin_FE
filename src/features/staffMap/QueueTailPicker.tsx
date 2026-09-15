@@ -140,7 +140,7 @@ function QueueTailMapArea({
       scrollWheelZoom={false}
       // 줄 끝을 찍을 때 기본 더블클릭 확대가 같이 걸리지 않게 한다.
       doubleClickZoom={false}
-      className="h-full w-full"
+      className="isolate h-full w-full"
       // 손가락으로 지도를 끈 뒤에는 Leaflet이 click을 보내지 않아, 끌기와 찍기가 섞이지 않는다.
       onClick={onPick}
     >

@@ -571,6 +571,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     return () => observer.disconnect();
   }, [selectedId, selectedShapeId, selectedLatitude, selectedLongitude, leafletMap, boothListOpen]);
 
+  // 자동 범위 맞춤·터치 확대 뒤에도 버튼은 실제 지도 배율에서 한 단계씩 움직인다.
+  useEffect(() => {
+    if (!leafletMap) return;
+    const syncZoom = () => setEditorZoom(leafletMap.getZoom());
+    leafletMap.on("zoomend", syncZoom);
+    return () => {
+      leafletMap.off("zoomend", syncZoom);
+    };
+  }, [leafletMap]);
+
   // 서버 데이터를 새로 받을 때마다(최초 진입, AI 분석 완료 등) 부스 전체가 보이도록
   // 한 번 맞춘다. 그 뒤로는 사용자가 옮기고 확대한 위치를 존중한다.
   // 지도는 상자 크기가 잡힌 뒤에 생기므로, 생기기 전에는 기다렸다가 생기면 맞춘다.
