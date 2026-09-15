@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { MapMetric } from "@/components/map/MapMetric";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getCurrentMap } from "@/features/boothmap/api";
-import { boothsToQueuePathItems } from "@/features/boothmap/QueuePathLayer";
+import { boothsToQueuePathItems } from "@/features/boothmap/queuePathItems";
 import { presentationBoundary, presentationOverlay } from "@/features/boothmap/mapPresentation";
 import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
 import type { NodeType } from "@/features/boothmap/types";
