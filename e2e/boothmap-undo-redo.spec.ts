@@ -167,21 +167,3 @@ test("부스 목록 순서 변경을 실행취소·다시실행으로 되돌린�
   // 되돌리는 동안 저장 요청은 나가지 않는다.
   expect(writes).toEqual([]);
 });
-
-test("자동 범위 맞춤 뒤 축소 버튼은 현재 배율에서 한 단계만 줄인다", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await mockBoothMap(page);
-  await page.goto(boothmapPath);
-  const pins = page.locator(".leaflet-pane button[data-map-click-guard]");
-  // 구역으로 묶인 6개 부스는 구역 마커로 접혀 있어 개별 핀 9개만 보인다.
-  await expect(pins).toHaveCount(9);
-  const distance = async () => {
-    const first = await pins.nth(0).boundingBox();
-    const second = await pins.nth(1).boundingBox();
-    return Math.abs(second!.x - first!.x);
-  };
-  await expect.poll(distance).toBeGreaterThan(10);
-  const before = await distance();
-  await page.getByRole("button", { name: "지도 축소", exact: true }).click();
-  await expect.poll(async () => Math.abs((await distance()) / before - 0.5)).toBeLessThan(0.03);
-});

@@ -1,21 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { Map, CustomOverlayMap, Polyline } from "react-kakao-maps-sdk";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
-import { LeafletMap } from "@/lib/map/LeafletMap";
-import { kakaoLevelToZoom } from "@/lib/map/mapConfig";
-import { MapOverlay } from "@/lib/map/MapOverlay";
-import { MapPolyline } from "@/lib/map/MapVectors";
+import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
 import { distanceInMeters } from "./utils";
 
-// 지도 레벨은 카카오 레벨 기준 `2 + zoomStep`이고 이 지도는 레벨 1~8만 허용한다.
-const MIN_LEVEL = 1;
-const MAX_LEVEL = 8;
-const MIN_ZOOM_STEP = MIN_LEVEL - 2;
-const MAX_ZOOM_STEP = MAX_LEVEL - 2;
+// 지도 레벨은 `2 + zoomStep`이고 이 지도는 레벨 1~8만 허용한다.
+const MIN_ZOOM_STEP = -1;
+const MAX_ZOOM_STEP = 6;
 
 function clampZoomStep(step: number) {
   return Math.min(Math.max(step, MIN_ZOOM_STEP), MAX_ZOOM_STEP);
@@ -52,10 +48,13 @@ export function QueueTailPicker({
   onCancel,
   onConfirm,
 }: QueueTailPickerProps) {
+  const [loading, error] = useKakaoMapLoader();
   const [tail, setTail] = useState<QueueTailPoint | null>(initialTail);
   const [zoomStep, setZoomStep] = useState(MIN_ZOOM_STEP);
 
   const meters = boothPoint && tail ? distanceInMeters(boothPoint, tail) : null;
+  // 지도가 뜨지 않으면 확대·축소 버튼도 눌러 봐야 소용없으므로 감춘다.
+  const mapReady = Boolean(process.env.NEXT_PUBLIC_KAKAO_MAP_KEY) && !error && !loading;
 
   return (
     // 스태프 화면은 402px 폭 안에서 동작하므로 그 폭에 맞춰 화면 전체를 덮는다.
@@ -76,19 +75,23 @@ export function QueueTailPicker({
 
       <div className="relative min-h-0 flex-1">
         <QueueTailMapArea
+          loading={loading}
+          error={error}
           center={center}
           zoomStep={zoomStep}
           boothPoint={boothPoint}
           tail={tail}
           onPick={setTail}
         />
-        <MapZoomControls
-          className="absolute top-5 left-5 z-10 [&_button]:size-9 [&_button]:shadow-md"
-          zoomInDisabled={zoomStep <= MIN_ZOOM_STEP}
-          zoomOutDisabled={zoomStep >= MAX_ZOOM_STEP}
-          onZoomIn={() => setZoomStep((step) => clampZoomStep(step - 1))}
-          onZoomOut={() => setZoomStep((step) => clampZoomStep(step + 1))}
-        />
+        {mapReady ? (
+          <MapZoomControls
+            className="absolute top-5 left-5 z-10 [&_button]:size-9 [&_button]:shadow-md"
+            zoomInDisabled={zoomStep <= MIN_ZOOM_STEP}
+            zoomOutDisabled={zoomStep >= MAX_ZOOM_STEP}
+            onZoomIn={() => setZoomStep((step) => clampZoomStep(step - 1))}
+            onZoomOut={() => setZoomStep((step) => clampZoomStep(step + 1))}
+          />
+        ) : null}
       </div>
 
       <div className="flex shrink-0 flex-col gap-3 border-t border-zinc-200 px-4 pt-3 pb-8">
@@ -119,33 +122,53 @@ export function QueueTailPicker({
 }
 
 function QueueTailMapArea({
+  loading,
+  error,
   center,
   zoomStep,
   boothPoint,
   tail,
   onPick,
 }: {
+  loading: boolean;
+  error: unknown;
   center: QueueTailPoint;
   zoomStep: number;
   boothPoint: QueueTailPoint | null;
   tail: QueueTailPoint | null;
   onPick: (point: QueueTailPoint) => void;
 }) {
+  if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY) {
+    return <QueueTailMapNotice message="NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다." error />;
+  }
+  if (error) {
+    return <QueueTailMapNotice message="카카오맵을 불러오지 못했습니다." error />;
+  }
+  if (loading) {
+    return <QueueTailMapNotice message="지도를 불러오는 중..." />;
+  }
+
   return (
-    <LeafletMap
+    <Map
       center={center}
-      zoom={kakaoLevelToZoom(2 + zoomStep)}
-      minZoom={kakaoLevelToZoom(MAX_LEVEL)}
-      maxZoom={kakaoLevelToZoom(MIN_LEVEL)}
-      scrollWheelZoom={false}
-      // 줄 끝을 찍을 때 기본 더블클릭 확대가 같이 걸리지 않게 한다.
-      doubleClickZoom={false}
-      className="isolate h-full w-full"
-      // 손가락으로 지도를 끈 뒤에는 Leaflet이 click을 보내지 않아, 끌기와 찍기가 섞이지 않는다.
-      onClick={onPick}
+      isPanto={false}
+      level={2 + zoomStep}
+      scrollwheel={false}
+      className="h-full w-full"
+      // 줄 끝을 찍을 때 카카오 기본 더블클릭 확대가 같이 걸리지 않게 한다.
+      disableDoubleClickZoom
+      onCreate={(map) => {
+        map.setMinLevel(1);
+        map.setMaxLevel(8);
+      }}
+      onClick={(_target, mouseEvent) => {
+        const latLng = mouseEvent.latLng;
+        if (!latLng) return;
+        onPick({ lat: latLng.getLat(), lng: latLng.getLng() });
+      }}
     >
       {boothPoint && tail ? (
-        <MapPolyline
+        <Polyline
           path={[boothPoint, tail]}
           strokeColor="#FD7E14"
           strokeWeight={4}
@@ -153,23 +176,31 @@ function QueueTailMapArea({
         />
       ) : null}
       {boothPoint ? (
-        <MapOverlay position={boothPoint} zIndex={10}>
+        <CustomOverlayMap position={boothPoint} zIndex={10}>
           <span
             role="img"
             aria-label="부스 위치"
             className="block size-3 rounded-full border border-white bg-zinc-950 shadow-sm"
           />
-        </MapOverlay>
+        </CustomOverlayMap>
       ) : null}
       {tail ? (
-        <MapOverlay position={tail} zIndex={20}>
+        <CustomOverlayMap position={tail} zIndex={20}>
           <span
             role="img"
             aria-label="선택한 줄 끝 위치"
             className="block size-4 rounded-full border-2 border-white bg-point-600 shadow-md"
           />
-        </MapOverlay>
+        </CustomOverlayMap>
       ) : null}
-    </LeafletMap>
+    </Map>
+  );
+}
+
+function QueueTailMapNotice({ message, error = false }: { message: string; error?: boolean }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-zinc-50 px-4 text-center">
+      <p className={error ? "body-small text-error" : "body-small text-zinc-500"}>{message}</p>
+    </div>
   );
 }
