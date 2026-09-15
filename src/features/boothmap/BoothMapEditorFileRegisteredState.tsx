@@ -3,7 +3,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomOverlayMap, Map as KakaoMap, Polygon, Polyline } from "react-kakao-maps-sdk";
+// leaflet은 import하는 순간 window를 읽어 서버 렌더링에서 죽으므로 타입만 가져온다.
+import type { LeafletMouseEvent, Map as LeafletMapInstance } from "leaflet";
 import {
   CheckCircledIcon,
   Cross2Icon,
@@ -18,7 +19,6 @@ import {
   RulerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { toast } from "sonner";
-import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -31,6 +31,15 @@ import { updateQueueTail } from "@/features/staffMap/api";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import { cn } from "@/lib/utils";
+import { LeafletMap } from "@/lib/map/LeafletMap";
+import { kakaoLevelToZoom, MAP_TILE_MAX_ZOOM } from "@/lib/map/mapConfig";
+import {
+  containerPointToLatLng,
+  fitMapBounds,
+  latLngToContainerPoint,
+} from "@/lib/map/mapGeometry";
+import { MapOverlay } from "@/lib/map/MapOverlay";
+import { MapPolygon, MapPolyline } from "@/lib/map/MapVectors";
 import {
   approveBooths,
   ensureCoordinateMap,
@@ -57,19 +66,19 @@ import {
   type LocalPamphletOverlay,
 } from "./mapPresentation";
 import { cornersFromAnchor } from "./overlayProjection";
-import { PamphletOverlay } from "./PamphletOverlay";
+import { LeafletPamphletOverlay } from "./LeafletPamphletOverlay";
 import {
   containsPoint,
   uniqueVertices,
   validateBoundary,
   withoutClosingDuplicate,
 } from "./polygonGeometry";
-import { boothsToQueuePathItems, QueuePathLayer } from "./QueuePathLayer";
+import { LeafletQueuePathLayer } from "./LeafletQueuePathLayer";
+import { boothsToQueuePathItems } from "./queuePathItems";
 import { MapAnalysisProgressCard } from "./MapAnalysisProgressCard";
 import { NODE_TYPE_LABEL, nodeTypeIcon, PIN_TYPE_OPTIONS } from "./nodeTypeIcons";
 import { buildZoneChanges } from "./zonePayload";
 import { MapInfoPopover } from "./MapInfoPopover";
-import { fitBoothBounds } from "./fitBoothBounds";
 import { primaryFestivalCenter } from "./mapCenter";
 import type { CreateCoordinateMapResponse, MapAnalysisStatusResponse, NodeType } from "./types";
 import { useEditHistory } from "./useEditHistory";
@@ -168,6 +177,30 @@ function applyPartitionedNodes(
 */
 const POPOVER_ANCHORS = { xAnchor: 0.5, yAnchor: 1.12 } as const;
 
+/** 편집기를 처음 열 때 확대 수준(Leaflet 줌). 카카오 레벨 2와 같다. */
+const EDITOR_DEFAULT_ZOOM = kakaoLevelToZoom(2);
+/** 지도를 가장 멀리 축소할 수 있는 줌. 카카오 레벨 8과 같다. */
+const EDITOR_MIN_ZOOM = kakaoLevelToZoom(8);
+/**
+ * 편집기에서 가장 가까이 확대할 수 있는 줌. 다른 지도(카카오 레벨 1 = 줌 19)보다 두 단계 더 연다.
+ * 바탕 타일은 줌 20까지만 실제 이미지가 있어(`MAP_TILE_MAX_NATIVE_ZOOM`) 21에서는 20 타일을
+ * 늘려 보여 준다. 타일 레이어의 maxZoom을 넘으면 바탕이 비므로 그 값을 넘지 않게 묶는다.
+ */
+const EDITOR_MAX_ZOOM = Math.min(21, MAP_TILE_MAX_ZOOM);
+/** 축소 버튼·Ctrl+휠로 내려갈 수 있는 한계. 카카오 때 zoomStep +4(레벨 6)와 같다. */
+const EDITOR_BUTTON_MIN_ZOOM = kakaoLevelToZoom(6);
+
+/**
+ * 카카오에서 clickable로 띄웠던 오버레이(핀·꼭짓점 손잡이) 표시. 이 안을 누르면 지도 클릭·더블클릭으로
+ * 치지 않는다. Leaflet `MapOverlay clickable`은 지도 끌기까지 막아, 카카오처럼 핀 위에서도 지도를
+ * 끌 수 있게(Space·잠금·핀 추가 모드) 클릭만 따로 거른다.
+ */
+const MAP_CLICK_GUARD_ATTRIBUTE = "data-map-click-guard";
+
+function isMapClickGuarded(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(`[${MAP_CLICK_GUARD_ATTRIBUTE}]`) !== null;
+}
+
 /** 지도에서 고를 수 있는 그리기 도구. 핀·폴리곤·라인은 노드, 경계·대기줄은 표시 설정이다. */
 type DrawTool = "select" | "pin" | "polygon" | "line" | "boundary" | "queue-line";
 
@@ -237,7 +270,7 @@ function shapeAnchor(shape: LocalMapShape) {
 }
 
 /**
- * 카카오맵에서 부스 핀을 찍고 구역을 묶는 편집 화면.
+ * 지도에서 부스 핀을 찍고 구역을 묶는 편집 화면.
  *
  * 배치도 이미지를 올리면 AI가 부스를 찾아 핀으로 뿌려주고(schema 2.0 위경도),
  * 관리자는 그 핀을 끌어 보정한다. 분석이 도는 동안에는 백엔드가 저장을 거부하므로
@@ -249,12 +282,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const setToastBelowActionBar = useConsoleUiStore((state) => state.setToastBelowActionBar);
-  const [zoomStep, setZoomStep] = useState(0);
+  /** 확대 버튼·Ctrl+휠이 정하는 Leaflet 줌. 값이 바뀔 때만 지도에 적용된다(카카오 level prop과 같다). */
+  const [editorZoom, setEditorZoom] = useState(EDITOR_DEFAULT_ZOOM);
   const [boothListOpen, setBoothListOpen] = useState(false);
   const [drawTool, setDrawTool] = useState<DrawTool>("select");
   const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
   const [pinTypeMenuOpen, setPinTypeMenuOpen] = useState(false);
-  const [mapLoading, mapError] = useKakaoMapLoader();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const boothListRef = useRef<HTMLDivElement>(null);
   const mapToolsRef = useRef<HTMLDivElement>(null);
@@ -263,8 +296,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
   const overlayFileInputRef = useRef<HTMLInputElement>(null);
   const localImageFiles = useRef(new Map<string, File>());
-  const kakaoMapRef = useRef<kakao.maps.Map | null>(null);
-  const [kakaoMap, setKakaoMap] = useState<kakao.maps.Map | null>(null);
+  /** 상자 크기가 잡힌 뒤에 들어온다. 그 전에는 null이라 쓰는 곳마다 확인한다. */
+  const [leafletMap, setLeafletMap] = useState<LeafletMapInstance | null>(null);
+  /**
+   * 마지막 누름의 지도 좌표. Leaflet은 도형(onClick 있는 폴리곤·라인)을 누르면 지도 click을 보내지
+   * 않지만, 카카오는 도형을 누를 때도 지도 클릭이 함께 일어났다. 'preclick'에서 좌표를 받아 두고
+   * 지도 click 또는 도형 onClick 쪽에서 한 번만 꺼내 쓴다.
+   */
+  const pendingMapClickRef = useRef<LatLng | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [unpublishDialogOpen, setUnpublishDialogOpen] = useState(false);
@@ -482,10 +521,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const selectedLongitude = selectedFocus?.lng;
   useEffect(() => {
     const wrapper = mapWrapperRef.current;
-    if (selectedLatitude == null || selectedLongitude == null || !kakaoMap || !wrapper) return;
+    if (selectedLatitude == null || selectedLongitude == null || !leafletMap || !wrapper) return;
 
     function centerSelectedBooth() {
-      if (!wrapper || !kakaoMap) return;
+      if (!wrapper || !leafletMap) return;
       const bounds = wrapper.getBoundingClientRect();
       const list = boothListRef.current?.getBoundingClientRect();
       const tools = mapToolsRef.current?.getBoundingClientRect();
@@ -512,18 +551,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       const popoverRoom = 200;
       const topBarBottom = topBar ? Math.max(0, topBar.bottom - bounds.top) : 96;
       const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
-      const projection = kakaoMap.getProjection();
-      const point = projection.containerPointFromCoords(
-        new window.kakao.maps.LatLng(selectedLatitude!, selectedLongitude!),
-      );
-      kakaoMap.panTo(
-        projection.coordsFromContainerPoint(
-          new window.kakao.maps.Point(
-            point.x + bounds.width / 2 - targetX,
-            point.y + bounds.height / 2 - targetY,
-          ),
-        ),
-      );
+      const point = latLngToContainerPoint(leafletMap, {
+        lat: selectedLatitude!,
+        lng: selectedLongitude!,
+      });
+      const target = containerPointToLatLng(leafletMap, {
+        x: point.x + bounds.width / 2 - targetX,
+        y: point.y + bounds.height / 2 - targetY,
+      });
+      leafletMap.panTo([target.lat, target.lng]);
     }
 
     centerSelectedBooth();
@@ -533,15 +569,17 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     // 버튼 줄이 좁은 화면에서 접히면 높이가 달라지므로 같이 지켜본다.
     if (topActionBarRef.current) observer.observe(topActionBarRef.current);
     return () => observer.disconnect();
-  }, [selectedId, selectedShapeId, selectedLatitude, selectedLongitude, kakaoMap, boothListOpen]);
+  }, [selectedId, selectedShapeId, selectedLatitude, selectedLongitude, leafletMap, boothListOpen]);
 
   // 서버 데이터를 새로 받을 때마다(최초 진입, AI 분석 완료 등) 부스 전체가 보이도록
   // 한 번 맞춘다. 그 뒤로는 사용자가 옮기고 확대한 위치를 존중한다.
-  const [fittedKey, setFittedKey] = useState<string | null>(null);
+  // 지도는 상자 크기가 잡힌 뒤에 생기므로, 생기기 전에는 기다렸다가 생기면 맞춘다.
+  // 맞춘 키는 화면에 그리지 않고 다시 맞출지만 가르므로 ref로 둔다(effect 안 setState로 렌더가 한 번 더 도는 것을 피한다).
+  const fittedKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!seededKey || fittedKey === seededKey || mapLoading) return;
-    if (fitBoothBounds(kakaoMapRef.current, booths)) setFittedKey(seededKey);
-  }, [fittedKey, seededKey, mapLoading, booths]);
+    if (!seededKey || fittedKeyRef.current === seededKey || !leafletMap) return;
+    if (fitMapBounds(leafletMap, booths)) fittedKeyRef.current = seededKey;
+  }, [seededKey, leafletMap, booths]);
   const pendingGroupMembers = useMemo(
     () => (groupPopoverOpen ? booths.filter((booth) => checkedIds.has(booth.id)) : []),
     [booths, checkedIds, groupPopoverOpen],
@@ -1058,9 +1096,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     const image = new Image();
     image.onload = () => {
       localImageFiles.current.set(url, file);
-      const center = kakaoMapRef.current?.getCenter();
-      const centerLatitude = center?.getLat() ?? mapCenter?.lat ?? 37.5;
-      const centerLongitude = center?.getLng() ?? mapCenter?.lng ?? 127;
+      const center = leafletMap?.getCenter();
+      const centerLatitude = center?.lat ?? mapCenter?.lat ?? 37.5;
+      const centerLongitude = center?.lng ?? mapCenter?.lng ?? 127;
       const anchor = {
         centerLatitude,
         centerLongitude,
@@ -1266,36 +1304,32 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   /**
    * 지도 위 핀을 끌어 위치를 옮긴다.
    *
-   * 카카오맵 CustomOverlay에는 마커 같은 draggable 옵션이 없어 포인터 이벤트로 직접 처리한다.
+   * 지도 위 오버레이에는 마커 같은 draggable 옵션이 없어 포인터 이벤트로 직접 처리한다.
    * 끄는 동안 지도가 같이 따라 움직이지 않도록 지도 드래그를 잠갔다가 손을 뗄 때 되돌린다.
+   * pointerdown이 Leaflet이 끌기를 시작하는 mousedown·touchstart보다 먼저 오므로 여기서 잠가도 늦지 않다.
    */
   function startPinDrag(booth: LocalBoothPin, event: React.PointerEvent<HTMLElement>) {
     // 핀 추가 모드에서는 지도 클릭이 곧 새 핀이라 이동을 받지 않는다.
     if (editingLocked || panOverride || drawTool === "pin" || event.button !== 0) return;
-    const map = kakaoMapRef.current;
-    const wrapper = mapWrapperRef.current;
-    if (!map || !wrapper || !window.kakao?.maps) return;
+    const map = leafletMap;
+    if (!map) return;
 
     event.preventDefault();
     event.stopPropagation();
     pinDraggedRef.current = false;
     pinDraggingRef.current = true;
     // 커서가 핀에 올라온 시점에 이미 잠갔지만, 터치처럼 hover 없이 바로 누르는 입력도 있다.
-    map.setDraggable(false);
+    map.dragging.disable();
 
     const coordsAt = (clientX: number, clientY: number) => {
-      const bounds = wrapper.getBoundingClientRect();
-      return map
-        .getProjection()
-        .coordsFromContainerPoint(
-          new window.kakao.maps.Point(clientX - bounds.left, clientY - bounds.top),
-        );
+      const bounds = map.getContainer().getBoundingClientRect();
+      return containerPointToLatLng(map, { x: clientX - bounds.left, y: clientY - bounds.top });
     };
 
     const handleMove = (moveEvent: PointerEvent) => {
       pinDraggedRef.current = true;
       const coords = coordsAt(moveEvent.clientX, moveEvent.clientY);
-      setDraggingPin({ id: booth.id, lat: coords.getLat(), lng: coords.getLng() });
+      setDraggingPin({ id: booth.id, lat: coords.lat, lng: coords.lng });
     };
     const handleUp = (upEvent: PointerEvent) => {
       window.removeEventListener("pointermove", handleMove);
@@ -1303,14 +1337,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       window.removeEventListener("pointercancel", handleUp);
       pinDraggingRef.current = false;
       // 손을 뗀 자리에 아직 핀이 있으면 잠금을 그대로 둔다 — 바로 다시 끌 수 있어야 한다.
-      if (!pinHoveredRef.current) map.setDraggable(true);
+      if (!pinHoveredRef.current) map.dragging.enable();
       setDraggingPin(null);
       // 움직이지 않았다면 그냥 클릭이다. 이어지는 click 핸들러가 핀을 선택한다.
       if (!pinDraggedRef.current) return;
       const coords = coordsAt(upEvent.clientX, upEvent.clientY);
       setBooths((prev) =>
         prev.map((item) =>
-          item.id === booth.id ? { ...item, lat: coords.getLat(), lng: coords.getLng() } : item,
+          item.id === booth.id ? { ...item, lat: coords.lat, lng: coords.lng } : item,
         ),
       );
     };
@@ -1328,30 +1362,25 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
    */
   function startVertexDrag(shape: LocalMapShape, index: number, event: React.PointerEvent) {
     if (editingLocked || drawTool !== "select" || event.button !== 0) return;
-    const map = kakaoMapRef.current;
-    const wrapper = mapWrapperRef.current;
-    if (!map || !wrapper || !window.kakao?.maps) return;
+    const map = leafletMap;
+    if (!map) return;
 
     event.preventDefault();
     event.stopPropagation();
     vertexDraggingRef.current = true;
-    map.setDraggable(false);
-    const bounds = wrapper.getBoundingClientRect();
+    map.dragging.disable();
+    const bounds = map.getContainer().getBoundingClientRect();
 
     const coordsAt = (clientX: number, clientY: number) =>
-      map
-        .getProjection()
-        .coordsFromContainerPoint(
-          new window.kakao.maps.Point(clientX - bounds.left, clientY - bounds.top),
-        );
+      containerPointToLatLng(map, { x: clientX - bounds.left, y: clientY - bounds.top });
 
     const handleMove = (moveEvent: PointerEvent) => {
       const coords = coordsAt(moveEvent.clientX, moveEvent.clientY);
       setDraggingVertex({
         shapeId: shape.id,
         index,
-        lat: coords.getLat(),
-        lng: coords.getLng(),
+        lat: coords.lat,
+        lng: coords.lng,
       });
     };
     const handleUp = (upEvent: PointerEvent) => {
@@ -1359,7 +1388,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleUp);
       vertexDraggingRef.current = false;
-      if (!vertexHoveredRef.current) map.setDraggable(true);
+      if (!vertexHoveredRef.current) map.dragging.enable();
       setDraggingVertex(null);
       const coords = coordsAt(upEvent.clientX, upEvent.clientY);
       setShapes((prev) =>
@@ -1368,7 +1397,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             ? {
                 ...item,
                 points: item.points.map((point, at) =>
-                  at === index ? { lat: coords.getLat(), lng: coords.getLng() } : point,
+                  at === index ? { lat: coords.lat, lng: coords.lng } : point,
                 ),
               }
             : item,
@@ -1532,11 +1561,120 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
       if (!(event.ctrlKey || event.metaKey)) return;
-      setZoomStep((step) => (event.deltaY > 0 ? Math.min(step + 1, 4) : Math.max(step - 1, -2)));
+      setEditorZoom((zoom) =>
+        event.deltaY > 0
+          ? Math.max(zoom - 1, EDITOR_BUTTON_MIN_ZOOM)
+          : Math.min(zoom + 1, EDITOR_MAX_ZOOM),
+      );
     };
     wrapper.addEventListener("wheel", handleWheel, { passive: false });
     return () => wrapper.removeEventListener("wheel", handleWheel);
-  }, [mapLoading, mapError]);
+    // 지도 상자는 로딩·안내 화면이 끝난 뒤에 생긴다. 지도가 생긴 시점이면 상자도 있으므로 그때 다시 건다.
+  }, [leafletMap]);
+
+  /*
+    지도 클릭·더블클릭. 카카오 Map의 onClick·onDoubleClick을 옮긴 것이다.
+    - 'preclick'은 도형 위를 눌러도 오므로 여기서 좌표를 받아 두고, 지도 'click'이나 도형 onClick
+      (handleShapeClick)에서 꺼내 쓴다. 끌고 난 뒤에는 Leaflet이 둘 다 보내지 않는다.
+    - 카카오에서 clickable이던 핀·꼭짓점 위 누름은 지도 클릭으로 치지 않는다.
+    - 카카오에 없던 Shift+끌기 영역 확대는 Shift+클릭(핀 다중 선택)과 겹치므로 끈다.
+  */
+  const mapClickHandlersRef = useRef<{
+    click: (point: LatLng) => void;
+    doubleClick: () => void;
+  }>({ click: () => {}, doubleClick: () => {} });
+  useEffect(() => {
+    mapClickHandlersRef.current = { click: handleMapClick, doubleClick: handleMapDoubleClick };
+  });
+  useEffect(() => {
+    if (!leafletMap) return;
+    leafletMap.boxZoom.disable();
+    const handlePreClick = (event: LeafletMouseEvent) => {
+      pendingMapClickRef.current = isMapClickGuarded(event.originalEvent.target)
+        ? null
+        : { lat: event.latlng.lat, lng: event.latlng.lng };
+    };
+    const handleClick = () => flushPendingMapClick();
+    const handleDoubleClick = (event: LeafletMouseEvent) => {
+      if (isMapClickGuarded(event.originalEvent.target)) return;
+      mapClickHandlersRef.current.doubleClick();
+    };
+    leafletMap.on("preclick", handlePreClick);
+    leafletMap.on("click", handleClick);
+    leafletMap.on("dblclick", handleDoubleClick);
+    return () => {
+      leafletMap.off("preclick", handlePreClick);
+      leafletMap.off("click", handleClick);
+      leafletMap.off("dblclick", handleDoubleClick);
+    };
+  }, [leafletMap]);
+
+  /** 받아 둔 지도 누름을 한 번만 처리한다. */
+  function flushPendingMapClick() {
+    const point = pendingMapClickRef.current;
+    pendingMapClickRef.current = null;
+    if (point) mapClickHandlersRef.current.click(point);
+  }
+
+  /**
+   * 도형(onClick 있는 폴리곤·라인)을 눌렀을 때. 카카오 도형은 clickable을 주지 않아 도형 클릭 뒤에
+   * 지도 클릭도 함께 일어났다(구역 안에 핀 찍기·도형 위에 꼭짓점 찍기가 이것에 기댄다).
+   * 도형 처리 뒤 같은 자리의 지도 클릭을 이어서 처리해 그 동작을 맞춘다.
+   */
+  function handleShapeClick(action: () => void) {
+    action();
+    flushPendingMapClick();
+  }
+
+  function handleMapClick(point: LatLng) {
+    if (editingLocked || panOverride) return;
+    if (drawTool === "pin") {
+      addBoothAt(point.lat, point.lng);
+      return;
+    }
+    if (drawTool === "polygon" || drawTool === "line") {
+      // 첫 꼭짓점을 다시 누르면 도형을 닫는다(더블클릭의 첫 번째 클릭도 여기서 걸린다).
+      if (closesDraft(draftPoints, point, SHAPE_MINIMUM_POINTS[drawTool])) {
+        finishDraftShape();
+        return;
+      }
+      if (isSamePlace(draftPoints[draftPoints.length - 1], point)) return;
+      addDraftPoint(point.lat, point.lng);
+      return;
+    }
+    if (drawTool === "boundary") {
+      if (closesDraft(boundaryDraft, point, 3)) {
+        finishBoundary();
+        return;
+      }
+      if (isSamePlace(boundaryDraft[boundaryDraft.length - 1], point)) return;
+      setBoundaryDraft((prev) => [...prev, point]);
+      return;
+    }
+    if (drawTool === "queue-line" && queueDraftId) {
+      if (isSamePlace(queueDraft[queueDraft.length - 1], point)) return;
+      setQueueDraft((prev) => [...prev, point]);
+    }
+  }
+
+  /*
+    화면설계서 FE-05: Enter 또는 첫 꼭짓점 근처 더블클릭으로 그리기를 끝낸다.
+    더블클릭은 클릭 두 번이 먼저 오므로, 같은 자리 중복 점은 위에서 걸러 둔다.
+  */
+  function handleMapDoubleClick() {
+    if (editingLocked || panOverride) return;
+    if (drawTool === "polygon" || drawTool === "line") {
+      finishDraftShape();
+      return;
+    }
+    if (drawTool === "boundary") {
+      finishBoundary();
+      return;
+    }
+    if (drawTool === "queue-line" && queueDraft.length >= 2) {
+      queueSaveMutation.mutate(queueDraft);
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1780,526 +1918,452 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-zinc-300">
-      {!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY || mapError || mapLoading ? (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="body-small text-zinc-600">
-            {!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY
-              ? "NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다."
-              : mapError
-                ? "카카오맵을 불러오지 못했습니다."
-                : "지도를 불러오는 중..."}
-          </p>
-        </div>
-      ) : (
-        <div
-          ref={mapWrapperRef}
-          className={cn("absolute inset-0 isolate", drawTool !== "select" && "cursor-crosshair")}
+      <div
+        ref={mapWrapperRef}
+        className={cn("absolute inset-0 isolate", drawTool !== "select" && "cursor-crosshair")}
+      >
+        <LeafletMap
+          center={mapCenter}
+          zoom={editorZoom}
+          minZoom={EDITOR_MIN_ZOOM}
+          maxZoom={EDITOR_MAX_ZOOM}
+          scrollWheelZoom={false}
+          /*
+            도형 그리기를 더블클릭으로 끝내는데, 기본 더블클릭 확대가 같이 걸려 그릴 때마다
+            지도가 한 단계씩 확대됐다. 확대는 오른쪽 아래 버튼으로 한다.
+          */
+          doubleClickZoom={false}
+          className="h-full w-full"
+          // 클릭·더블클릭은 핀·도형과의 순서를 맞추려고 onMapReady로 받은 지도에 직접 건다.
+          onMapReady={setLeafletMap}
         >
-          <KakaoMap
-            center={mapCenter}
-            isPanto={false}
-            level={2 + zoomStep}
-            scrollwheel={false}
-            /*
-              도형 그리기를 더블클릭으로 끝내는데, 카카오 기본 더블클릭 확대가 같이
-              걸려 그릴 때마다 지도가 한 단계씩 확대됐다. 확대는 오른쪽 아래 버튼으로
-              한다. 이 값은 지도 생성 때만 반영되므로 상수로 둔다.
-            */
-            disableDoubleClickZoom
-            className="h-full w-full"
-            onCreate={(map) => {
-              kakaoMapRef.current = map;
-              setKakaoMap(map);
-              map.setMinLevel(1);
-              map.setMaxLevel(8);
-            }}
-            onClick={(_target, mouseEvent) => {
-              if (editingLocked || panOverride) return;
-              const latLng = mouseEvent.latLng;
-              if (!latLng) return;
-              const point = { lat: latLng.getLat(), lng: latLng.getLng() };
-              if (drawTool === "pin") {
-                addBoothAt(point.lat, point.lng);
-                return;
-              }
-              if (drawTool === "polygon" || drawTool === "line") {
-                // 첫 꼭짓점을 다시 누르면 도형을 닫는다(더블클릭의 첫 번째 클릭도 여기서 걸린다).
-                if (closesDraft(draftPoints, point, SHAPE_MINIMUM_POINTS[drawTool])) {
-                  finishDraftShape();
-                  return;
-                }
-                if (isSamePlace(draftPoints[draftPoints.length - 1], point)) return;
-                addDraftPoint(point.lat, point.lng);
-                return;
-              }
-              if (drawTool === "boundary") {
-                if (closesDraft(boundaryDraft, point, 3)) {
-                  finishBoundary();
-                  return;
-                }
-                if (isSamePlace(boundaryDraft[boundaryDraft.length - 1], point)) return;
-                setBoundaryDraft((prev) => [...prev, point]);
-                return;
-              }
-              if (drawTool === "queue-line" && queueDraftId) {
-                if (isSamePlace(queueDraft[queueDraft.length - 1], point)) return;
-                setQueueDraft((prev) => [...prev, point]);
-              }
-            }}
-            /*
-              화면설계서 FE-05: Enter 또는 첫 꼭짓점 근처 더블클릭으로 그리기를 끝낸다.
-              더블클릭은 클릭 두 번이 먼저 오므로, 같은 자리 중복 점은 위에서 걸러 둔다.
-            */
-            onDoubleClick={() => {
-              if (editingLocked || panOverride) return;
-              if (drawTool === "polygon" || drawTool === "line") {
-                finishDraftShape();
-                return;
-              }
-              if (drawTool === "boundary") {
-                finishBoundary();
-                return;
-              }
-              if (drawTool === "queue-line" && queueDraft.length >= 2) {
-                queueSaveMutation.mutate(queueDraft);
-              }
-            }}
-          >
-            <PamphletOverlay
-              map={kakaoMap}
-              imageUrl={pamphlet?.imageUrl ?? null}
-              corners={pamphlet?.corners ?? null}
-              boundary={siteBoundary}
-              clipToBoundary={Boolean(pamphlet?.clipToBoundary && siteBoundary)}
-              opacity={pamphlet?.opacity ?? 0.7}
-              visible={Boolean(pamphlet?.visible)}
-              interactive
-              onImageError={() =>
-                toast.error("팜플렛 이미지를 표시하지 못했습니다. 핀과 경계는 그대로 둡니다.")
-              }
+          <LeafletPamphletOverlay
+            imageUrl={pamphlet?.imageUrl ?? null}
+            corners={pamphlet?.corners ?? null}
+            boundary={siteBoundary}
+            clipToBoundary={Boolean(pamphlet?.clipToBoundary && siteBoundary)}
+            opacity={pamphlet?.opacity ?? 0.7}
+            visible={Boolean(pamphlet?.visible)}
+            interactive
+            onImageError={() =>
+              toast.error("팜플렛 이미지를 표시하지 못했습니다. 핀과 경계는 그대로 둡니다.")
+            }
+          />
+          <LeafletQueuePathLayer queues={queuePathItems} />
+          {siteBoundary && siteBoundary.length >= 3 ? (
+            <MapPolygon
+              path={siteBoundary}
+              fillColor="#18181b"
+              fillOpacity={0.04}
+              strokeColor="#18181b"
+              strokeWeight={3}
+              strokeOpacity={0.9}
             />
-            <QueuePathLayer queues={queuePathItems} />
-            {siteBoundary && siteBoundary.length >= 3 ? (
-              <Polygon
-                path={siteBoundary}
-                fillColor="#18181b"
-                fillOpacity={0.04}
-                strokeColor="#18181b"
-                strokeWeight={3}
-                strokeOpacity={0.9}
-              />
-            ) : null}
-            {boundaryDraft.length >= 2 ? (
-              <Polyline
-                path={boundaryDraft}
-                strokeColor="#18181b"
+          ) : null}
+          {boundaryDraft.length >= 2 ? (
+            <MapPolyline
+              path={boundaryDraft}
+              strokeColor="#18181b"
+              strokeWeight={2}
+              strokeStyle="shortdash"
+            />
+          ) : null}
+          {pendingGroupMembers.length >= 2 ? (
+            <>
+              <MapPolygon
+                path={zonePolygonPath(pendingGroupMembers)}
+                fillColor="#236cf6"
+                fillOpacity={0.1}
+                strokeColor="#236cf6"
                 strokeWeight={2}
-                strokeStyle="shortdash"
+                strokeOpacity={0.8}
               />
-            ) : null}
-            {pendingGroupMembers.length >= 2 ? (
-              <>
-                <Polygon
-                  path={zonePolygonPath(pendingGroupMembers)}
-                  fillColor="#236cf6"
-                  fillOpacity={0.1}
-                  strokeColor="#236cf6"
-                  strokeWeight={2}
-                  strokeOpacity={0.8}
-                />
-                {zonePolygonPath(pendingGroupMembers).map((point, index) => (
-                  <CustomOverlayMap key={`pending-group-${index}`} position={point} zIndex={15}>
-                    <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
-                  </CustomOverlayMap>
-                ))}
-              </>
-            ) : null}
-            {standaloneZones
-              .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
-              .map((zone) => {
-                const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
-                if (members.length === 0) return null;
-                const path = zonePolygonPath(members);
-                return (
-                  <Fragment key={zone.id}>
-                    <Polygon
-                      path={path}
-                      fillColor="#236cf6"
-                      fillOpacity={0.1}
-                      strokeColor="#236cf6"
-                      strokeWeight={2}
-                      strokeOpacity={0.8}
-                      onClick={() => selectZone(zone.id)}
-                    />
-                    {path.map((point, index) => (
-                      <CustomOverlayMap key={`${zone.id}-${index}`} position={point} zIndex={15}>
-                        <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
-                      </CustomOverlayMap>
-                    ))}
-                  </Fragment>
-                );
-              })}
-            {shapes.map((shape) => {
-              const selected = shape.id === selectedShapeId;
-              const select = () => {
-                setSelectedShapeId(shape.id);
-                setEditingBoothId(null);
-              };
-              const path = shapePointsOf(shape);
-              return shape.kind === "polygon" ? (
-                <Polygon
-                  key={shape.id}
-                  path={path}
-                  fillColor="#236cf6"
-                  fillOpacity={selected ? 0.25 : 0.1}
-                  strokeColor="#236cf6"
-                  strokeWeight={selected ? 3 : 2}
-                  strokeOpacity={0.8}
-                  onClick={select}
-                />
-              ) : (
-                <Polyline
-                  key={shape.id}
-                  path={path}
-                  strokeColor="#236cf6"
-                  strokeWeight={selected ? 6 : 4}
-                  strokeOpacity={0.9}
-                  onClick={select}
-                />
+              {zonePolygonPath(pendingGroupMembers).map((point, index) => (
+                <MapOverlay key={`pending-group-${index}`} position={point} zIndex={15}>
+                  <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
+                </MapOverlay>
+              ))}
+            </>
+          ) : null}
+          {standaloneZones
+            .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
+            .map((zone) => {
+              const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
+              if (members.length === 0) return null;
+              const path = zonePolygonPath(members);
+              return (
+                <Fragment key={zone.id}>
+                  <MapPolygon
+                    path={path}
+                    fillColor="#236cf6"
+                    fillOpacity={0.1}
+                    strokeColor="#236cf6"
+                    strokeWeight={2}
+                    strokeOpacity={0.8}
+                    onClick={() => handleShapeClick(() => selectZone(zone.id))}
+                  />
+                  {path.map((point, index) => (
+                    <MapOverlay key={`${zone.id}-${index}`} position={point} zIndex={15}>
+                      <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
+                    </MapOverlay>
+                  ))}
+                </Fragment>
               );
             })}
-            {/*
-              고른 도형의 꼭짓점 손잡이. 끌면 모양이 바뀌고 Alt(또는 Shift)를 누른 채
-              누르면 그 점을 지운다. 그리는 중에는 새 점 찍기와 헷갈리므로 숨긴다.
-            */}
-            {selectedShape && !editingLocked && drawTool === "select"
-              ? shapePointsOf(selectedShape).map((point, index) => (
-                  <CustomOverlayMap
-                    key={`${selectedShape.id}-vertex-${index}`}
-                    position={point}
-                    clickable
-                    zIndex={25}
-                  >
-                    <button
-                      type="button"
-                      aria-label={`꼭짓점 ${index + 1}`}
-                      title="끌어서 이동 · Alt를 누른 채 누르면 삭제"
-                      onPointerEnter={() => {
-                        vertexHoveredRef.current = true;
-                        kakaoMapRef.current?.setDraggable(false);
-                      }}
-                      onPointerLeave={() => {
-                        vertexHoveredRef.current = false;
-                        if (!vertexDraggingRef.current) kakaoMapRef.current?.setDraggable(true);
-                      }}
-                      onPointerDown={(event) => {
-                        if (event.altKey || event.shiftKey) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          removeVertex(selectedShape, index);
-                          return;
-                        }
-                        startVertexDrag(selectedShape, index, event);
-                      }}
-                      className="flex size-6 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
-                    >
-                      <span className="block size-3 rounded-full border-2 border-primary bg-white shadow" />
-                    </button>
-                  </CustomOverlayMap>
-                ))
-              : null}
-            {/* 그리는 중인 도형 — 확정 전이라 점선으로 구분해 보여 준다. */}
-            {draftPoints.length >= 2 ? (
-              drawTool === "polygon" && draftPoints.length >= 3 ? (
-                <Polygon
-                  path={draftPoints}
-                  fillColor="#236cf6"
-                  fillOpacity={0.1}
-                  strokeColor="#236cf6"
-                  strokeWeight={2}
-                  strokeStyle="shortdash"
-                />
-              ) : (
-                <Polyline
-                  path={draftPoints}
-                  strokeColor="#236cf6"
-                  strokeWeight={3}
-                  strokeStyle="shortdash"
-                />
-              )
-            ) : null}
-            {draftPoints.map((point, index) => (
-              <CustomOverlayMap key={`draft-${index}`} position={point} zIndex={25}>
-                <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
-              </CustomOverlayMap>
-            ))}
-            {visibleBooths.map((booth) => {
-              const isSelected = booth.id === selectedId;
-              return (
-                <CustomOverlayMap
-                  key={booth.id}
-                  position={pinPositionOf(booth)}
-                  clickable
-                  zIndex={isSelected ? 20 : 10}
+          {shapes.map((shape) => {
+            const selected = shape.id === selectedShapeId;
+            const select = () =>
+              handleShapeClick(() => {
+                setSelectedShapeId(shape.id);
+                setEditingBoothId(null);
+              });
+            const path = shapePointsOf(shape);
+            return shape.kind === "polygon" ? (
+              <MapPolygon
+                key={shape.id}
+                path={path}
+                fillColor="#236cf6"
+                fillOpacity={selected ? 0.25 : 0.1}
+                strokeColor="#236cf6"
+                strokeWeight={selected ? 3 : 2}
+                strokeOpacity={0.8}
+                onClick={select}
+              />
+            ) : (
+              <MapPolyline
+                key={shape.id}
+                path={path}
+                strokeColor="#236cf6"
+                strokeWeight={selected ? 6 : 4}
+                strokeOpacity={0.9}
+                onClick={select}
+              />
+            );
+          })}
+          {/*
+            고른 도형의 꼭짓점 손잡이. 끌면 모양이 바뀌고 Alt(또는 Shift)를 누른 채
+            누르면 그 점을 지운다. 그리는 중에는 새 점 찍기와 헷갈리므로 숨긴다.
+          */}
+          {selectedShape && !editingLocked && drawTool === "select"
+            ? shapePointsOf(selectedShape).map((point, index) => (
+                <MapOverlay
+                  key={`${selectedShape.id}-vertex-${index}`}
+                  position={point}
+                  zIndex={25}
                 >
                   <button
                     type="button"
-                    title={editingLocked ? booth.name : `${booth.name} (끌어서 위치 이동)`}
-                    aria-label={booth.name}
-                    /*
-                      카카오맵은 지도 엘리먼트에서 네이티브 mousedown을 먼저 잡아 패닝을
-                      시작한다. React 핸들러는 그 뒤에 오므로 누른 다음 잠그면 이미 늦어
-                      핀과 지도가 함께 움직인다. 커서가 핀에 올라온 순간 미리 잠근다.
-                    */
+                    data-map-click-guard
+                    aria-label={`꼭짓점 ${index + 1}`}
+                    title="끌어서 이동 · Alt를 누른 채 누르면 삭제"
                     onPointerEnter={() => {
-                      pinHoveredRef.current = true;
-                      if (!editingLocked && !panOverride && drawTool !== "pin") {
-                        kakaoMapRef.current?.setDraggable(false);
-                      }
+                      vertexHoveredRef.current = true;
+                      leafletMap?.dragging.disable();
                     }}
                     onPointerLeave={() => {
-                      pinHoveredRef.current = false;
-                      if (!pinDraggingRef.current) kakaoMapRef.current?.setDraggable(true);
+                      vertexHoveredRef.current = false;
+                      if (!vertexDraggingRef.current) leafletMap?.dragging.enable();
                     }}
-                    onPointerDown={(event) => startPinDrag(booth, event)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      // 끌어서 옮긴 직후의 click은 선택이 아니다.
-                      if (pinDraggedRef.current) {
-                        pinDraggedRef.current = false;
+                    onPointerDown={(event) => {
+                      if (event.altKey || event.shiftKey) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        removeVertex(selectedShape, index);
                         return;
                       }
-                      if (isPanModifier(event)) {
-                        setSelectedZoneId(zoneIdByBoothId.get(booth.id) ?? null);
-                        setCheckedIds(new Set([booth.id]));
-                        setEditingBoothId(null);
-                        return;
-                      }
-                      if (event.shiftKey) {
-                        toggleChecked(booth.id);
-                        return;
-                      }
+                      startVertexDrag(selectedShape, index, event);
+                    }}
+                    className="flex size-6 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+                  >
+                    <span className="block size-3 rounded-full border-2 border-primary bg-white shadow" />
+                  </button>
+                </MapOverlay>
+              ))
+            : null}
+          {/* 그리는 중인 도형 — 확정 전이라 점선으로 구분해 보여 준다. */}
+          {draftPoints.length >= 2 ? (
+            drawTool === "polygon" && draftPoints.length >= 3 ? (
+              <MapPolygon
+                path={draftPoints}
+                fillColor="#236cf6"
+                fillOpacity={0.1}
+                strokeColor="#236cf6"
+                strokeWeight={2}
+                strokeStyle="shortdash"
+              />
+            ) : (
+              <MapPolyline
+                path={draftPoints}
+                strokeColor="#236cf6"
+                strokeWeight={3}
+                strokeStyle="shortdash"
+              />
+            )
+          ) : null}
+          {draftPoints.map((point, index) => (
+            <MapOverlay key={`draft-${index}`} position={point} zIndex={25}>
+              <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
+            </MapOverlay>
+          ))}
+          {visibleBooths.map((booth) => {
+            const isSelected = booth.id === selectedId;
+            return (
+              <MapOverlay
+                key={booth.id}
+                position={pinPositionOf(booth)}
+                zIndex={isSelected ? 20 : 10}
+              >
+                <button
+                  type="button"
+                  data-map-click-guard
+                  title={editingLocked ? booth.name : `${booth.name} (끌어서 위치 이동)`}
+                  aria-label={booth.name}
+                  /*
+                    지도는 핀 위에서 누른 것도 끌기로 받는다(잠금·Space·핀 추가 모드에서 핀 위에서도
+                    지도를 끌 수 있게 오버레이 clickable을 켜지 않았다). 그래서 핀을 끌 수 있는
+                    상태면 커서가 핀에 올라온 순간 지도 끌기를 미리 잠근다. 터치처럼 hover가 없는
+                    입력은 startPinDrag의 pointerdown에서 잠근다.
+                  */
+                  onPointerEnter={() => {
+                    pinHoveredRef.current = true;
+                    if (!editingLocked && !panOverride && drawTool !== "pin") {
+                      leafletMap?.dragging.disable();
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    pinHoveredRef.current = false;
+                    if (!pinDraggingRef.current) leafletMap?.dragging.enable();
+                  }}
+                  onPointerDown={(event) => startPinDrag(booth, event)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    // 끌어서 옮긴 직후의 click은 선택이 아니다.
+                    if (pinDraggedRef.current) {
+                      pinDraggedRef.current = false;
+                      return;
+                    }
+                    if (isPanModifier(event)) {
                       setSelectedZoneId(zoneIdByBoothId.get(booth.id) ?? null);
                       setCheckedIds(new Set([booth.id]));
-                      setEditingBoothId(booth.id);
-                      setBoothListOpen(false);
-                    }}
-                    /*
-                      아이콘을 넣으면서 히트 영역을 넉넉히 잡는다(28px). 점(12px)만 할 때는
-                      살짝만 빗나가도 지도 클릭으로 새어 핀 대신 지도가 움직였다.
-                    */
-                    className={cn(
-                      "relative flex size-7 touch-none items-center justify-center",
-                      editingLocked || drawTool === "pin"
-                        ? "cursor-default"
-                        : draggingPin?.id === booth.id
-                          ? "cursor-grabbing"
-                          : "cursor-grab",
-                    )}
-                  >
-                    {/*
-                      부스는 지도에 가장 많이 찍히는 유형이라 원래대로 점으로 둔다.
-                      화장실·입구·출구·시설만 아이콘으로 구분한다 — 부스와 섞였을 때
-                      무엇인지 알 수 없던 것이 문제였지 부스 자체는 아니었다.
-                      AI가 찾아 검수가 필요한 핀은 유형과 상관없이 색으로 구분한다.
-                    */}
-                    {booth.nodeType === "BOOTH" ? (
-                      <>
-                        {isSelected ? (
-                          <span className="absolute size-3 rounded-full bg-point-600/25" />
-                        ) : null}
-                        <span
-                          className={cn(
-                            "relative rounded-full",
-                            isSelected ? "size-1" : "size-3 shadow-sm",
-                            booth.uncertain ? "bg-secondary-600" : "bg-point-600",
-                          )}
-                        />
-                      </>
-                    ) : (
+                      setEditingBoothId(null);
+                      return;
+                    }
+                    if (event.shiftKey) {
+                      toggleChecked(booth.id);
+                      return;
+                    }
+                    setSelectedZoneId(zoneIdByBoothId.get(booth.id) ?? null);
+                    setCheckedIds(new Set([booth.id]));
+                    setEditingBoothId(booth.id);
+                    setBoothListOpen(false);
+                  }}
+                  /*
+                    아이콘을 넣으면서 히트 영역을 넉넉히 잡는다(28px). 점(12px)만 할 때는
+                    살짝만 빗나가도 지도 클릭으로 새어 핀 대신 지도가 움직였다.
+                  */
+                  className={cn(
+                    "relative flex size-7 touch-none items-center justify-center",
+                    editingLocked || drawTool === "pin"
+                      ? "cursor-default"
+                      : draggingPin?.id === booth.id
+                        ? "cursor-grabbing"
+                        : "cursor-grab",
+                  )}
+                >
+                  {/*
+                    부스는 지도에 가장 많이 찍히는 유형이라 원래대로 점으로 둔다.
+                    화장실·입구·출구·시설만 아이콘으로 구분한다 — 부스와 섞였을 때
+                    무엇인지 알 수 없던 것이 문제였지 부스 자체는 아니었다.
+                    AI가 찾아 검수가 필요한 핀은 유형과 상관없이 색으로 구분한다.
+                  */}
+                  {booth.nodeType === "BOOTH" ? (
+                    <>
+                      {isSelected ? (
+                        <span className="absolute size-3 rounded-full bg-point-600/25" />
+                      ) : null}
                       <span
                         className={cn(
-                          "relative flex size-5 items-center justify-center rounded-full border border-white text-white shadow-sm [&_svg]:size-3",
+                          "relative rounded-full",
+                          isSelected ? "size-1" : "size-3 shadow-sm",
                           booth.uncertain ? "bg-secondary-600" : "bg-point-600",
-                          isSelected && "ring-2 ring-point-600/40",
                         )}
-                      >
-                        {nodeTypeIcon(booth.nodeType)}
-                      </span>
-                    )}
-                  </button>
-                </CustomOverlayMap>
-              );
-            })}
-            {/*
-              그리기 도구를 켜면 말풍선은 접는다. 대기줄처럼 부스를 고른 뒤 쓰는 도구는
-              선택을 그대로 둬야 하는데, 말풍선까지 떠 있으면 그릴 자리를 가린다.
-            */}
-            {selectedBooth && !editingLocked && drawTool === "select" ? (
-              <CustomOverlayMap
-                position={pinPositionOf(selectedBooth)}
-                {...POPOVER_ANCHORS}
-                zIndex={30}
-              >
-                <MapInfoPopover
-                  mode="booth-edit"
-                  style={{ position: "static" }}
-                  initialName={selectedBooth.name}
-                  typeLabel={NODE_TYPE_LABEL[selectedBooth.nodeType] ?? "시설"}
-                  parentZoneName={selectedBoothParentName}
-                  confirmLabel={selectedBooth.isNew ? "등록" : "수정"}
-                  hideCancel
-                  onChangeNodeType={(nodeType) => changePinNodeType(selectedBooth, nodeType)}
-                  onConfirm={(name) => {
-                    setBooths((prev) =>
-                      prev.map((booth) =>
-                        booth.id === selectedBooth.id ? { ...booth, name, isNew: false } : booth,
-                      ),
-                    );
-                    setCheckedIds(new Set());
-                    setEditingBoothId(null);
-                    setSelectedZoneId(null);
-                  }}
-                  onCancel={() => {
-                    setCheckedIds(new Set());
-                    setEditingBoothId(null);
-                    setSelectedZoneId(null);
-                  }}
-                  onDelete={() => {
-                    if (selectedBooth.nodeId) {
-                      setDeletedNodeIds((prev) => [...prev, selectedBooth.nodeId!]);
-                    }
-                    setBooths((prev) => prev.filter((booth) => booth.id !== selectedBooth.id));
-                    setZones((prev) =>
-                      prev
-                        .map((zone) => ({
-                          ...zone,
-                          boothIds: zone.boothIds.filter((id) => id !== selectedBooth.id),
-                        }))
-                        .filter((zone) => zone.boothIds.length > 0),
-                    );
-                    setCheckedIds(new Set());
-                    setEditingBoothId(null);
-                    setSelectedZoneId(null);
-                  }}
-                />
-              </CustomOverlayMap>
-            ) : null}
-            {selectedShape && !editingLocked && drawTool === "select" ? (
-              <CustomOverlayMap
-                position={shapeAnchor({ ...selectedShape, points: shapePointsOf(selectedShape) })}
-                {...POPOVER_ANCHORS}
-                zIndex={30}
-              >
-                <MapInfoPopover
-                  mode="booth-edit"
-                  style={{ position: "static" }}
-                  initialName={selectedShape.name}
-                  typeLabel={SHAPE_LABEL[selectedShape.kind]}
-                  onChangeNodeType={(nodeType) => changeShapeNodeType(selectedShape, nodeType)}
-                  confirmLabel={selectedShape.isNew ? "등록" : "수정"}
-                  hideCancel
-                  onConfirm={(name) => {
-                    setShapes((prev) =>
-                      prev.map((shape) =>
-                        shape.id === selectedShape.id ? { ...shape, name, isNew: false } : shape,
-                      ),
-                    );
-                    setSelectedShapeId(null);
-                    // 도형 편집은 아직 초안이다. 저장하기를 눌러야 서버로 간다.
-                    toast.success(`${name}을(를) 반영했습니다.`, {
-                      description: "저장하기를 눌러야 서버에 반영됩니다.",
-                    });
-                  }}
-                  onCancel={() => setSelectedShapeId(null)}
-                  onDelete={() => deleteShape(selectedShape.id)}
-                />
-              </CustomOverlayMap>
-            ) : null}
-            {groupPopoverOpen
-              ? (() => {
-                  if (pendingGroupMembers.length < 2) return null;
-                  return (
-                    <CustomOverlayMap
-                      position={centroidOf(pendingGroupMembers)}
-                      {...POPOVER_ANCHORS}
-                      zIndex={30}
-                    >
-                      <MapInfoPopover
-                        mode="group-create"
-                        style={{ position: "static" }}
-                        initialName="새 구역"
-                        confirmLabel="등록"
-                        hideCancel
-                        onConfirm={(name) => {
-                          const zone: LocalZone = {
-                            id: createZoneId(),
-                            name,
-                            // 부스가 아닌 노드가 섞이면 저장이 통째로 거부된다.
-                            boothIds: booths
-                              .filter(
-                                (booth) => checkedIds.has(booth.id) && booth.nodeType === "BOOTH",
-                              )
-                              .map((booth) => booth.id),
-                          };
-                          setZones((prev) => [...prev, zone]);
-                          setExpandedZoneIds((prev) => new Set(prev).add(zone.id));
-                          setSelectedZoneId(zone.id);
-                          setCheckedIds(new Set());
-                          setGroupPopoverOpen(false);
-                        }}
-                        onCancel={() => setGroupPopoverOpen(false)}
-                        onDelete={() => setGroupPopoverOpen(false)}
-                        onChangeType={(type) =>
-                          toast.info(
-                            `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
-                          )
-                        }
                       />
-                    </CustomOverlayMap>
+                    </>
+                  ) : (
+                    <span
+                      className={cn(
+                        "relative flex size-5 items-center justify-center rounded-full border border-white text-white shadow-sm [&_svg]:size-3",
+                        booth.uncertain ? "bg-secondary-600" : "bg-point-600",
+                        isSelected && "ring-2 ring-point-600/40",
+                      )}
+                    >
+                      {nodeTypeIcon(booth.nodeType)}
+                    </span>
+                  )}
+                </button>
+              </MapOverlay>
+            );
+          })}
+          {/*
+            그리기 도구를 켜면 말풍선은 접는다. 대기줄처럼 부스를 고른 뒤 쓰는 도구는
+            선택을 그대로 둬야 하는데, 말풍선까지 떠 있으면 그릴 자리를 가린다.
+          */}
+          {selectedBooth && !editingLocked && drawTool === "select" ? (
+            <MapOverlay position={pinPositionOf(selectedBooth)} {...POPOVER_ANCHORS} zIndex={30}>
+              <MapInfoPopover
+                mode="booth-edit"
+                style={{ position: "static" }}
+                initialName={selectedBooth.name}
+                typeLabel={NODE_TYPE_LABEL[selectedBooth.nodeType] ?? "시설"}
+                parentZoneName={selectedBoothParentName}
+                confirmLabel={selectedBooth.isNew ? "등록" : "수정"}
+                hideCancel
+                onChangeNodeType={(nodeType) => changePinNodeType(selectedBooth, nodeType)}
+                onConfirm={(name) => {
+                  setBooths((prev) =>
+                    prev.map((booth) =>
+                      booth.id === selectedBooth.id ? { ...booth, name, isNew: false } : booth,
+                    ),
                   );
-                })()
-              : null}
-            {selectedZone &&
-            !selectedBooth &&
-            !selectedShape &&
-            !editingLocked &&
-            checkedIds.size === 0 &&
-            selectedZoneMembers.length > 0 ? (
-              <CustomOverlayMap
-                position={centroidOf(selectedZoneMembers)}
-                {...POPOVER_ANCHORS}
-                zIndex={30}
-              >
-                <MapInfoPopover
-                  mode="zone-edit"
-                  style={{ position: "static" }}
-                  initialName={selectedZone.name}
-                  confirmLabel="수정"
-                  hideCancel
-                  onChangeType={(type) =>
-                    toast.info(
-                      `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
-                      { description: "화면 레이아웃만 우선 구현된 상태입니다." },
-                    )
+                  setCheckedIds(new Set());
+                  setEditingBoothId(null);
+                  setSelectedZoneId(null);
+                }}
+                onCancel={() => {
+                  setCheckedIds(new Set());
+                  setEditingBoothId(null);
+                  setSelectedZoneId(null);
+                }}
+                onDelete={() => {
+                  if (selectedBooth.nodeId) {
+                    setDeletedNodeIds((prev) => [...prev, selectedBooth.nodeId!]);
                   }
-                  onConfirm={(name) => {
-                    setZones((prev) =>
-                      prev.map((zone) => (zone.id === selectedZone.id ? { ...zone, name } : zone)),
-                    );
-                    setSelectedZoneId(null);
-                  }}
-                  onCancel={() => setSelectedZoneId(null)}
-                  onDelete={() => {
-                    setZones((prev) => prev.filter((zone) => zone.id !== selectedZone.id));
-                    setSelectedZoneId(null);
-                  }}
-                />
-              </CustomOverlayMap>
-            ) : null}
-          </KakaoMap>
-        </div>
-      )}
+                  setBooths((prev) => prev.filter((booth) => booth.id !== selectedBooth.id));
+                  setZones((prev) =>
+                    prev
+                      .map((zone) => ({
+                        ...zone,
+                        boothIds: zone.boothIds.filter((id) => id !== selectedBooth.id),
+                      }))
+                      .filter((zone) => zone.boothIds.length > 0),
+                  );
+                  setCheckedIds(new Set());
+                  setEditingBoothId(null);
+                  setSelectedZoneId(null);
+                }}
+              />
+            </MapOverlay>
+          ) : null}
+          {selectedShape && !editingLocked && drawTool === "select" ? (
+            <MapOverlay
+              position={shapeAnchor({ ...selectedShape, points: shapePointsOf(selectedShape) })}
+              {...POPOVER_ANCHORS}
+              zIndex={30}
+            >
+              <MapInfoPopover
+                mode="booth-edit"
+                style={{ position: "static" }}
+                initialName={selectedShape.name}
+                typeLabel={SHAPE_LABEL[selectedShape.kind]}
+                onChangeNodeType={(nodeType) => changeShapeNodeType(selectedShape, nodeType)}
+                confirmLabel={selectedShape.isNew ? "등록" : "수정"}
+                hideCancel
+                onConfirm={(name) => {
+                  setShapes((prev) =>
+                    prev.map((shape) =>
+                      shape.id === selectedShape.id ? { ...shape, name, isNew: false } : shape,
+                    ),
+                  );
+                  setSelectedShapeId(null);
+                  // 도형 편집은 아직 초안이다. 저장하기를 눌러야 서버로 간다.
+                  toast.success(`${name}을(를) 반영했습니다.`, {
+                    description: "저장하기를 눌러야 서버에 반영됩니다.",
+                  });
+                }}
+                onCancel={() => setSelectedShapeId(null)}
+                onDelete={() => deleteShape(selectedShape.id)}
+              />
+            </MapOverlay>
+          ) : null}
+          {groupPopoverOpen
+            ? (() => {
+                if (pendingGroupMembers.length < 2) return null;
+                return (
+                  <MapOverlay
+                    position={centroidOf(pendingGroupMembers)}
+                    {...POPOVER_ANCHORS}
+                    zIndex={30}
+                  >
+                    <MapInfoPopover
+                      mode="group-create"
+                      style={{ position: "static" }}
+                      initialName="새 구역"
+                      confirmLabel="등록"
+                      hideCancel
+                      onConfirm={(name) => {
+                        const zone: LocalZone = {
+                          id: createZoneId(),
+                          name,
+                          // 부스가 아닌 노드가 섞이면 저장이 통째로 거부된다.
+                          boothIds: booths
+                            .filter(
+                              (booth) => checkedIds.has(booth.id) && booth.nodeType === "BOOTH",
+                            )
+                            .map((booth) => booth.id),
+                        };
+                        setZones((prev) => [...prev, zone]);
+                        setExpandedZoneIds((prev) => new Set(prev).add(zone.id));
+                        setSelectedZoneId(zone.id);
+                        setCheckedIds(new Set());
+                        setGroupPopoverOpen(false);
+                      }}
+                      onCancel={() => setGroupPopoverOpen(false)}
+                      onDelete={() => setGroupPopoverOpen(false)}
+                      onChangeType={(type) =>
+                        toast.info(
+                          `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
+                        )
+                      }
+                    />
+                  </MapOverlay>
+                );
+              })()
+            : null}
+          {selectedZone &&
+          !selectedBooth &&
+          !selectedShape &&
+          !editingLocked &&
+          checkedIds.size === 0 &&
+          selectedZoneMembers.length > 0 ? (
+            <MapOverlay position={centroidOf(selectedZoneMembers)} {...POPOVER_ANCHORS} zIndex={30}>
+              <MapInfoPopover
+                mode="zone-edit"
+                style={{ position: "static" }}
+                initialName={selectedZone.name}
+                confirmLabel="수정"
+                hideCancel
+                onChangeType={(type) =>
+                  toast.info(
+                    `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
+                    { description: "화면 레이아웃만 우선 구현된 상태입니다." },
+                  )
+                }
+                onConfirm={(name) => {
+                  setZones((prev) =>
+                    prev.map((zone) => (zone.id === selectedZone.id ? { ...zone, name } : zone)),
+                  );
+                  setSelectedZoneId(null);
+                }}
+                onCancel={() => setSelectedZoneId(null)}
+                onDelete={() => {
+                  setZones((prev) => prev.filter((zone) => zone.id !== selectedZone.id));
+                  setSelectedZoneId(null);
+                }}
+              />
+            </MapOverlay>
+          ) : null}
+        </LeafletMap>
+      </div>
 
       {/*
         분석 안내와 팜플렛 배치 패널은 부스 목록 오른쪽 위 같은 자리를 쓴다. 각자
@@ -2447,9 +2511,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     setEditingBoothId(null);
                     setSelectedShapeId(shape.id);
                     const anchor = shapeAnchor(shape);
-                    kakaoMapRef.current?.panTo(
-                      new window.kakao.maps.LatLng(anchor.lat, anchor.lng),
-                    );
+                    leafletMap?.panTo([anchor.lat, anchor.lng]);
                   }}
                   className={cn(
                     "flex items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-zinc-100",
@@ -2697,8 +2759,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </span>
         </div>
         <MapZoomControls
-          onZoomIn={() => setZoomStep((step) => Math.max(step - 1, -2))}
-          onZoomOut={() => setZoomStep((step) => Math.min(step + 1, 4))}
+          onZoomIn={() => setEditorZoom((zoom) => Math.min(zoom + 1, EDITOR_MAX_ZOOM))}
+          onZoomOut={() => setEditorZoom((zoom) => Math.max(zoom - 1, EDITOR_BUTTON_MIN_ZOOM))}
         />
       </div>
 
@@ -2818,11 +2880,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             type="button"
             variant="outline"
             onClick={() => {
-              const center = kakaoMap?.getCenter();
+              const center = leafletMap?.getCenter();
               if (center)
                 updatePamphletAnchor({
-                  centerLatitude: center.getLat(),
-                  centerLongitude: center.getLng(),
+                  centerLatitude: center.lat,
+                  centerLongitude: center.lng,
                 });
             }}
           >
