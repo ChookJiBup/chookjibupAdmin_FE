@@ -4,9 +4,10 @@ import { Pencil1Icon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { CustomOverlayMap, Map } from "react-kakao-maps-sdk";
 import { toast } from "sonner";
-import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
+import { LeafletMap } from "@/lib/map/LeafletMap";
+import { kakaoLevelToZoom } from "@/lib/map/mapConfig";
+import { MapOverlay } from "@/lib/map/MapOverlay";
 import { Bottombar } from "@/components/ui/Bottombar";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -357,7 +358,6 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
 }
 
 function FestivalLocationMap({ locations }: { locations: FestivalLocationResponse[] | undefined }) {
-  const [loading, error] = useKakaoMapLoader();
   const center = useMemo(() => primaryFestivalCenter(locations), [locations]);
 
   if (!center) {
@@ -368,25 +368,18 @@ function FestivalLocationMap({ locations }: { locations: FestivalLocationRespons
     );
   }
 
-  if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY || error || loading) {
-    return (
-      <div className="flex h-full min-h-[360px] xl:min-h-[calc(100vh-252px)] items-center justify-center">
-        <p className="body-small text-zinc-500">
-          {!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY
-            ? "NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다."
-            : error
-              ? "카카오맵을 불러오지 못했습니다."
-              : "지도를 불러오는 중..."}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <Map center={center} isPanto={false} level={2} className="absolute inset-0">
-      <CustomOverlayMap position={center}>
+    <LeafletMap
+      center={center}
+      zoom={kakaoLevelToZoom(2)}
+      // 카카오 지도 기본 확대 범위(레벨 1~14)를 그대로 옮긴다.
+      minZoom={kakaoLevelToZoom(14)}
+      maxZoom={kakaoLevelToZoom(1)}
+      className="absolute inset-0"
+    >
+      <MapOverlay position={center}>
         <span aria-label="축제 위치" className="block size-3 rounded-full bg-point-600 shadow-sm" />
-      </CustomOverlayMap>
-    </Map>
+      </MapOverlay>
+    </LeafletMap>
   );
 }

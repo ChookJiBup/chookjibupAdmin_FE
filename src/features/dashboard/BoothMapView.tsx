@@ -1,18 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Map, CustomOverlayMap, Polygon } from "react-kakao-maps-sdk";
+import type { Map as LeafletMapInstance } from "leaflet";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { IconButton } from "@/components/ui/IconButton";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
-import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
-import { PamphletOverlay } from "@/features/boothmap/PamphletOverlay";
-import { QueuePathLayer, type QueuePathItem } from "@/features/boothmap/QueuePathLayer";
+import { LeafletMap } from "@/lib/map/LeafletMap";
+import { kakaoLevelToZoom } from "@/lib/map/mapConfig";
+import { MapOverlay } from "@/lib/map/MapOverlay";
+import { MapPolygon } from "@/lib/map/MapVectors";
+import { LeafletPamphletOverlay } from "@/features/boothmap/LeafletPamphletOverlay";
+import { LeafletQueuePathLayer } from "@/features/boothmap/LeafletQueuePathLayer";
+import type { QueuePathItem } from "@/features/boothmap/queuePathItems";
 import { nodeTypeIcon, nodeTypeLabel } from "@/features/boothmap/nodeTypeIcons";
 import type { LocalPamphletOverlay } from "@/features/boothmap/mapPresentation";
 import type { LatLng } from "@/features/boothmap/latLng";
 import type { Booth, CongestionLevel, FacilityMarker } from "./types";
+
+/** 가장 멀리 축소할 수 있는 카카오 레벨. */
+const MAX_LEVEL = 8;
 
 /**
  * 부스가 아닌 핀에 씌우는 동그란 아이콘 배지.
@@ -95,7 +102,7 @@ export function BoothMapView({
   facilities?: FacilityMarker[];
   selectedBooth: Booth | null;
   onSelectBooth: (booth: Booth | null) => void;
-  /** 기본 확대 수준(4)에 대한 상대값. 낮을수록 확대된다. */
+  /** 기본 확대 수준(카카오 레벨 2)에 대한 상대값. 낮을수록 확대된다. */
   zoomStep?: number;
   center: { lat: number; lng: number };
   /** 마커를 누르면 상세 말풍선을 띄울지 여부. 선택 정보를 하단바로 보여주는 화면에서는 끈다. */
@@ -110,8 +117,7 @@ export function BoothMapView({
   minLevel?: number;
   onZoomByWheel?: (direction: 1 | -1) => void;
 }) {
-  const [loading, error] = useKakaoMapLoader();
-  const [kakaoMap, setKakaoMap] = useState<kakao.maps.Map | null>(null);
+  const [leafletMap, setLeafletMap] = useState<LeafletMapInstance | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   /*
@@ -122,9 +128,9 @@ export function BoothMapView({
   const selectedLat = selectedBooth?.lat;
   const selectedLng = selectedBooth?.lng;
   useEffect(() => {
-    if (!kakaoMap || selectedLat === undefined || selectedLng === undefined) return;
-    kakaoMap.panTo(new kakao.maps.LatLng(selectedLat, selectedLng));
-  }, [kakaoMap, selectedLat, selectedLng]);
+    if (!leafletMap || selectedLat === undefined || selectedLng === undefined) return;
+    leafletMap.panTo([selectedLat, selectedLng]);
+  }, [leafletMap, selectedLat, selectedLng]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -136,31 +142,7 @@ export function BoothMapView({
     };
     wrapper.addEventListener("wheel", handleWheel, { passive: false });
     return () => wrapper.removeEventListener("wheel", handleWheel);
-  }, [onZoomByWheel, loading, error]);
-
-  if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY) {
-    return (
-      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center">
-        <p className="body-small text-zinc-500">NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다.</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center">
-        <p className="body-small text-error">카카오맵을 불러오지 못했습니다.</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center">
-        <p className="body-small text-zinc-500">지도를 불러오는 중...</p>
-      </div>
-    );
-  }
+  }, [onZoomByWheel]);
 
   // 좌표가 없는 부스는 지도에 찍을 수 없으므로 목록에서만 보여준다.
   const pinnedBooths = booths.filter(
@@ -174,23 +156,20 @@ export function BoothMapView({
 
   return (
     <div ref={wrapperRef} className="absolute inset-0 isolate">
-      <Map
+      <LeafletMap
         center={center}
-        isPanto={false}
-        level={2 + zoomStep}
-        scrollwheel={false}
+        zoom={kakaoLevelToZoom(2 + zoomStep)}
+        /*
+          확대 한계는 지금까지처럼 카카오 레벨(minLevel~8)로 받고 Leaflet 줌으로 옮긴다.
+          레벨은 작을수록, 줌은 클수록 확대라 최소 레벨이 최대 줌이 된다.
+        */
+        minZoom={kakaoLevelToZoom(MAX_LEVEL)}
+        maxZoom={kakaoLevelToZoom(minLevel)}
+        scrollWheelZoom={false}
         className="h-full w-full"
-        // react-kakao-maps-sdk의 minLevel/maxLevel prop은 내부적으로 서로 뒤바뀐 채
-        // kakao.maps.Map.setMinLevel/setMaxLevel에 전달되는 버그가 있어(v1.2.1),
-        // onCreate에서 직접 정확한 인자로 호출한다.
-        onCreate={(map) => {
-          setKakaoMap(map);
-          map.setMinLevel(minLevel);
-          map.setMaxLevel(8);
-        }}
+        onMapReady={setLeafletMap}
       >
-        <PamphletOverlay
-          map={kakaoMap}
+        <LeafletPamphletOverlay
           imageUrl={pamphlet?.imageUrl ?? null}
           corners={pamphlet?.corners ?? null}
           boundary={boundary}
@@ -198,9 +177,9 @@ export function BoothMapView({
           opacity={pamphlet?.opacity ?? 0.7}
           visible={Boolean(pamphlet?.visible)}
         />
-        <QueuePathLayer queues={queues} />
+        <LeafletQueuePathLayer queues={queues} />
         {boundary && boundary.length >= 3 ? (
-          <Polygon
+          <MapPolygon
             path={boundary}
             fillColor="#18181b"
             fillOpacity={0.04}
@@ -214,7 +193,7 @@ export function BoothMapView({
           누를 것이 없고, 부스가 몰린 자리에서 선택을 가로채면 오히려 방해가 된다.
         */}
         {facilities.map((facility) => (
-          <CustomOverlayMap
+          <MapOverlay
             key={facility.nodeId}
             position={{ lat: facility.lat, lng: facility.lng }}
             zIndex={5}
@@ -227,7 +206,7 @@ export function BoothMapView({
             >
               {nodeTypeIcon(facility.nodeType)}
             </span>
-          </CustomOverlayMap>
+          </MapOverlay>
         ))}
         {pinnedBooths.map((booth) => {
           const isSelected = selectedBooth?.boothId === booth.boothId;
@@ -235,7 +214,7 @@ export function BoothMapView({
           const pinType = booth.nodeType ?? "BOOTH";
           const isIconPin = pinType !== "BOOTH";
           return (
-            <CustomOverlayMap
+            <MapOverlay
               key={booth.boothId}
               position={{ lat: booth.lat, lng: booth.lng }}
               clickable
@@ -271,20 +250,20 @@ export function BoothMapView({
                   />
                 )}
               </button>
-            </CustomOverlayMap>
+            </MapOverlay>
           );
         })}
 
         {showPopup && pinnedSelectedBooth ? (
-          <CustomOverlayMap
+          <MapOverlay
             position={{ lat: pinnedSelectedBooth.lat, lng: pinnedSelectedBooth.lng }}
             yAnchor={1}
             zIndex={30}
           >
             <BoothPopup booth={pinnedSelectedBooth} onClose={() => onSelectBooth(null)} />
-          </CustomOverlayMap>
+          </MapOverlay>
         ) : null}
-      </Map>
+      </LeafletMap>
     </div>
   );
 }

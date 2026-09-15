@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { MapMetric } from "@/components/map/MapMetric";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getCurrentMap } from "@/features/boothmap/api";
-import { boothsToQueuePathItems } from "@/features/boothmap/QueuePathLayer";
+import { boothsToQueuePathItems } from "@/features/boothmap/queuePathItems";
 import { presentationBoundary, presentationOverlay } from "@/features/boothmap/mapPresentation";
 import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
 import type { NodeType } from "@/features/boothmap/types";
@@ -345,7 +345,12 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
               <AiSuggestionPanel
                 suggestions={suggestions}
                 onDismiss={(id) => setDismissedSuggestionIds((current) => [...current, id])}
-                className="pointer-events-auto min-h-0 w-full overflow-y-auto"
+                /*
+                  여기에 pointer-events-auto를 주면 패널 안쪽이 다시 클릭을 받아,
+                  카드 아래 부스 마커를 누를 수도 지도를 끌 수도 없게 된다. 통과는
+                  패널이 맡고, 닫기 버튼만 카드 쪽에서 auto로 되돌린다.
+                */
+                className="min-h-0 w-full overflow-y-auto"
               />
             ) : null}
           </div>
