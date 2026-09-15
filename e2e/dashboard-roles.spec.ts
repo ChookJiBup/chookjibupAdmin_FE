@@ -294,10 +294,7 @@ test("작은 화면에서 부스 목록을 열고 닫아 지도를 조작한다"
   await expect(page.getByRole("complementary")).toBeHidden();
   await toggle.click();
   await page.getByRole("button", { name: /먹거리 구역/ }).click();
-  await page
-    .getByRole("complementary")
-    .getByRole("button", { name: "테스트 먹거리 부스", exact: true })
-    .click();
+  await page.getByRole("button", { name: "테스트 먹거리 부스", exact: true }).click();
   await expect(page.getByRole("complementary")).toBeHidden();
   await expect(
     page.getByText("테스트 먹거리 부스", { exact: true }).filter({ visible: true }).first(),

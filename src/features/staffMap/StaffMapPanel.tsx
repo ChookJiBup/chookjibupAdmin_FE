@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { BoothMapView } from "@/features/dashboard/BoothMapView";
-import { boothsToQueuePathItems } from "@/features/boothmap/queuePathItems";
+import { boothsToQueuePathItems } from "@/features/boothmap/QueuePathLayer";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { QueueUpdateSheet } from "./QueueUpdateSheet";
 import { StaffBoothBar } from "./StaffBoothBar";
@@ -13,8 +13,7 @@ import { useStaffFestival } from "./useStaffFestival";
 import { distanceInMeters } from "./utils";
 
 /*
-  `BoothMapView`는 카카오 지도 레벨 기준 `2 + zoomStep`을 받아 Leaflet 줌으로 옮긴다
-  (`kakaoLevelToZoom`, 레벨 L ≈ 줌 20 - L). 스태프 화면은
+  `BoothMapView`는 카카오 지도 레벨을 `2 + zoomStep`으로 계산한다. 스태프 화면은
   폭 402px 안에서 부스를 봐야 해서 콘솔 기본값보다 한 단계 더 확대한 레벨 1에서
   시작하고, 지도가 허용하는 레벨 1~8을 그대로 zoomStep 범위로 쓴다.
 
