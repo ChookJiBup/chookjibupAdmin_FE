@@ -11,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { distanceInMeters } from "@/features/staffMap/utils";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
@@ -56,14 +55,10 @@ function QueueTailForm({
       const zone = zones.find((candidate) => candidate.zoneId === zoneId);
       const center = zone ? zoneCenter(zone) : null;
       if (!center) throw new Error("구역 좌표를 찾을 수 없습니다.");
-      const boothPoint =
-        booth.lat !== undefined && booth.lng !== undefined
-          ? { lat: booth.lat, lng: booth.lng }
-          : null;
       return updateQueueTailAsAdmin(festivalId, booth.queueId, {
         tailLatitude: center.lat,
         tailLongitude: center.lng,
-        queueTailMeters: boothPoint ? distanceInMeters(boothPoint, center) : undefined,
+        expectedRevision: booth.observationRevision,
       });
     },
     onSuccess: () => {
@@ -131,6 +126,9 @@ function BoothQueueUpdateBar({
               "미입력"
             )}{" "}
             · 예상 대기시간 {formatWaitMinutes(booth.waitMinutes)}
+            {booth.congestionUpdatedAt
+              ? ` · 관측 ${new Date(booth.congestionUpdatedAt.includes("+") || booth.congestionUpdatedAt.endsWith("Z") ? booth.congestionUpdatedAt : `${booth.congestionUpdatedAt}+09:00`).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" })}`
+              : " · 미관측"}
           </p>
         </div>
       </div>
