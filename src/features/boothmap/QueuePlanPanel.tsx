@@ -19,6 +19,7 @@ export interface QueuePlanPanelProps {
   festivalId: string;
   boothId: number;
   boothName: string;
+  entry?: "manual" | "ai";
   nodeVersion: number | undefined;
   boundaryAvailable: boolean;
   path: QueuePathPoint[];
@@ -32,6 +33,7 @@ export function QueuePlanPanel({
   festivalId,
   boothId,
   boothName,
+  entry = "manual",
   nodeVersion,
   boundaryAvailable,
   path,
@@ -146,7 +148,9 @@ export function QueuePlanPanel({
         <div>
           <p className="body-small-bold text-zinc-950">{boothName} · 사전 줄 설정</p>
           <p className="body-caption text-zinc-500">
-            지도에서 꺾이는 지점을 클릭하세요. 점선은 사전 경로이며 현재 대기시간을 바꾸지 않습니다.
+            {entry === "ai"
+              ? "간격·처리 인원·목표 수용 인원을 확인하고 AI 추천을 요청하세요. 추천 경로는 확인 후 확정합니다."
+              : "지도에서 꺾이는 지점을 클릭하세요. 점선은 사전 경로이며 현재 대기시간을 바꾸지 않습니다."}
           </p>
         </div>
         <Button variant="outline" disabled={busy} onClick={onClose}>

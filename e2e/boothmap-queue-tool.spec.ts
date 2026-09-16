@@ -23,6 +23,8 @@ async function mockBoothMap(
     missingVersion?: boolean;
     planDelay?: Promise<void>;
     queueDelay?: Promise<void>;
+    noQueue?: boolean;
+    unapproved?: boolean;
   } = {},
 ) {
   const planPath = `/api/festivals/${festivalId}/operations/booths/501/queue-plan`;
@@ -147,7 +149,7 @@ async function mockBoothMap(
             sortOrder: 0,
             geometrySchemaVersion: "2.0",
             // 승인된 운영 부스와 이어져 있어야 대기줄을 그릴 수 있다.
-            relatedBoothId: 501,
+            relatedBoothId: options.unapproved ? null : 501,
           },
           {
             nodeId: lineNodeId,
@@ -182,23 +184,25 @@ async function mockBoothMap(
       };
     } else if (path === `/api/festivals/${festivalId}/operations/queues`) {
       data = {
-        queues: [
-          {
-            queueId: "00000000-0000-0000-0000-0000000000b1",
-            boothId: 501,
-            boothName: "김밥천국",
-            tailLatitude: null,
-            tailLongitude: null,
-            queueTailMeters: null,
-            path: null,
-            lastModifierType: null,
-            lastModifierName: null,
-            updatedAt: "2026-09-09T00:00:00",
-            observationRevision: 0,
-            waitMinutes: null,
-            observedAt: null,
-          },
-        ],
+        queues: options.noQueue
+          ? []
+          : [
+              {
+                queueId: "00000000-0000-0000-0000-0000000000b1",
+                boothId: 501,
+                boothName: "김밥천국",
+                tailLatitude: null,
+                tailLongitude: null,
+                queueTailMeters: null,
+                path: null,
+                lastModifierType: null,
+                lastModifierName: null,
+                updatedAt: "2026-09-09T00:00:00",
+                observationRevision: 0,
+                waitMinutes: null,
+                observedAt: null,
+              },
+            ],
       };
     } else if (path === `/api/festivals/${festivalId}/maps/${mapId}/analysis`) {
       code = 40406;
@@ -227,6 +231,50 @@ async function openPlan(page: Page) {
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "사전 줄 설정", exact: true }).click();
 }
+
+test("부스 선택에 직접 설정·AI·현재 줄 UI를 표시하고 AI 설정으로 진입한다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { boundary: true });
+  await page.goto(boothmapPath);
+  await expect(page.getByRole("region", { name: "김밥천국 줄 관리" })).toHaveCount(0);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
+  await expect(actions.getByRole("button", { name: "줄 직접 설정" })).toBeEnabled();
+  await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeEnabled();
+  await actions.getByRole("button", { name: "AI 줄 설정", exact: true }).click();
+  await expect(
+    page.getByText("간격·처리 인원·목표 수용 인원을 확인하고", { exact: false }),
+  ).toBeVisible();
+  expect(calls.recommendations).toBe(0);
+  await page.getByRole("button", { name: "AI로 사전 줄 추천" }).click();
+  await expect(page.getByText("추천 이유: 출입구를 피해 배치했습니다.")).toBeVisible();
+  expect(calls.planWrites).toHaveLength(0);
+});
+
+test("현재 대기열이 없어도 승인된 부스의 사전 줄은 확정할 수 있다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { noQueue: true });
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
+  await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeDisabled();
+  await actions.getByRole("button", { name: "줄 직접 설정" }).click();
+  await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
+  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeEnabled();
+  await page.getByRole("button", { name: "사전 줄 확정" }).click();
+  await expect(page.getByText("사전 줄을 설정했습니다.", { exact: false })).toBeVisible();
+  expect(calls.planWrites).toHaveLength(1);
+  expect(calls.queueWrites).toHaveLength(0);
+});
+
+test("미승인 부스는 줄 설정이 불가능한 이유를 선택 화면에서 안내한다", async ({ page }) => {
+  await mockBoothMap(page, { noQueue: true, unapproved: true });
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
+  await expect(actions.getByRole("button", { name: "줄 직접 설정" })).toBeDisabled();
+  await expect(
+    actions.getByText("부스를 지도에 저장하고 운영 부스로 승인해 주세요."),
+  ).toBeVisible();
+});
 
 test("도면 후보는 사전 줄 확정으로만 저장하고 Enter는 실제 관측을 쓰지 않는다", async ({
   page,
