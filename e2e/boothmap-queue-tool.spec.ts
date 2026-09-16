@@ -25,6 +25,9 @@ async function mockBoothMap(
     queueDelay?: Promise<void>;
     noQueue?: boolean;
     unapproved?: boolean;
+    existingPlan?: boolean;
+    aiUnavailable?: boolean;
+    existingCurrent?: boolean;
   } = {},
 ) {
   const planPath = `/api/festivals/${festivalId}/operations/booths/501/queue-plan`;
@@ -32,7 +35,20 @@ async function mockBoothMap(
     { lat: 35.1495, lng: 126.9195 },
     { lat: 35.1499, lng: 126.9195 },
   ];
-  let savedPlan: unknown = null;
+  let savedPlan: unknown = options.existingPlan
+    ? {
+        path: points,
+        planId: "plan-1",
+        boothId: 501,
+        revision: 4,
+        nodeVersion: 3,
+        lengthMeters: 44,
+        estimatedCapacity: 44,
+        metersPerPerson: 1,
+        servedPersonsPerMinute: 2,
+        sourceNodeId: null,
+      }
+    : null;
   const planWrites: Record<string, unknown>[] = [];
   const queueWrites: Record<string, unknown>[] = [];
   let recommendations = 0;
@@ -54,7 +70,7 @@ async function mockBoothMap(
           ...request.postDataJSON(),
           planId: "plan-1",
           boothId: 501,
-          revision: 1,
+          revision: Number(request.postDataJSON().expectedRevision) + 1,
           nodeVersion: 3,
           lengthMeters: 44,
           estimatedCapacity: 44,
@@ -73,6 +89,13 @@ async function mockBoothMap(
           expectedNodeVersion: 3,
         },
       ];
+    } else if (path === `${planPath}/recommendations/status`) {
+      data = {
+        available: !options.aiUnavailable,
+        reason: options.aiUnavailable
+          ? "서버에 AI 인증 설정이 없습니다. 운영자가 APP_OPENAI_API_KEY를 설정해야 합니다."
+          : null,
+      };
     } else if (path === `${planPath}/recommendations`) {
       recommendations++;
       if (options.aiFailure)
@@ -194,7 +217,7 @@ async function mockBoothMap(
                 tailLatitude: null,
                 tailLongitude: null,
                 queueTailMeters: null,
-                path: null,
+                path: options.existingCurrent ? points : null,
                 lastModifierType: null,
                 lastModifierName: null,
                 updatedAt: "2026-09-09T00:00:00",
@@ -231,6 +254,64 @@ async function openPlan(page: Page) {
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "사전 줄 설정", exact: true }).click();
 }
+
+test("현재 줄 수정은 저장된 경로의 지점을 변경해 관측 리비전과 함께 저장한다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { existingCurrent: true });
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.getByRole("button", { name: "현재 줄 수정", exact: true }).click();
+  await page.getByRole("spinbutton", { name: "지점 2 위도", exact: true }).fill("35.1498");
+  await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
+  await expect(page.getByRole("button", { name: "대기줄 저장", exact: true })).toHaveCount(0);
+  expect(calls.queueWrites[0]).toMatchObject({
+    expectedRevision: 0,
+    path: [
+      { lat: 35.1495, lng: 126.9195 },
+      { lat: 35.1498, lng: 126.9195 },
+    ],
+  });
+});
+
+test("저장된 사전 줄을 자동으로 불러와 지점을 이동·추가·삭제하고 최신 리비전으로 저장한다", async ({
+  page,
+}) => {
+  const calls = await mockBoothMap(page, { existingPlan: true });
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.getByRole("button", { name: "사전 줄 수정", exact: true }).click();
+  await expect(page.getByRole("spinbutton", { name: "지점 2 위도", exact: true })).toHaveValue(
+    "35.1499",
+  );
+  await expect(page.getByRole("spinbutton", { name: "지점 1 위도", exact: true })).toBeDisabled();
+  await page.getByRole("spinbutton", { name: "지점 2 위도", exact: true }).fill("");
+  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeDisabled();
+  await page.getByRole("spinbutton", { name: "지점 2 위도", exact: true }).fill("35.1498");
+  await page.getByRole("button", { name: "지점 1 뒤에 추가", exact: true }).click();
+  await expect(page.getByRole("spinbutton", { name: "지점 3 위도", exact: true })).toHaveValue(
+    "35.1498",
+  );
+  await page.getByRole("button", { name: "지점 2 삭제", exact: true }).click();
+  await page.getByRole("button", { name: "사전 줄 확정" }).click();
+  await expect(page.getByText("사전 줄을 설정했습니다.", { exact: false })).toBeVisible();
+  expect(calls.planWrites[0]).toMatchObject({
+    expectedRevision: 4,
+    expectedNodeVersion: 3,
+    path: [
+      { lat: 35.1495, lng: 126.9195 },
+      { lat: 35.1498, lng: 126.9195 },
+    ],
+  });
+});
+
+test("AI 서버 차단 이유를 안내하고 수동 줄 편집은 유지한다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { aiUnavailable: true, boundary: true });
+  await openPlan(page);
+  await expect(page.getByRole("status")).toContainText("APP_OPENAI_API_KEY");
+  await expect(page.getByRole("button", { name: "AI로 사전 줄 추천" })).toBeDisabled();
+  await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
+  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeEnabled();
+  expect(calls.recommendations).toBe(0);
+});
 
 test("부스 선택에 직접 설정·AI·현재 줄 UI를 표시하고 AI 설정으로 진입한다", async ({ page }) => {
   const calls = await mockBoothMap(page, { boundary: true });

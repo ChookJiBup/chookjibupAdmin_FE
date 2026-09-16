@@ -6,11 +6,13 @@ import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { QueuePointEditor } from "./QueuePointEditor";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import type { QueuePathPoint } from "@/features/staffMap/types";
 import {
   getQueueCandidates,
   getQueuePlan,
+  getQueueRecommendationStatus,
   recommendQueuePlan,
   saveQueuePlan,
 } from "./queuePlanApi";
@@ -54,6 +56,17 @@ export function QueuePlanPanel({
     queryFn: () => getQueueCandidates(festivalId, boothId),
     retry: false,
   });
+  const aiStatus = useQuery({
+    queryKey: [...key, "ai-status"],
+    queryFn: () => getQueueRecommendationStatus(festivalId, boothId),
+    retry: false,
+  });
+  const pathInitialized = useRef(false);
+  useEffect(() => {
+    if (!plan.isSuccess || pathInitialized.current) return;
+    pathInitialized.current = true;
+    if (plan.data && path.length <= 1) onPathChange(plan.data.path);
+  }, [plan.isSuccess, plan.data, path, onPathChange]);
   const [spacing, setSpacing] = useState(1);
   const [speed, setSpeed] = useState(2);
   const [capacity, setCapacity] = useState(40);
@@ -132,6 +145,13 @@ export function QueuePlanPanel({
     onError: handleError,
   });
   const busy = save.isPending || recommendation.isPending;
+  const validPath = path.every(
+    (p) =>
+      Number.isFinite(p.lat) &&
+      Number.isFinite(p.lng) &&
+      Math.abs(p.lat) <= 90 &&
+      Math.abs(p.lng) <= 180,
+  );
   const validSettings =
     Number.isFinite(spacing) &&
     spacing >= 0.2 &&
@@ -194,6 +214,7 @@ export function QueuePlanPanel({
           variant="outline"
           disabled={
             unavailable ||
+            !aiStatus.data?.available ||
             !boundaryAvailable ||
             !validSettings ||
             !Number.isInteger(capacity) ||
@@ -208,7 +229,9 @@ export function QueuePlanPanel({
           {recommendation.isPending ? "AI 추천 중…" : "AI로 사전 줄 추천"}
         </Button>
         <Button
-          disabled={unavailable || !validSettings || path.length < 2 || path.length > 500}
+          disabled={
+            unavailable || !validSettings || !validPath || path.length < 2 || path.length > 500
+          }
           onClick={() => {
             setError(null);
             save.mutate();
@@ -251,6 +274,26 @@ export function QueuePlanPanel({
             : "사전 설정 조회 중…"}{" "}
         · 초안 {path.length}개 지점
       </p>
+      {aiStatus.isPending ? (
+        <p className="body-caption text-zinc-500">AI 사용 가능 여부 확인 중…</p>
+      ) : aiStatus.isError ? (
+        <p role="alert" className="body-caption text-error">
+          AI 상태를 확인하지 못했습니다. BE 업데이트와 서버 연결을 확인해 주세요.
+        </p>
+      ) : !aiStatus.data?.available ? (
+        <p role="status" className="body-caption text-point-600">
+          {aiStatus.data?.reason ?? "서버에서 AI 줄 추천을 사용할 수 없습니다."}
+        </p>
+      ) : null}
+      <QueuePointEditor
+        path={path}
+        fixedStart
+        locked={settingsLocked || conflict}
+        onChange={(points) => {
+          setSource(null);
+          onPathChange(points);
+        }}
+      />
       {!boundaryAvailable ? (
         <p className="body-caption text-point-600">
           AI 추천은 지도에 행사장 경계를 저장한 뒤 사용할 수 있습니다.

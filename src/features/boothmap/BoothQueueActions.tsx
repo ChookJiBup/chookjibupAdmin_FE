@@ -10,6 +10,8 @@ export function BoothQueueActions({
   onPlan,
   onAi,
   onCurrent,
+  planExists = false,
+  currentExists = false,
 }: {
   boothName: string;
   planDisabledReason?: string;
@@ -18,13 +20,15 @@ export function BoothQueueActions({
   onPlan: () => void;
   onAi: () => void;
   onCurrent: () => void;
+  planExists?: boolean;
+  currentExists?: boolean;
 }) {
   return (
     <section aria-label={`${boothName} 줄 관리`} data-map-tools className="space-y-2">
       <p className="body-small-bold text-zinc-950">{boothName} · 줄 관리</p>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={Boolean(planDisabledReason)} onClick={onPlan}>
-          줄 직접 설정
+          {planExists ? "사전 줄 수정" : "줄 직접 설정"}
         </Button>
         <Button
           size="sm"
@@ -40,7 +44,7 @@ export function BoothQueueActions({
           disabled={Boolean(currentDisabledReason)}
           onClick={onCurrent}
         >
-          현재 줄 기록
+          {currentExists ? "현재 줄 수정" : "현재 줄 기록"}
         </Button>
       </div>
       <p className="body-caption text-zinc-500">

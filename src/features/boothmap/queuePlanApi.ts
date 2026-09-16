@@ -50,6 +50,12 @@ export async function getQueueCandidates(festivalId: string, boothId: number) {
   );
   return data.data;
 }
+export async function getQueueRecommendationStatus(festivalId: string, boothId: number) {
+  const { data } = await adminApiClient.get<
+    ApiResponse<{ available: boolean; reason: string | null }>
+  >(`${pathFor(festivalId, boothId)}/recommendations/status`);
+  return data.data;
+}
 export async function recommendQueuePlan(
   festivalId: string,
   boothId: number,
