@@ -50,6 +50,7 @@ async function mockBoothMap(
       }
     : null;
   const planWrites: Record<string, unknown>[] = [];
+  const planDeletes: Record<string, unknown>[] = [];
   const queueWrites: Record<string, unknown>[] = [];
   let recommendations = 0;
   await page.route("**/api/**", async (route) => {
@@ -58,6 +59,17 @@ async function mockBoothMap(
     let data: unknown;
     let code = 0;
     if (path === planPath) {
+      if (request.method() === "DELETE") {
+        const payload = request.postDataJSON();
+        planDeletes.push(payload);
+        savedPlan = {
+          ...(savedPlan as Record<string, unknown>),
+          path: [],
+          lengthMeters: 0,
+          estimatedCapacity: 0,
+          revision: Number(payload.expectedRevision) + 1,
+        };
+      }
       if (request.method() === "GET") await options.planDelay;
       if (request.method() === "PUT") {
         planWrites.push(request.postDataJSON());
@@ -242,6 +254,7 @@ async function mockBoothMap(
   });
   return {
     planWrites,
+    planDeletes,
     queueWrites,
     get recommendations() {
       return recommendations;
@@ -255,20 +268,42 @@ async function openPlan(page: Page) {
   await page.getByRole("button", { name: "사전 줄 설정", exact: true }).click();
 }
 
+test("사전 경로 삭제는 확인 후 서버 DELETE를 호출하고 현재 줄 기록을 막는다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { existingPlan: true });
+  await openPlan(page);
+  await page.getByRole("button", { name: "사전 경로 삭제", exact: true }).click();
+  expect(calls.planDeletes).toHaveLength(0);
+  await page.getByRole("dialog").getByRole("button", { name: "경로 삭제", exact: true }).click();
+  await expect(page.getByText("사전 줄 경로를 삭제했습니다.")).toBeVisible();
+  expect(calls.planDeletes[0]).toMatchObject({ expectedRevision: 4, expectedNodeVersion: 3 });
+  await expect(
+    page
+      .getByRole("region", { name: "김밥천국 줄 관리" })
+      .getByRole("button", { name: "현재 줄 기록" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "줄 직접 설정", exact: true }).click();
+  await expect(page.getByRole("spinbutton", { name: "지점 1 위도", exact: true })).toHaveValue(
+    "35.1495",
+  );
+});
+
 test("현재 줄 수정은 저장된 경로의 지점을 변경해 관측 리비전과 함께 저장한다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { existingCurrent: true });
+  const calls = await mockBoothMap(page, { existingCurrent: true, existingPlan: true });
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "현재 줄 수정", exact: true }).click();
-  await page.getByRole("spinbutton", { name: "지점 2 위도", exact: true }).fill("35.1498");
+  await page.getByRole("spinbutton", { name: "지점 1 위도", exact: true }).fill("35.1498");
+  await page.getByRole("spinbutton", { name: "지점 1 경도", exact: true }).fill("126.925");
+  await expect(page.getByRole("spinbutton", { name: "지점 1 경도", exact: true })).toHaveValue(
+    "126.9195",
+  );
   await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
   await expect(page.getByRole("button", { name: "대기줄 저장", exact: true })).toHaveCount(0);
   expect(calls.queueWrites[0]).toMatchObject({
     expectedRevision: 0,
-    path: [
-      { lat: 35.1495, lng: 126.9195 },
-      { lat: 35.1498, lng: 126.9195 },
-    ],
+    tailLatitude: 35.1498,
+    tailLongitude: 126.9195,
+    planRevision: 4,
   });
 });
 
@@ -320,7 +355,7 @@ test("부스 선택에 직접 설정·AI·현재 줄 UI를 표시하고 AI 설�
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
   await expect(actions.getByRole("button", { name: "줄 직접 설정" })).toBeEnabled();
-  await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeEnabled();
+  await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeDisabled();
   await actions.getByRole("button", { name: "AI 줄 설정", exact: true }).click();
   await expect(
     page.getByText("간격·처리 인원·목표 수용 인원을 확인하고", { exact: false }),
@@ -441,7 +476,7 @@ test("지도 버전이 없으면 사전 줄을 확정하지 않는다", async ({
 test("현재 경로는 관리자 PATCH와 관측 리비전으로 저장하며 시간 입력이 필요 없다", async ({
   page,
 }) => {
-  const calls = await mockBoothMap(page);
+  const calls = await mockBoothMap(page, { existingPlan: true });
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "대기줄 추가" }).click();
@@ -455,17 +490,17 @@ test("현재 경로는 관리자 PATCH와 관측 리비전으로 저장하며 �
     tailLatitude: 35.1499,
     tailLongitude: 126.9195,
   });
-  expect(calls.queueWrites[0].path).toHaveLength(2);
+  expect(calls.queueWrites[0]).not.toHaveProperty("path");
   expect(calls.queueWrites[0]).not.toHaveProperty("queueTailMeters");
   expect(calls.planWrites).toHaveLength(0);
 });
 
 test("줄끝 모드에서 참고선을 가져와도 경로를 생략하고 마지막 지점만 전송한다", async ({ page }) => {
-  const calls = await mockBoothMap(page);
+  const calls = await mockBoothMap(page, { existingPlan: true });
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "대기줄 추가" }).click();
-  await page.getByRole("button", { name: "줄끝만 선택" }).click();
+
   await page.getByRole("button", { name: "참고선 가져오기" }).click();
   await page.getByRole("button", { name: "도면 대기선 점 2개" }).click();
   await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
@@ -500,7 +535,7 @@ test("늦게 도착한 현재 줄 저장 응답은 새 사전 설정 패널을 �
   const queueDelay = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const calls = await mockBoothMap(page, { queueDelay });
+  const calls = await mockBoothMap(page, { queueDelay, existingPlan: true });
   try {
     await page.goto(boothmapPath);
     await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
@@ -520,7 +555,7 @@ test("늦게 도착한 현재 줄 저장 응답은 새 사전 설정 패널을 �
 
 test("부스를 고른 뒤 대기줄 버튼을 누르면 대기줄 도구가 열린다", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await mockBoothMap(page);
+  await mockBoothMap(page, { existingPlan: true });
   await page.goto(boothmapPath);
 
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();

@@ -30,6 +30,7 @@ import type { FestivalQueue, FestivalQueueList } from "@/features/staffMap/types
 import { QueuePlanPanel } from "./QueuePlanPanel";
 import { BoothQueueActions } from "./BoothQueueActions";
 import { QueuePointEditor } from "./QueuePointEditor";
+import { snapToQueuePath } from "./queueSnap";
 import { getQueuePlan } from "./queuePlanApi";
 import { getManagedFestival } from "@/features/festivals/api";
 import { updateQueueTailAsAdmin as updateQueueTail } from "@/features/dashboard/api";
@@ -1194,13 +1195,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 ? "부스를 지도에 저장하고 운영 부스로 승인해 주세요."
                 : undefined;
   const currentDisabledReason =
-    editingLocked || queuePlanBusy
-      ? "진행 중인 작업 또는 지도 상태를 확인해 주세요."
-      : !canEditQueue
-        ? queuesQuery.isError
-          ? "현재 대기열 조회에 실패했습니다. 화면을 새로고침해 주세요."
-          : "현재 대기열을 불러오거나 운영 부스 승인을 완료해 주세요."
-        : undefined;
+    !selectedPlanQuery.data || selectedPlanQuery.data.path.length < 2
+      ? "사전 줄 경로를 먼저 설정해 주세요."
+      : editingLocked || queuePlanBusy
+        ? "진행 중인 작업 또는 지도 상태를 확인해 주세요."
+        : !canEditQueue
+          ? queuesQuery.isError
+            ? "현재 대기열 조회에 실패했습니다. 화면을 새로고침해 주세요."
+            : "현재 대기열을 불러오거나 운영 부스 승인을 완료해 주세요."
+          : undefined;
   function openQueuePlan(entry: "manual" | "ai" = "manual") {
     if (planDisabledReason || !selectedBooth) return;
     setQueuePlanEntry(entry);
@@ -1209,26 +1212,31 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     setPinTypeMenuOpen(false);
     setDraftPoints([]);
     setQueueDraft(
-      selectedPlanQuery.data?.path ?? [{ lat: selectedBooth.lat, lng: selectedBooth.lng }],
+      selectedPlanQuery.data && selectedPlanQuery.data.path.length >= 2
+        ? selectedPlanQuery.data.path
+        : [{ lat: selectedBooth.lat, lng: selectedBooth.lng }],
     );
     setQueueDraftId(selectedQueue?.queueId ?? null);
   }
   function openCurrentQueue() {
     if (currentDisabledReason) return;
     setQueueMode("current");
-    setQueueTailOnly(false);
+    setQueueTailOnly(true);
     setQueueDraftRevision(selectedQueue?.observationRevision);
     setDrawTool("queue-line");
     setPinTypeMenuOpen(false);
     setDraftPoints([]);
-    setQueueDraft(selectedQueue?.path ?? []);
+    const tail = selectedQueue?.path?.at(-1);
+    setQueueDraft(
+      tail && selectedPlanQuery.data ? [snapToQueuePath(selectedPlanQuery.data.path, tail)] : [],
+    );
     setQueueDraftId(selectedQueue?.queueId ?? null);
   }
   const boothQueueActions =
     selectedBooth?.nodeType === "BOOTH" ? (
       <BoothQueueActions
         boothName={selectedBooth.name}
-        planExists={Boolean(selectedPlanQuery.data)}
+        planExists={Boolean(selectedPlanQuery.data && selectedPlanQuery.data.path.length >= 2)}
         currentExists={Boolean(selectedQueue?.path && selectedQueue.path.length >= 2)}
         planDisabledReason={planDisabledReason}
         currentDisabledReason={currentDisabledReason}
@@ -1284,6 +1292,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   ]);
   const queueSaveMutation = useMutation({
     mutationFn: async (path: LatLng[]) => {
+      if (!selectedPlanQuery.data || selectedPlanQuery.data.path.length < 2)
+        throw new Error("사전 줄 경로를 먼저 설정해 주세요.");
       if (
         !path.every(
           (p) =>
@@ -1373,7 +1383,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
    * 부스를 고르고 이 버튼을 눌러야만 초안으로 들어오고, 저장은 따로 눌러야 한다.
    */
   function importQueueDraftFrom(shape: LocalMapShape) {
-    const points = queueTailOnly ? shape.points.slice(-1) : shape.points;
+    const points =
+      queueMode === "current" && selectedPlanQuery.data
+        ? [snapToQueuePath(selectedPlanQuery.data.path, shape.points.at(-1)!)]
+        : shape.points;
     setQueueDraft(points.map((point) => ({ lat: point.lat, lng: point.lng })));
     setQueueImportOpen(false);
     toast.info(`${shape.name}을(를) 대기줄 초안으로 가져왔습니다.`, {
@@ -1475,7 +1488,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     if (
       (index === 0 && queueMode === "plan") ||
       drawTool !== "queue-line" ||
-      (queueMode === "current" && queueTailOnly) ||
       editingLocked ||
       hasUnsavedChanges ||
       queuePlanBusy ||
@@ -1503,7 +1515,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           ),
         );
       setQueueDraft((points) =>
-        points.map((p, i) => (i === index ? { lat: point.getLat(), lng: point.getLng() } : p)),
+        points.map((p, i) =>
+          i === index
+            ? queueMode === "current" && selectedPlanQuery.data
+              ? snapToQueuePath(selectedPlanQuery.data.path, {
+                  lat: point.getLat(),
+                  lng: point.getLng(),
+                })
+              : { lat: point.getLat(), lng: point.getLng() }
+            : p,
+        ),
       );
     };
     const finish = (pointEvent: PointerEvent) => {
@@ -2052,7 +2073,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 if (queueMode === "plan" && selectedPlanQuery.isPending) return;
                 if (isSamePlace(queueDraft[queueDraft.length - 1], point)) return;
                 setQueueDraft((prev) =>
-                  queueMode === "current" && queueTailOnly ? [point] : [...prev, point],
+                  queueMode === "current" && selectedPlanQuery.data
+                    ? [snapToQueuePath(selectedPlanQuery.data.path, point)]
+                    : [...prev, point],
                 );
               }
             }}
@@ -2117,7 +2140,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 strokeStyle="dash"
               />
             ) : null}
-            {drawTool === "queue-line" && !(queueMode === "current" && queueTailOnly)
+            {drawTool === "queue-line"
               ? queueDraft.map((point, index) =>
                   Number.isFinite(point.lat) && Number.isFinite(point.lng) ? (
                     <CustomOverlayMap key={`queue-point-${index}`} position={point} zIndex={25}>
@@ -2135,9 +2158,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                         }
                         onPointerDown={(event) => startQueuePointDrag(index, event)}
                         onClick={(event) => event.stopPropagation()}
-                        className="body-caption flex size-7 touch-none items-center justify-center rounded-full border-2 border-primary bg-white text-primary disabled:cursor-default cursor-grab"
+                        title={`지점 ${index + 1}`}
+                        className="flex size-6 touch-none items-center justify-center bg-transparent cursor-grab disabled:cursor-default"
                       >
-                        {index + 1}
+                        <span className="size-2.5 rounded-full border border-primary bg-white" />
                       </button>
                     </CustomOverlayMap>
                   ) : null,
@@ -2950,16 +2974,26 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               icon={<ClockIcon className="size-5" />}
               aria-label="대기줄 추가"
               aria-pressed={drawTool === "queue-line"}
-              disabled={!canEditQueue || editingLocked || queuePlanBusy}
+              disabled={
+                !canEditQueue ||
+                editingLocked ||
+                queuePlanBusy ||
+                !selectedPlanQuery.data ||
+                selectedPlanQuery.data.path.length < 2
+              }
               className={cn("text-zinc-950", drawTool === "queue-line" && "ring-2 ring-primary")}
               onClick={() => {
                 setQueueMode("current");
-                setQueueTailOnly(false);
+                setQueueTailOnly(true);
                 setQueueDraftRevision(selectedQueue?.observationRevision);
                 setDrawTool((tool) => (tool === "queue-line" ? "select" : "queue-line"));
                 setPinTypeMenuOpen(false);
                 setDraftPoints([]);
-                setQueueDraft(selectedQueue?.path ?? []);
+                setQueueDraft(
+                  selectedQueue?.path?.at(-1) && selectedPlanQuery.data
+                    ? [snapToQueuePath(selectedPlanQuery.data.path, selectedQueue.path.at(-1)!)]
+                    : [],
+                );
                 setQueueDraftId(selectedQueue?.queueId ?? null);
               }}
             />
@@ -3069,13 +3103,13 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               </Button>
               <Button
                 variant="outline"
-                disabled={queueSaveMutation.isPending}
+                disabled
                 onClick={() => {
                   setQueueTailOnly(!queueTailOnly);
                   setQueueDraft([]);
                 }}
               >
-                {queueTailOnly ? "전체 경로 그리기" : "줄끝만 선택"}
+                사전 선 따라 줄끝 선택
               </Button>
               {queueTailOnly ? (
                 <p className="body-caption text-zinc-500">
@@ -3113,6 +3147,21 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     queueSaveMutation.isPending ||
                     selectedQueue?.queueId !== queueDraftId
                   }
+                />
+              ) : null}
+              {queueTailOnly && queueDraft.length === 1 ? (
+                <QueuePointEditor
+                  path={queueDraft}
+                  onChange={(points) => {
+                    if (!points.length) setQueueDraft([]);
+                    else if (
+                      selectedPlanQuery.data &&
+                      Number.isFinite(points[0].lat) &&
+                      Number.isFinite(points[0].lng)
+                    )
+                      setQueueDraft([snapToQueuePath(selectedPlanQuery.data.path, points[0])]);
+                  }}
+                  locked={queueSaveMutation.isPending}
                 />
               ) : null}
               {/* 이미 저장된 경로가 있을 때만. 서버에는 빈 배열이 곧 삭제다. */}

@@ -34,6 +34,18 @@ export interface QueueRecommendation {
 }
 const pathFor = (festivalId: string, boothId: number) =>
   `/festivals/${festivalId}/operations/booths/${boothId}/queue-plan`;
+export async function deleteQueuePlan(
+  festivalId: string,
+  boothId: number,
+  expectedRevision: number,
+  expectedNodeVersion: number,
+) {
+  const { data } = await adminApiClient.delete<ApiResponse<QueuePlan>>(
+    pathFor(festivalId, boothId),
+    { data: { expectedRevision, expectedNodeVersion } },
+  );
+  return data.data;
+}
 
 export async function getQueuePlan(festivalId: string, boothId: number): Promise<QueuePlan | null> {
   try {

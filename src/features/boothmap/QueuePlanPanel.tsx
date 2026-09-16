@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { QueuePointEditor } from "./QueuePointEditor";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import type { QueuePathPoint } from "@/features/staffMap/types";
 import {
@@ -15,6 +16,7 @@ import {
   getQueueRecommendationStatus,
   recommendQueuePlan,
   saveQueuePlan,
+  deleteQueuePlan,
 } from "./queuePlanApi";
 
 export interface QueuePlanPanelProps {
@@ -65,7 +67,7 @@ export function QueuePlanPanel({
   useEffect(() => {
     if (!plan.isSuccess || pathInitialized.current) return;
     pathInitialized.current = true;
-    if (plan.data && path.length <= 1) onPathChange(plan.data.path);
+    if (plan.data && plan.data.path.length >= 2 && path.length <= 1) onPathChange(plan.data.path);
   }, [plan.isSuccess, plan.data, path, onPathChange]);
   const [spacing, setSpacing] = useState(1);
   const [speed, setSpeed] = useState(2);
@@ -78,6 +80,20 @@ export function QueuePlanPanel({
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const remove = useMutation({
+    mutationFn: () => deleteQueuePlan(festivalId, boothId, revision, version!),
+    onMutate: () => onBusyChange(true),
+    onSettled: () => onBusyChange(false),
+    onSuccess: (result) => {
+      client.setQueryData(key, result);
+      void client.invalidateQueries({ queryKey: ["festival-queues", festivalId] });
+      void client.invalidateQueries({ queryKey: ["festival-dashboard", festivalId] });
+      onClose();
+      toast.success("사전 줄 경로를 삭제했습니다.");
+    },
+    onError: (cause) => handleError(cause),
+  });
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -144,7 +160,7 @@ export function QueuePlanPanel({
     },
     onError: handleError,
   });
-  const busy = save.isPending || recommendation.isPending;
+  const busy = save.isPending || recommendation.isPending || remove.isPending;
   const validPath = path.every(
     (p) =>
       Number.isFinite(p.lat) &&
@@ -241,7 +257,7 @@ export function QueuePlanPanel({
         </Button>
         <Button
           variant="outline"
-          disabled={busy || !plan.data || locked || plan.isFetching}
+          disabled={busy || !plan.data || plan.data.path.length < 2 || locked || plan.isFetching}
           onClick={() => {
             if (!plan.data) return;
             onPathChange(plan.data.path);
@@ -265,9 +281,38 @@ export function QueuePlanPanel({
         >
           마지막 점 취소
         </Button>
+        <Button
+          variant="outline"
+          disabled={settingsLocked || path.length <= 1}
+          onClick={() => {
+            setSource(null);
+            onPathChange(path.slice(0, 1));
+          }}
+        >
+          초안 경로 지우기
+        </Button>
+        <Button
+          variant="destructive"
+          disabled={unavailable || !plan.data?.path.length}
+          onClick={() => setDeleteOpen(true)}
+        >
+          사전 경로 삭제
+        </Button>
       </div>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="사전 줄 경로를 삭제하시겠습니까?"
+        description="현재 줄 위치와 대기시간도 초기화됩니다. 새 경로를 설정한 뒤 현재 줄을 다시 기록해 주세요."
+        confirmLabel="경로 삭제"
+        confirmVariant="destructive"
+        onConfirm={() => {
+          setDeleteOpen(false);
+          remove.mutate();
+        }}
+      />
       <p className="body-caption text-zinc-500">
-        {plan.data
+        {plan.data && plan.data.path.length >= 2
           ? `저장된 사전 줄 ${Math.round(plan.data.lengthMeters)}m · 약 ${plan.data.estimatedCapacity}명 수용`
           : plan.isSuccess
             ? "아직 설정된 사전 줄이 없습니다."
