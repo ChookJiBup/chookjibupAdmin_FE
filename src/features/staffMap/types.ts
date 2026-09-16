@@ -19,6 +19,12 @@ export interface FestivalQueue {
   /** 마지막으로 줄끝을 갱신한 사람의 이름. */
   lastModifierName: string | null;
   updatedAt: string | null;
+  waitMinutes?: number | null;
+  congestionLevel?: CongestionLevel | null;
+  observedAt?: string | null;
+  observationRevision?: number;
+  planRevision?: number | null;
+  calculationMethod?: string | null;
 }
 
 export interface FestivalQueueList {
@@ -31,6 +37,8 @@ export interface UpdateQueueTailRequest {
   tailLongitude: number;
   queueTailMeters?: number;
   path?: QueuePathPoint[];
+  expectedRevision?: number;
+  planRevision?: number;
 }
 
 /**

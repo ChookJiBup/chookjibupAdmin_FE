@@ -144,6 +144,8 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
       return {
         boothId: String(dashboardBooth.boothId),
         queueId: queue?.queueId,
+        observationRevision: queue?.observationRevision,
+        planRevision: queue?.planRevision ?? undefined,
         name: dashboardBooth.boothName,
         nodeType: nodeTypeByBoothId.get(dashboardBooth.boothId),
         zoneId:
@@ -153,10 +155,17 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         lat: dashboardBooth.lat ?? undefined,
         lng: dashboardBooth.lng ?? undefined,
         congestionLevel:
-          congestion?.congestionLevel ?? dashboardBooth?.congestionLevel ?? undefined,
-        waitMinutes: congestion?.waitMinutes ?? dashboardBooth?.waitMinutes ?? undefined,
+          queue?.congestionLevel !== undefined
+            ? (queue.congestionLevel ?? undefined)
+            : (congestion?.congestionLevel ?? dashboardBooth?.congestionLevel ?? undefined),
+        waitMinutes:
+          queue?.waitMinutes !== undefined
+            ? (queue.waitMinutes ?? undefined)
+            : (congestion?.waitMinutes ?? dashboardBooth?.waitMinutes ?? undefined),
         congestionUpdatedAt:
-          congestion?.updatedAt ?? dashboardBooth?.congestionUpdatedAt ?? undefined,
+          queue?.observedAt !== undefined
+            ? (queue.observedAt ?? undefined)
+            : (congestion?.updatedAt ?? dashboardBooth?.congestionUpdatedAt ?? undefined),
         lastQueueUpdater:
           queue?.lastModifierName && queue.lastModifierType
             ? { name: queue.lastModifierName, role: queue.lastModifierType }

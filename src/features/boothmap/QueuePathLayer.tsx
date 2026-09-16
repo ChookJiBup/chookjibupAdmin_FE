@@ -34,7 +34,15 @@ export function boothsToQueuePathItems(
     waitMinutes?: number | null;
     congestionLevel?: CongestionLevel | null;
   }>,
-  queueByBoothId: Map<string, { queueId: string; path: LatLng[] | null }>,
+  queueByBoothId: Map<
+    string,
+    {
+      queueId: string;
+      path: LatLng[] | null;
+      waitMinutes?: number | null;
+      congestionLevel?: CongestionLevel | null;
+    }
+  >,
 ): QueuePathItem[] {
   return booths.flatMap((booth) => {
     if (booth.lat === undefined || booth.lng === undefined) return [];
@@ -44,8 +52,12 @@ export function boothsToQueuePathItems(
         queueId: queue?.queueId ?? `wait-${booth.boothId}`,
         boothId: booth.boothId,
         path: queue?.path ?? null,
-        waitMinutes: booth.waitMinutes ?? null,
-        congestionLevel: booth.congestionLevel ?? null,
+        waitMinutes:
+          queue?.waitMinutes !== undefined ? queue.waitMinutes : (booth.waitMinutes ?? null),
+        congestionLevel:
+          queue?.congestionLevel !== undefined
+            ? queue.congestionLevel
+            : (booth.congestionLevel ?? null),
         boothLat: booth.lat,
         boothLng: booth.lng,
       },
