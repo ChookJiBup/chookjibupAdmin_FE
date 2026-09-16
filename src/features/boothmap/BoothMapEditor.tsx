@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { deleteFestivalMap, getMapEditor, replaceFestivalMap, saveMapEditor } from "./api";
@@ -45,6 +45,13 @@ export function BoothMapEditor({
   const [conflict, setConflict] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [zones, setZones] = useState<LocalZone[]>([]);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+
+  const currentSnapshot = useMemo(
+    () => JSON.stringify({ objects, deletedNodeIds, zones }),
+    [objects, deletedNodeIds, zones],
+  );
+  const hasUnsavedChanges = savedSnapshot !== null && savedSnapshot !== currentSnapshot;
 
   // 에디터를 새로 불러올 때만(mapId 변경, 최초 로드, 저장 후 재조회) 캔버스 상태를 채운다.
   // 편집 도중 objects가 바뀌어도 이 effect가 다시 돌아 덮어쓰지 않도록 dataUpdatedAt만 의존한다.
@@ -62,16 +69,16 @@ export function BoothMapEditor({
     loadObjects(loaded);
     const loadedObjectIds = new Set(loaded.map((object) => object.id));
     // 서버 재조회 시 구역 편집 상태도 같은 revision으로 맞춘다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setZones(
-      (editorQuery.data.zones ?? []).map((zone) => ({
+    const loadedZones = (editorQuery.data.zones ?? []).map((zone) => ({
         id: zone.zoneId,
         name: zone.name,
         boothIds: zone.boothNodeIds
           .map((nodeId) => `node-${nodeId}`)
           .filter((objectId) => loadedObjectIds.has(objectId)),
-      })),
-    );
+      }));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setZones(loadedZones);
+    setSavedSnapshot(JSON.stringify({ objects: loaded, deletedNodeIds: [], zones: loadedZones }));
     setZoom(Math.min(1, MAX_DISPLAY_WIDTH / imageWidth) || 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorQuery.dataUpdatedAt]);
@@ -103,6 +110,7 @@ export function BoothMapEditor({
       });
     },
     onSuccess: () => {
+      setSavedSnapshot(currentSnapshot);
       setSavedAt(new Date().toLocaleTimeString("ko-KR"));
       setConflict(false);
       queryClient.invalidateQueries({ queryKey: ["boothmap-editor", festivalId, mapId] });
@@ -158,6 +166,7 @@ export function BoothMapEditor({
         zones={zones}
         onZonesChange={setZones}
         onSave={() => saveMutation.mutate()}
+        hasUnsavedChanges={hasUnsavedChanges}
         saving={saveMutation.isPending}
         saveError={saveMutation.isError ? getApiErrorMessage(saveMutation.error) : null}
         savedAt={savedAt}

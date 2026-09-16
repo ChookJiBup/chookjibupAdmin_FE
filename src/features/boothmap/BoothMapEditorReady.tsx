@@ -46,6 +46,7 @@ export function BoothMapEditorReady({
   zones,
   onZonesChange,
   onSave,
+  hasUnsavedChanges,
   saving,
   saveError,
   savedAt,
@@ -63,6 +64,7 @@ export function BoothMapEditorReady({
   zones: LocalZone[];
   onZonesChange: React.Dispatch<React.SetStateAction<LocalZone[]>>;
   onSave: () => void;
+  hasUnsavedChanges: boolean;
   saving: boolean;
   saveError: string | null;
   savedAt: string | null;
@@ -406,7 +408,12 @@ export function BoothMapEditorReady({
             >
               {replacing ? "재업로드 중..." : "파일 재업로드"}
             </Button>
-            <Button type="button" variant="primary" disabled={saving} onClick={onSave}>
+            <Button
+              type="button"
+              variant={hasUnsavedChanges ? "primary" : "outline"}
+              disabled={saving || !hasUnsavedChanges}
+              onClick={onSave}
+            >
               {saving ? "저장 중..." : "저장하기"}
             </Button>
           </div>

@@ -2565,8 +2565,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </Button>
           <Button
             type="button"
-            variant="outline"
-            disabled={saveMutation.isPending || editingLocked}
+            variant={hasUnsavedChanges ? "primary" : "outline"}
+            disabled={saveMutation.isPending || editingLocked || !hasUnsavedChanges}
             title={saveLockReason}
             onClick={() => setSaveDialogOpen(true)}
           >
