@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CustomOverlayMap, Map as KakaoMap, Polygon, Polyline } from "react-kakao-maps-sdk";
 import {
   CheckCircledIcon,
+  PlusIcon,
   Cross2Icon,
   DimensionsIcon,
   FileIcon,
@@ -28,6 +29,13 @@ import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getFestivalDashboard, getFestivalQueues } from "@/features/dashboard/api";
 import type { FestivalQueue, FestivalQueueList } from "@/features/staffMap/types";
 import { QueuePlanPanel } from "./QueuePlanPanel";
+import { ShapeEditSection } from "./ShapeEditSection";
+import {
+  midpointOf,
+  presetPolygonPoints,
+  straightenLine,
+  type PolygonPreset,
+} from "./shapeGeometry";
 import { BoothQueueActions } from "./BoothQueueActions";
 import { QueuePointEditor } from "./QueuePointEditor";
 import { snapToQueuePath } from "./queueSnap";
@@ -174,6 +182,28 @@ function applyPartitionedNodes(
 */
 const POPOVER_ANCHORS = { xAnchor: 0.5, yAnchor: 1.12 } as const;
 
+type PamphletUploadStatus =
+  "pending" | "uploading" | "failed" | "uploaded-unsaved" | "saved-modified" | "saved";
+
+const PAMPHLET_STATUS: Record<PamphletUploadStatus, { label: string; className: string }> = {
+  pending: { label: "업로드 전 · 저장을 누르면 올라갑니다", className: "text-point-600" },
+  uploading: { label: "업로드 중…", className: "text-zinc-500" },
+  failed: { label: "업로드 실패 · 다시 저장해 주세요", className: "text-error" },
+  "uploaded-unsaved": { label: "업로드됨 · 배치 저장 전", className: "text-point-600" },
+  "saved-modified": { label: "업로드 완료 · 변경 저장 전", className: "text-point-600" },
+  saved: { label: "업로드 완료", className: "text-primary" },
+};
+
+function PamphletStatusLabel({ status }: { status: PamphletUploadStatus }) {
+  const { label, className } = PAMPHLET_STATUS[status];
+  return (
+    <p role="status" className={cn("body-caption flex items-center gap-1", className)}>
+      {status === "saved" ? <CheckCircledIcon className="size-3.5 shrink-0" /> : null}
+      {label}
+    </p>
+  );
+}
+
 /** 지도에서 고를 수 있는 그리기 도구. 핀·폴리곤·라인은 노드, 경계·대기줄은 표시 설정이다. */
 type DrawTool = "select" | "pin" | "polygon" | "line" | "boundary" | "queue-line";
 
@@ -243,6 +273,18 @@ function shapeAnchor(shape: LocalMapShape) {
 }
 
 /**
+ * 도형 말풍선을 띄울 기준점. 무게중심에 띄우면 말풍선이 도형 위쪽 절반과 그 위의
+ * 점 손잡이를 덮어 모양을 고칠 수 없어서, 도형의 가장 위쪽 높이에 맞춘다.
+ */
+function shapePopoverAnchor(shape: LocalMapShape) {
+  const top = Math.max(...shape.points.map((point) => point.lat));
+  if (shape.kind === "line") {
+    return shape.points.find((point) => point.lat === top) ?? shape.points[0];
+  }
+  return { lat: top, lng: shapeAnchor(shape).lng };
+}
+
+/**
  * 카카오맵에서 부스 핀을 찍고 구역을 묶는 편집 화면.
  *
  * 배치도 이미지를 올리면 AI가 부스를 찾아 핀으로 뿌려주고(schema 2.0 위경도),
@@ -269,6 +311,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
   const overlayFileInputRef = useRef<HTMLInputElement>(null);
   const localImageFiles = useRef(new Map<string, File>());
+  /*
+    서버는 팜플렛 원본 파일명을 돌려주지 않는다. 이번 편집 중에 고른 파일만 이름을 알 수 있어
+    objectURL과 업로드 후 assetId 양쪽으로 기억해 둔다. 편집 스냅샷과는 분리한다.
+  */
+  const [pamphletFileNames, setPamphletFileNames] = useState<Record<string, string>>({});
+  const uploadedPamphletName = useRef<string | null>(null);
   const kakaoMapRef = useRef<kakao.maps.Map | null>(null);
   const [kakaoMap, setKakaoMap] = useState<kakao.maps.Map | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -350,6 +398,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [queueDraftRevision, setQueueDraftRevision] = useState<number | undefined>();
   const [queueTailOnly, setQueueTailOnly] = useState(false);
   const [queuePlanBusy, setQueuePlanBusy] = useState(false);
+  const [showQueueCoordinates, setShowQueueCoordinates] = useState(false);
   const [queueDraftId, setQueueDraftId] = useState<string | null>(null);
   const [queueSaveError, setQueueSaveError] = useState<string | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -485,7 +534,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   */
   const selectedFocus = useMemo(() => {
     if (selectedBooth) return { lat: selectedBooth.lat, lng: selectedBooth.lng };
-    if (selectedShape) return shapeAnchor(selectedShape);
+    if (selectedShape) return shapePopoverAnchor(selectedShape);
     return null;
   }, [selectedBooth, selectedShape]);
   const selectedLatitude = selectedFocus?.lat;
@@ -511,7 +560,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       const right = toolsLeft > left ? Math.min(bounds.width, toolsLeft) : bounds.width;
       const targetX = (left + right) / 2;
       /*
-        말풍선(높이 약 200px)이 대상 위쪽에 뜨므로, 화면이 낮으면 세로 가운데에 둬도
+        말풍선이 대상 위쪽에 뜨므로, 화면이 낮으면 세로 가운데에 둬도
         상단 버튼 줄 밑으로 파고든다. 버튼 줄 아래에 말풍선이 들어갈 만큼은 내린다.
         버튼 줄은 좁은 화면에서 두 줄로 접히므로 높이를 실제로 재서 쓴다 — 상수로 두면
         접힌 만큼 말풍선이 버튼 아래로 파고들어 이름 입력칸이 가려진다.
@@ -519,7 +568,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         재는 대상은 «위쪽» 버튼 줄이다. mapToolsRef는 오른쪽 «아래» 도구 열이라, 그쪽
         bottom을 쓰면 지도 높이만큼 더 내려보내 핀과 말풍선이 화면 밖으로 나간다.
       */
-      const popoverRoom = 200;
+      // 대기줄·모양 편집 영역이 붙으면서 말풍선이 약 350px까지 길어졌다.
+      const popoverRoom = 380;
       const topBarBottom = topBar ? Math.max(0, topBar.bottom - bounds.top) : 96;
       const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
       const projection = kakaoMap.getProjection();
@@ -592,6 +642,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         const uploaded = await uploadMapOverlay(festivalId, mapQuery.data.mapId, file);
         overlay = { ...overlay, ...uploaded, imageUrl: uploaded.imageUrl ?? overlay.imageUrl };
         setPamphlet(overlay);
+        setPamphletFileNames((names) => ({ ...names, [uploaded.assetId]: file.name }));
+        uploadedPamphletName.current = file.name;
       }
       return saveMapEditor(festivalId, mapQuery.data.mapId, {
         baseRevision: editRevision,
@@ -663,12 +715,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       // 저장 직후 화면 상태를 "저장된 상태"로 다시 기준 잡는다.
       setSeedToken((token) => token + 1);
       // 저장해도 공개는 그대로 유지된다(서버가 공개본을 방금 저장한 판으로 따라오게 한다).
+      const uploadedName = uploadedPamphletName.current;
+      uploadedPamphletName.current = null;
       toast.success("부스맵과 표시 설정이 저장되었습니다.", {
         description:
-          approvedCount > 0 ? `부스 ${approvedCount}개를 운영 목록에 등록했습니다.` : undefined,
+          [
+            uploadedName ? `팜플렛 ${uploadedName} 업로드를 완료했습니다.` : null,
+            approvedCount > 0 ? `부스 ${approvedCount}개를 운영 목록에 등록했습니다.` : null,
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
       });
     },
     onError: async (error) => {
+      uploadedPamphletName.current = null;
       if (getApiErrorCode(error) === 40910) {
         toast.error("다른 곳에서 수정되었습니다.", {
           description:
@@ -838,6 +898,37 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     setSavedSnapshot({ key: seededKey, value: currentSnapshot });
   }
   const hasUnsavedChanges = savedSnapshot !== null && savedSnapshot.value !== currentSnapshot;
+
+  /** 팜플렛이 서버에 올라갔는지. 저장 버튼 하나로 업로드와 배치 저장이 같이 일어나 구분해 보여 준다. */
+  const serverOverlay = editorQuery.data?.presentation?.overlay;
+  const pamphletStatus: PamphletUploadStatus | null = !pamphlet
+    ? null
+    : saveMutation.isPending && pamphlet.assetId !== serverOverlay?.assetId
+      ? "uploading"
+      : !pamphlet.assetId
+        ? saveMutation.isError
+          ? "failed"
+          : "pending"
+        : pamphlet.assetId !== serverOverlay?.assetId
+          ? "uploaded-unsaved"
+          : JSON.stringify([
+                pamphlet.anchor,
+                pamphlet.opacity,
+                pamphlet.visible,
+                pamphlet.clipToBoundary,
+              ]) !==
+              JSON.stringify([
+                serverOverlay.anchor,
+                serverOverlay.opacity,
+                serverOverlay.visible,
+                serverOverlay.clipToBoundary,
+              ])
+            ? "saved-modified"
+            : "saved";
+  const pamphletFileName = pamphlet
+    ? (pamphletFileNames[pamphlet.assetId ?? ""] ??
+      pamphletFileNames[pamphlet.localObjectUrl ?? ""])
+    : undefined;
 
   /*
     방문객 공개 상태. 저장해도 공개는 유지되고, 공개와 해제는 관리자가 버튼으로 직접 정한다.
@@ -1068,6 +1159,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     const image = new Image();
     image.onload = () => {
       localImageFiles.current.set(url, file);
+      setPamphletFileNames((names) => ({ ...names, [url]: file.name }));
       const center = kakaoMapRef.current?.getCenter();
       const centerLatitude = center?.getLat() ?? mapCenter?.lat ?? 37.5;
       const centerLongitude = center?.getLng() ?? mapCenter?.lng ?? 127;
@@ -1164,7 +1256,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   }, [queueDraftId, queueMode, selectedOpsBoothId]);
   const canPlanQueue = selectedOpsBoothId != null && selectedBooth?.nodeType === "BOOTH";
   const canEditQueue = Boolean(selectedQueue && canPlanQueue);
-  const [queuePlanEntry, setQueuePlanEntry] = useState<"manual" | "ai">("manual");
   const selectedPlanQuery = useQuery({
     queryKey: ["booth-queue-plan", festivalId, selectedOpsBoothId],
     queryFn: () => getQueuePlan(festivalId, selectedOpsBoothId!),
@@ -1204,9 +1295,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             ? "현재 대기열 조회에 실패했습니다. 화면을 새로고침해 주세요."
             : "현재 대기열을 불러오거나 운영 부스 승인을 완료해 주세요."
           : undefined;
-  function openQueuePlan(entry: "manual" | "ai" = "manual") {
+  function openQueuePlan() {
     if (planDisabledReason || !selectedBooth) return;
-    setQueuePlanEntry(entry);
     setQueueMode("plan");
     setDrawTool("queue-line");
     setPinTypeMenuOpen(false);
@@ -1237,16 +1327,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       <BoothQueueActions
         boothName={selectedBooth.name}
         planExists={Boolean(selectedPlanQuery.data && selectedPlanQuery.data.path.length >= 2)}
+        planSummary={
+          selectedPlanQuery.data && selectedPlanQuery.data.path.length >= 2
+            ? `사전 줄 ${Math.round(selectedPlanQuery.data.lengthMeters)}m · 약 ${selectedPlanQuery.data.estimatedCapacity}명`
+            : undefined
+        }
+        waitMinutes={selectedQueue?.waitMinutes}
         currentExists={Boolean(selectedQueue?.path && selectedQueue.path.length >= 2)}
         planDisabledReason={planDisabledReason}
         currentDisabledReason={currentDisabledReason}
-        aiDisabledReason={
-          !siteBoundary || siteBoundary.length < 3
-            ? "AI 줄 설정은 행사장 경계를 먼저 저장해야 합니다."
-            : undefined
-        }
-        onPlan={() => openQueuePlan()}
-        onAi={() => openQueuePlan("ai")}
+        onPlan={openQueuePlan}
         onCurrent={openCurrentQueue}
       />
     ) : null;
@@ -1600,6 +1690,53 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     window.addEventListener("pointercancel", handleUp);
   }
 
+  /** 고른 모양으로 꼭짓점을 다시 만든다. 위치와 대략의 크기는 유지한다. */
+  function applyShapePreset(shape: LocalMapShape, preset: PolygonPreset) {
+    setShapes((prev) =>
+      prev.map((item) =>
+        item.id === shape.id ? { ...item, points: presetPolygonPoints(item.points, preset) } : item,
+      ),
+    );
+  }
+
+  function straightenShape(shape: LocalMapShape) {
+    setShapes((prev) =>
+      prev.map((item) =>
+        item.id === shape.id ? { ...item, points: straightenLine(item.points) } : item,
+      ),
+    );
+  }
+
+  /**
+   * 변 가운데 손잡이를 누르면 그 자리에 꼭짓점을 끼워 넣고 곧바로 끌기를 시작한다.
+   * 누르고 놓기만 해도 가운데에 점이 하나 생긴다.
+   */
+  function insertVertexAndDrag(
+    shape: LocalMapShape,
+    afterIndex: number,
+    event: React.PointerEvent,
+  ) {
+    if (editingLocked || drawTool !== "select" || event.button !== 0) return;
+    const points = shape.points;
+    const next = points[(afterIndex + 1) % points.length];
+    const inserted = midpointOf(points[afterIndex], next);
+    setShapes((prev) =>
+      prev.map((item) =>
+        item.id === shape.id
+          ? {
+              ...item,
+              points: [
+                ...item.points.slice(0, afterIndex + 1),
+                inserted,
+                ...item.points.slice(afterIndex + 1),
+              ],
+            }
+          : item,
+      ),
+    );
+    startVertexDrag(shape, afterIndex + 1, event);
+  }
+
   /** 꼭짓점 하나를 지운다. 최소 점수(폴리곤 3, 라인 2)보다 적어지면 거절한다. */
   function removeVertex(shape: LocalMapShape, index: number) {
     const minimum = SHAPE_MINIMUM_POINTS[shape.kind];
@@ -1655,7 +1792,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     setEditingBoothId(null);
     setSelectedShapeId(shapeId);
     toast.success(`${booth.name}을(를) ${SHAPE_LABEL[category]}(으)로 바꿨습니다.`, {
-      description: "꼭짓점을 끌어 모양을 맞춘 뒤 저장하기를 눌러 주세요.",
+      description: "꼭짓점을 끌어 모양을 맞춘 뒤 저장을 눌러 주세요.",
     });
   }
 
@@ -1687,7 +1824,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       setCheckedIds(new Set([pinId]));
       setEditingBoothId(pinId);
       toast.success(`${shape.name}을(를) 핀으로 바꿨습니다.`, {
-        description: "저장하기를 눌러야 서버에 반영됩니다.",
+        description: "저장을 눌러야 서버에 반영됩니다.",
       });
       return;
     }
@@ -1701,7 +1838,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       ),
     );
     toast.success(`${shape.name}을(를) ${SHAPE_LABEL[category]}(으)로 바꿨습니다.`, {
-      description: "꼭짓점을 끌어 모양을 맞춘 뒤 저장하기를 눌러 주세요.",
+      description: "꼭짓점을 끌어 모양을 맞춘 뒤 저장을 눌러 주세요.",
     });
   }
 
@@ -2234,26 +2371,44 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 setEditingBoothId(null);
               };
               const path = shapePointsOf(shape);
-              return shape.kind === "polygon" ? (
-                <Polygon
-                  key={shape.id}
-                  path={path}
-                  fillColor="#236cf6"
-                  fillOpacity={selected ? 0.25 : 0.1}
-                  strokeColor="#236cf6"
-                  strokeWeight={selected ? 3 : 2}
-                  strokeOpacity={0.8}
-                  onClick={select}
-                />
-              ) : (
+              // 다른 도형을 고른 동안에는 흐리게 두어 지금 편집 중인 도형이 눈에 띄게 한다.
+              const dimmed = selectedShapeId !== null && !selected;
+              // 고른 도형은 흰 테두리를 한 겹 깔아 지도 색과 겹쳐도 윤곽이 보이게 한다.
+              const halo = selected ? (
                 <Polyline
-                  key={shape.id}
-                  path={path}
-                  strokeColor="#236cf6"
-                  strokeWeight={selected ? 6 : 4}
+                  path={shape.kind === "polygon" ? [...path, path[0]] : path}
+                  strokeColor="#ffffff"
+                  strokeWeight={shape.kind === "polygon" ? 8 : 11}
                   strokeOpacity={0.9}
-                  onClick={select}
+                  zIndex={1}
                 />
+              ) : null;
+              return shape.kind === "polygon" ? (
+                <Fragment key={shape.id}>
+                  {halo}
+                  <Polygon
+                    path={path}
+                    fillColor="#236cf6"
+                    fillOpacity={selected ? 0.3 : dimmed ? 0.05 : 0.1}
+                    strokeColor="#236cf6"
+                    strokeWeight={selected ? 4 : 2}
+                    strokeOpacity={dimmed ? 0.4 : 0.8}
+                    zIndex={selected ? 2 : 0}
+                    onClick={select}
+                  />
+                </Fragment>
+              ) : (
+                <Fragment key={shape.id}>
+                  {halo}
+                  <Polyline
+                    path={path}
+                    strokeColor="#236cf6"
+                    strokeWeight={selected ? 7 : 4}
+                    strokeOpacity={dimmed ? 0.4 : 0.9}
+                    zIndex={selected ? 2 : 0}
+                    onClick={select}
+                  />
+                </Fragment>
               );
             })}
             {/*
@@ -2291,10 +2446,48 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       }}
                       className="flex size-6 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
                     >
-                      <span className="block size-3 rounded-full border-2 border-primary bg-white shadow" />
+                      <span className="block size-3.5 rounded-full border-2 border-primary bg-white shadow" />
                     </button>
                   </CustomOverlayMap>
                 ))
+              : null}
+            {selectedShape && !editingLocked && drawTool === "select" && !draggingVertex
+              ? shapePointsOf(selectedShape)
+                  .slice(0, selectedShape.kind === "polygon" ? undefined : -1)
+                  .map((point, index, list) => {
+                    const all = shapePointsOf(selectedShape);
+                    const next = all[(index + 1) % all.length];
+                    return (
+                      <CustomOverlayMap
+                        key={`${selectedShape.id}-mid-${index}-${list.length}`}
+                        position={midpointOf(point, next)}
+                        clickable
+                        zIndex={24}
+                      >
+                        <button
+                          type="button"
+                          aria-label={`${index + 1}번과 ${((index + 1) % all.length) + 1}번 점 사이에 점 추가`}
+                          title="눌러서 점 추가 · 끌어서 모양 바꾸기"
+                          onPointerEnter={() => {
+                            vertexHoveredRef.current = true;
+                            kakaoMapRef.current?.setDraggable(false);
+                          }}
+                          onPointerLeave={() => {
+                            vertexHoveredRef.current = false;
+                            if (!vertexDraggingRef.current) kakaoMapRef.current?.setDraggable(true);
+                          }}
+                          onPointerDown={(event) =>
+                            insertVertexAndDrag(selectedShape, index, event)
+                          }
+                          className="flex size-6 cursor-copy touch-none items-center justify-center"
+                        >
+                          <span className="flex size-3.5 items-center justify-center rounded-full border border-primary bg-white text-primary opacity-80 shadow-sm hover:opacity-100 [&_svg]:size-2.5">
+                            <PlusIcon />
+                          </span>
+                        </button>
+                      </CustomOverlayMap>
+                    );
+                  })
               : null}
             {/* 그리는 중인 도형 — 확정 전이라 점선으로 구분해 보여 준다. */}
             {draftPoints.length >= 2 ? (
@@ -2433,7 +2626,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   key={selectedBooth.id}
                   mode="booth-edit"
                   style={{ position: "static" }}
-                  boothActions={boothQueueActions}
+                  extraSection={boothQueueActions}
                   initialName={selectedBooth.name}
                   typeLabel={NODE_TYPE_LABEL[selectedBooth.nodeType] ?? "시설"}
                   parentZoneName={selectedBoothParentName}
@@ -2477,7 +2670,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             ) : null}
             {selectedShape && !editingLocked && drawTool === "select" ? (
               <CustomOverlayMap
-                position={shapeAnchor({ ...selectedShape, points: shapePointsOf(selectedShape) })}
+                position={shapePopoverAnchor({
+                  ...selectedShape,
+                  points: shapePointsOf(selectedShape),
+                })}
                 {...POPOVER_ANCHORS}
                 zIndex={30}
               >
@@ -2496,13 +2692,21 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       ),
                     );
                     setSelectedShapeId(null);
-                    // 도형 편집은 아직 초안이다. 저장하기를 눌러야 서버로 간다.
+                    // 도형 편집은 아직 초안이다. 저장을 눌러야 서버로 간다.
                     toast.success(`${name}을(를) 반영했습니다.`, {
-                      description: "저장하기를 눌러야 서버에 반영됩니다.",
+                      description: "저장을 눌러야 서버에 반영됩니다.",
                     });
                   }}
                   onCancel={() => setSelectedShapeId(null)}
                   onDelete={() => deleteShape(selectedShape.id)}
+                  extraSection={
+                    <ShapeEditSection
+                      kind={selectedShape.kind}
+                      points={shapePointsOf(selectedShape)}
+                      onApplyPreset={(preset) => applyShapePreset(selectedShape, preset)}
+                      onStraighten={() => straightenShape(selectedShape)}
+                    />
+                  }
                 />
               </CustomOverlayMap>
             ) : null}
@@ -2743,7 +2947,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   }}
                   className={cn(
                     "flex items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-zinc-100",
-                    selectedShapeId === shape.id && "bg-zinc-100",
+                    selectedShapeId === shape.id && "bg-primary/10 hover:bg-primary/10",
                   )}
                 >
                   <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
@@ -2778,13 +2982,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       >
         <div className="flex items-center gap-2">
           <span
+            className="flex"
             title={
               editLockReason ??
               (canUndo ? "실행취소 (Ctrl/⌘+Z)" : "편집 내용이 없어 실행취소할 수 없습니다.")
             }
           >
             <IconButton
-              icon={<ResetIcon className="size-5" />}
+              icon={<ResetIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
               aria-label="실행취소"
               disabled={undoDisabled}
               onClick={undo}
@@ -2792,13 +2999,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             />
           </span>
           <span
+            className="flex"
             title={
               editLockReason ??
               (canRedo ? "다시실행 (Shift+Ctrl/⌘+Z)" : "편집 내용이 없어 다시실행할 수 없습니다.")
             }
           >
             <IconButton
-              icon={<ResetIcon className="size-5 -scale-x-100" />}
+              icon={<ResetIcon className="-scale-x-100" />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
               aria-label="다시실행"
               disabled={redoDisabled}
               onClick={redo}
@@ -2834,24 +3044,23 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             variant="outline"
             icon={<FileIcon />}
             disabled={replaceMutation.isPending || editingLocked}
-            title={editLockReason ?? undefined}
+            title={
+              editLockReason ??
+              (hasBlueprintImage ? "다른 배치도 이미지로 다시 분석" : "배치도 이미지로 AI 분석")
+            }
             onClick={() => setAnalyzeDialogOpen(true)}
           >
-            {replaceMutation.isPending
-              ? "배치도 올리는 중..."
-              : hasBlueprintImage
-                ? "다른 배치도로 다시 분석"
-                : "배치도 이미지로 AI 분석"}
+            {replaceMutation.isPending ? "올리는 중..." : hasBlueprintImage ? "재분석" : "AI 분석"}
           </Button>
           <Button
             type="button"
             variant="outline"
             icon={<ImageIcon />}
             disabled={editingLocked}
-            title={editLockReason ?? undefined}
+            title={editLockReason ?? "팜플렛 이미지 올리기"}
             onClick={() => overlayFileInputRef.current?.click()}
           >
-            팜플렛 올리기
+            팜플렛
           </Button>
           <Button
             type="button"
@@ -2860,7 +3069,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             title={saveLockReason}
             onClick={() => setSaveDialogOpen(true)}
           >
-            {saveMutation.isPending ? "저장 중..." : "저장하기"}
+            {saveMutation.isPending ? "저장 중..." : "저장"}
           </Button>
           {/*
             공개 여부는 방문객에게 보이는지를 가르는 유일한 신호라 항상 자리를 지킨다.
@@ -2870,28 +3079,30 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           {isPublished ? (
             <button
               type="button"
-              className="body-regular-bold flex items-center gap-2 rounded-md border border-primary-300 bg-primary-300/20 px-4 py-2 text-primary disabled:opacity-50"
+              className="body-regular-bold flex items-center gap-2 rounded-md border border-primary-300 bg-white px-4 py-2 text-primary hover:bg-zinc-100 disabled:opacity-50"
               title="방문객 앱 부스지도에 보이는 중입니다. 눌러서 공개를 해제합니다."
               disabled={unpublishMutation.isPending}
               onClick={() => setUnpublishDialogOpen(true)}
             >
               <CheckCircledIcon className="size-4 shrink-0" />
-              {unpublishMutation.isPending ? "해제하는 중..." : "공개됨"}
+              {unpublishMutation.isPending ? "해제 중..." : "공개됨"}
             </button>
           ) : (
             <Button
               type="button"
               variant="primary"
               disabled={publishMutation.isPending || publishLockReason !== null}
-              title={publishLockReason ?? undefined}
+              title={publishLockReason ?? "방문객 앱 부스지도에 공개"}
               onClick={() => setPublishDialogOpen(true)}
             >
-              {publishMutation.isPending ? "공개하는 중..." : "방문객에게 공개"}
+              {publishMutation.isPending ? "공개 중..." : "공개하기"}
             </Button>
           )}
         </div>
         <IconButton
-          icon={<Cross2Icon className="size-5" />}
+          icon={<Cross2Icon />}
+          size="lg"
+          iconClassName="size-5 [&_svg]:size-5"
           aria-label="닫기"
           className="text-zinc-950"
           onClick={() => setCloseDialogOpen(true)}
@@ -2905,7 +3116,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       >
         <div className="flex flex-col gap-1">
           <IconButton
-            icon={<RadiobuttonIcon className="size-5" />}
+            icon={<RadiobuttonIcon />}
+            size="lg"
+            iconClassName="size-5 [&_svg]:size-5"
             aria-label="핀 추가"
             aria-pressed={drawTool === "pin"}
             disabled={editingLocked}
@@ -2934,9 +3147,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               ))}
             </div>
           ) : null}
-          <span title={editLockReason ?? "폴리곤 그리기 — 지도를 눌러 꼭짓점을 찍습니다"}>
+          <span
+            className="flex"
+            title={editLockReason ?? "폴리곤 그리기 — 지도를 눌러 꼭짓점을 찍습니다"}
+          >
             <IconButton
-              icon={<DimensionsIcon className="size-5" />}
+              icon={<DimensionsIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
               aria-label="폴리곤 추가"
               aria-pressed={drawTool === "polygon"}
               disabled={editingLocked}
@@ -2944,9 +3162,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               onClick={() => startShapeTool("polygon")}
             />
           </span>
-          <span title={editLockReason ?? "라인 그리기 — 지도를 눌러 꺾은점을 찍습니다"}>
+          <span
+            className="flex"
+            title={editLockReason ?? "라인 그리기 — 지도를 눌러 꺾은점을 찍습니다"}
+          >
             <IconButton
-              icon={<RulerHorizontalIcon className="size-5" />}
+              icon={<RulerHorizontalIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
               aria-label="라인 추가"
               aria-pressed={drawTool === "line"}
               disabled={editingLocked}
@@ -2954,9 +3177,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               onClick={() => startShapeTool("line")}
             />
           </span>
-          <span title={editLockReason ?? "부지 경계 — 지도를 눌러 꼭짓점을 찍습니다"}>
+          <span
+            className="flex"
+            title={editLockReason ?? "부지 경계 — 지도를 눌러 꼭짓점을 찍습니다"}
+          >
             <IconButton
-              icon={<CornersIcon className="size-5" />}
+              icon={<CornersIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
               aria-label="부지 경계"
               aria-pressed={drawTool === "boundary"}
               disabled={editingLocked}
@@ -2969,9 +3197,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               }}
             />
           </span>
-          <span title={canEditQueue ? undefined : queueToolDisabledReason}>
+          <span className="flex" title={canEditQueue ? undefined : queueToolDisabledReason}>
             <IconButton
-              icon={<ClockIcon className="size-5" />}
+              icon={<ClockIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
               aria-label="대기줄 추가"
               aria-pressed={drawTool === "queue-line"}
               disabled={
@@ -2998,15 +3228,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               }}
             />
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={Boolean(planDisabledReason)}
-            title={planDisabledReason}
-            onClick={() => openQueuePlan()}
-          >
-            사전 줄 설정
-          </Button>
         </div>
         <MapZoomControls
           onZoomIn={() => setZoomStep((step) => Math.max(step - 1, -2))}
@@ -3071,14 +3292,13 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         </div>
       ) : null}
       {drawTool === "queue-line" ? (
-        <div className="pointer-events-auto absolute right-16 bottom-4 left-4 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md lg:right-28 lg:bottom-10 lg:left-[23rem]">
+        <div className="pointer-events-auto absolute right-16 bottom-4 left-4 rounded-lg border border-zinc-200 bg-white px-4 py-3 shadow-md lg:right-28 lg:bottom-10 lg:left-[23rem]">
           {queueMode === "plan" && selectedOpsBoothId != null && selectedBooth ? (
             <QueuePlanPanel
               key={`${mapQuery.data?.mapId}-${selectedOpsBoothId}`}
               festivalId={festivalId}
               boothId={selectedOpsBoothId}
               boothName={selectedBooth.name}
-              entry={queuePlanEntry}
               nodeVersion={
                 editorQuery.data?.nodes.find((node) => node.nodeId === selectedBooth.nodeId)
                   ?.version
@@ -3091,54 +3311,110 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               locked={editingLocked || hasUnsavedChanges || !canPlanQueue}
             />
           ) : (
-            <>
-              <p className="body-caption text-zinc-500">
-                현재 줄 저장 시 대기시간이 자동 계산됩니다.{" "}
-                {selectedQueue?.waitMinutes != null
-                  ? `현재 ${selectedQueue.waitMinutes}분`
-                  : "아직 미관측"}
-              </p>
-              <Button type="button" variant="outline" onClick={cancelDraftShape}>
-                취소
-              </Button>
-              <Button
-                variant="outline"
-                disabled
-                onClick={() => {
-                  setQueueTailOnly(!queueTailOnly);
-                  setQueueDraft([]);
-                }}
-              >
-                사전 선 따라 줄끝 선택
-              </Button>
-              {queueTailOnly ? (
-                <p className="body-caption text-zinc-500">
-                  지도에서 현재 줄끝을 선택하세요.{" "}
-                  {selectedPlanQuery.data
-                    ? "사전 경로의 점유 구간으로 계산합니다."
-                    : "부스부터 직선 거리로 계산합니다."}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <p className="body-small text-zinc-950">
+                  {selectedBooth ? (
+                    <>
+                      <span className="body-small-bold">{selectedBooth.name}</span> ·{" "}
+                    </>
+                  ) : null}
+                  {queueTailOnly
+                    ? "지도를 눌러 현재 줄 끝을 찍으세요. 사전 경로 위로 맞춰집니다"
+                    : "지도를 눌러 현재 줄이 꺾이는 지점을 찍으세요"}
+                  <span className="body-small-bold ml-2 text-primary">
+                    {selectedQueue?.waitMinutes != null
+                      ? `현재 대기 ${selectedQueue.waitMinutes}분`
+                      : "아직 미관측"}
+                  </span>
                 </p>
-              ) : null}
-              <Button
-                type="button"
-                variant="primary"
-                disabled={
-                  queueDraft.length < (queueTailOnly ? 1 : 2) ||
-                  queueSaveMutation.isPending ||
-                  !queueDraft.every(
-                    (p) =>
-                      Number.isFinite(p.lat) &&
-                      Number.isFinite(p.lng) &&
-                      Math.abs(p.lat) <= 90 &&
-                      Math.abs(p.lng) <= 180,
-                  ) ||
-                  selectedQueue?.queueId !== queueDraftId
-                }
-                onClick={() => queueSaveMutation.mutate(queueDraft)}
-              >
-                {queueSaveMutation.isPending ? "저장 중..." : "대기줄 저장"}
-              </Button>
-              {!queueTailOnly ? (
+                <div className="ml-auto flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={cancelDraftShape}>
+                    그만두기
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={
+                      queueDraft.length < (queueTailOnly ? 1 : 2) ||
+                      queueSaveMutation.isPending ||
+                      !queueDraft.every(
+                        (p) =>
+                          Number.isFinite(p.lat) &&
+                          Number.isFinite(p.lng) &&
+                          Math.abs(p.lat) <= 90 &&
+                          Math.abs(p.lng) <= 180,
+                      ) ||
+                      selectedQueue?.queueId !== queueDraftId
+                    }
+                    onClick={() => queueSaveMutation.mutate(queueDraft)}
+                  >
+                    {queueSaveMutation.isPending ? "저장 중..." : "대기줄 저장"}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1 border-t border-zinc-200 pt-3">
+                {/*
+                  지도에 그려 둔 라인(통로·대기 라인)을 초안으로 옮긴다. 자동으로 승격하지
+                  않는 이유는 지도 노드와 운영 대기줄이 다른 데이터이기 때문이다.
+                */}
+                {lineShapes.length > 0 ? (
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      selected={queueImportOpen}
+                      onClick={() => setQueueImportOpen((open) => !open)}
+                    >
+                      참고선 가져오기
+                    </Button>
+                    {queueImportOpen ? (
+                      <div className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
+                        {lineShapes.map((shape) => (
+                          <button
+                            key={shape.id}
+                            type="button"
+                            onClick={() => importQueueDraftFrom(shape)}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-zinc-100"
+                          >
+                            <span className="body-small truncate text-zinc-950">{shape.name}</span>
+                            <span className="body-caption ml-auto shrink-0 text-zinc-500">
+                              점 {shape.points.length}개
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {queueDraft.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    selected={showQueueCoordinates}
+                    aria-expanded={showQueueCoordinates}
+                    onClick={() => setShowQueueCoordinates((open) => !open)}
+                  >
+                    좌표 직접 입력
+                  </Button>
+                ) : null}
+                {/* 이미 저장된 경로가 있을 때만. 서버에는 빈 배열이 곧 삭제다. */}
+                {selectedQueue?.path && selectedQueue.path.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto text-error"
+                    disabled={queueSaveMutation.isPending}
+                    onClick={() => setClearQueuePathOpen(true)}
+                  >
+                    경로 지우기
+                  </Button>
+                ) : null}
+              </div>
+              {showQueueCoordinates && !queueTailOnly ? (
                 <QueuePointEditor
                   path={queueDraft}
                   onChange={setQueueDraft}
@@ -3149,7 +3425,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   }
                 />
               ) : null}
-              {queueTailOnly && queueDraft.length === 1 ? (
+              {showQueueCoordinates && queueTailOnly && queueDraft.length === 1 ? (
                 <QueuePointEditor
                   path={queueDraft}
                   onChange={(points) => {
@@ -3164,51 +3440,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   locked={queueSaveMutation.isPending}
                 />
               ) : null}
-              {/* 이미 저장된 경로가 있을 때만. 서버에는 빈 배열이 곧 삭제다. */}
-              {selectedQueue?.path && selectedQueue.path.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={queueSaveMutation.isPending}
-                  onClick={() => setClearQueuePathOpen(true)}
-                >
-                  경로 지우기
-                </Button>
-              ) : null}
-              {/*
-            지도에 그려 둔 라인(통로·대기 라인)을 초안으로 옮긴다. 자동으로 승격하지
-            않는 이유는 지도 노드와 운영 대기줄이 다른 데이터이기 때문이다.
-          */}
-              {lineShapes.length > 0 ? (
-                <div className="relative">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setQueueImportOpen((open) => !open)}
-                  >
-                    참고선 가져오기
-                  </Button>
-                  {queueImportOpen ? (
-                    <div className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
-                      {lineShapes.map((shape) => (
-                        <button
-                          key={shape.id}
-                          type="button"
-                          onClick={() => importQueueDraftFrom(shape)}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-zinc-100"
-                        >
-                          <span className="body-small truncate text-zinc-950">{shape.name}</span>
-                          <span className="body-caption ml-auto shrink-0 text-zinc-500">
-                            점 {shape.points.length}개
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
               {queueSaveError ? <p className="body-caption text-error">{queueSaveError}</p> : null}
-            </>
+            </div>
           )}
         </div>
       ) : null}
@@ -3216,12 +3449,31 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       {pamphlet ? (
         <div className="absolute top-28 left-4 w-72 rounded-lg bg-white p-4 shadow-md lg:top-10 lg:left-[23rem]">
           <p className="body-small-bold text-zinc-950">팜플렛 배치</p>
-          <p className="body-caption mt-1 text-zinc-500">
+          <div className="mt-3 flex items-center gap-3 rounded-md border border-zinc-200 p-2">
+            {/* 서명 URL이라 next/image 최적화 대상이 아니다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={pamphlet.imageUrl}
+              alt=""
+              className="size-12 shrink-0 rounded-sm border border-zinc-200 object-cover"
+            />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <p className="body-small-bold truncate text-zinc-950" title={pamphletFileName}>
+                {pamphletFileName ?? "저장된 팜플렛 이미지"}
+              </p>
+              <p className="body-caption text-zinc-500">
+                {pamphlet.imageWidth}×{pamphlet.imageHeight}px
+              </p>
+              {pamphletStatus ? <PamphletStatusLabel status={pamphletStatus} /> : null}
+            </div>
+          </div>
+          <p className="body-caption mt-2 text-zinc-500">
             이미지만 움직이며 부스 좌표는 유지됩니다.
           </p>
           <Button
             type="button"
             variant="outline"
+            className="mt-3 w-full"
             onClick={() => {
               const center = kakaoMap?.getCenter();
               if (center)

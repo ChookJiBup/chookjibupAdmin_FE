@@ -70,12 +70,12 @@ export function BoothMapEditor({
     const loadedObjectIds = new Set(loaded.map((object) => object.id));
     // 서버 재조회 시 구역 편집 상태도 같은 revision으로 맞춘다.
     const loadedZones = (editorQuery.data.zones ?? []).map((zone) => ({
-        id: zone.zoneId,
-        name: zone.name,
-        boothIds: zone.boothNodeIds
-          .map((nodeId) => `node-${nodeId}`)
-          .filter((objectId) => loadedObjectIds.has(objectId)),
-      }));
+      id: zone.zoneId,
+      name: zone.name,
+      boothIds: zone.boothNodeIds
+        .map((nodeId) => `node-${nodeId}`)
+        .filter((objectId) => loadedObjectIds.has(objectId)),
+    }));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setZones(loadedZones);
     setSavedSnapshot(JSON.stringify({ objects: loaded, deletedNodeIds: [], zones: loadedZones }));

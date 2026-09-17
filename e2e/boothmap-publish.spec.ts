@@ -114,7 +114,7 @@ test("편집 중인 부스맵은 확인 모달을 거쳐 방문객에게 공개�
   const publishCalls = await mockBoothMap(page, "EDITING");
   await page.goto(boothmapPath);
 
-  const publishButton = page.getByRole("button", { name: "방문객에게 공개", exact: true });
+  const publishButton = page.getByRole("button", { name: "공개하기", exact: true });
   await expect(publishButton).toBeEnabled();
   await publishButton.click();
 
@@ -125,7 +125,7 @@ test("편집 중인 부스맵은 확인 모달을 거쳐 방문객에게 공개�
   await page.getByRole("button", { name: "공개", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "공개됨", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "방문객에게 공개", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "공개하기", exact: true })).toHaveCount(0);
   expect(publishCalls).toEqual([`POST /api/festivals/${festivalId}/maps/${mapId}/publish`]);
 });
 
@@ -142,7 +142,7 @@ test("공개된 부스맵은 «공개됨»을 눌러 확인 모달을 거쳐 다
   await expect(page.getByText("더 이상 보이지 않습니다", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "공개 해제", exact: true }).click();
 
-  await expect(page.getByRole("button", { name: "방문객에게 공개", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "공개하기", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "공개됨", exact: true })).toHaveCount(0);
   expect(publishCalls).toEqual([`DELETE /api/festivals/${festivalId}/maps/${mapId}/publish`]);
 });

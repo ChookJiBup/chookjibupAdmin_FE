@@ -125,8 +125,8 @@ test("종료된 축제의 부스맵 편집기는 주소로 직접 들어와도 �
   await expect(panel.getByRole("button", { name: "김밥천국", exact: true })).toBeVisible();
   await expect(panel.getByText("종료된 축제입니다.", { exact: true })).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "저장하기", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: /배치도/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /AI 분석|재분석/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: "핀 추가", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "실행취소", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "다시실행", exact: true })).toBeDisabled();

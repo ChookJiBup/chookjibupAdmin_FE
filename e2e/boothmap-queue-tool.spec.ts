@@ -265,7 +265,10 @@ async function mockBoothMap(
 async function openPlan(page: Page) {
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  await page.getByRole("button", { name: "사전 줄 설정", exact: true }).click();
+  await page
+    .getByRole("region", { name: "김밥천국 줄 관리" })
+    .getByRole("button", { name: /줄 직접 설정|사전 줄 수정/ })
+    .click();
 }
 
 test("사전 경로 삭제는 확인 후 서버 DELETE를 호출하고 현재 줄 기록을 막는다", async ({ page }) => {
@@ -282,6 +285,7 @@ test("사전 경로 삭제는 확인 후 서버 DELETE를 호출하고 현재 �
       .getByRole("button", { name: "현재 줄 기록" }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "줄 직접 설정", exact: true }).click();
+  await page.getByRole("button", { name: "좌표 직접 입력" }).click();
   await expect(page.getByRole("spinbutton", { name: "지점 1 위도", exact: true })).toHaveValue(
     "35.1495",
   );
@@ -292,6 +296,7 @@ test("현재 줄 수정은 저장된 경로의 지점을 변경해 관측 리비
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "현재 줄 수정", exact: true }).click();
+  await page.getByRole("button", { name: "좌표 직접 입력" }).click();
   await page.getByRole("spinbutton", { name: "지점 1 위도", exact: true }).fill("35.1498");
   await page.getByRole("spinbutton", { name: "지점 1 경도", exact: true }).fill("126.925");
   await expect(page.getByRole("spinbutton", { name: "지점 1 경도", exact: true })).toHaveValue(
@@ -314,6 +319,7 @@ test("저장된 사전 줄을 자동으로 불러와 지점을 이동·추가·�
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page.getByRole("button", { name: "사전 줄 수정", exact: true }).click();
+  await page.getByRole("button", { name: "좌표 직접 입력" }).click();
   await expect(page.getByRole("spinbutton", { name: "지점 2 위도", exact: true })).toHaveValue(
     "35.1499",
   );
@@ -342,13 +348,15 @@ test("AI 서버 차단 이유를 안내하고 수동 줄 편집은 유지한다"
   const calls = await mockBoothMap(page, { aiUnavailable: true, boundary: true });
   await openPlan(page);
   await expect(page.getByRole("status")).toContainText("APP_OPENAI_API_KEY");
-  await expect(page.getByRole("button", { name: "AI로 사전 줄 추천" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "AI 추천", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
   await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeEnabled();
   expect(calls.recommendations).toBe(0);
 });
 
-test("부스 선택에 직접 설정·AI·현재 줄 UI를 표시하고 AI 설정으로 진입한다", async ({ page }) => {
+test("부스 선택에 사전 줄·현재 줄 버튼을 표시하고 사전 줄 설정에서 AI 추천을 받는다", async ({
+  page,
+}) => {
   const calls = await mockBoothMap(page, { boundary: true });
   await page.goto(boothmapPath);
   await expect(page.getByRole("region", { name: "김밥천국 줄 관리" })).toHaveCount(0);
@@ -356,12 +364,9 @@ test("부스 선택에 직접 설정·AI·현재 줄 UI를 표시하고 AI 설�
   const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
   await expect(actions.getByRole("button", { name: "줄 직접 설정" })).toBeEnabled();
   await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeDisabled();
-  await actions.getByRole("button", { name: "AI 줄 설정", exact: true }).click();
-  await expect(
-    page.getByText("간격·처리 인원·목표 수용 인원을 확인하고", { exact: false }),
-  ).toBeVisible();
+  await actions.getByRole("button", { name: "줄 직접 설정" }).click();
   expect(calls.recommendations).toBe(0);
-  await page.getByRole("button", { name: "AI로 사전 줄 추천" }).click();
+  await page.getByRole("button", { name: "AI 추천", exact: true }).click();
   await expect(page.getByText("추천 이유: 출입구를 피해 배치했습니다.")).toBeVisible();
   expect(calls.planWrites).toHaveLength(0);
 });
@@ -416,7 +421,7 @@ test("도면 후보는 사전 줄 확정으로만 저장하고 Enter는 실제 �
 test("AI 추천은 미리보기와 이유를 보여주고 별도 확정한다", async ({ page }) => {
   const calls = await mockBoothMap(page, { boundary: true });
   await openPlan(page);
-  await page.getByRole("button", { name: "AI로 사전 줄 추천" }).click();
+  await page.getByRole("button", { name: "AI 추천", exact: true }).click();
   await expect(page.getByText("추천 이유: 출입구를 피해 배치했습니다.")).toBeVisible();
   await expect(page.getByText("현장 통행 여유를 확인하세요.")).toBeVisible();
   expect(calls.planWrites).toHaveLength(0);
@@ -430,16 +435,16 @@ test("AI 추천은 미리보기와 이유를 보여주고 별도 확정한다", 
 test("경계 없는 AI와 운영자 사전 수정을 차단한다", async ({ page }) => {
   await mockBoothMap(page);
   await openPlan(page);
-  await expect(page.getByRole("button", { name: "AI로 사전 줄 추천" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "AI 추천", exact: true })).toBeDisabled();
   await page
     .getByRole("region", { name: "사전 줄 설정" })
-    .getByRole("button", { name: "닫기", exact: true })
+    .getByRole("button", { name: "그만두기", exact: true })
     .click();
   await page.unrouteAll();
   await mockBoothMap(page, { role: "SUB_ADMIN" });
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`/festivals/${festivalId}/dashboard$`));
-  await expect(page.getByRole("button", { name: "사전 줄 설정", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "사전 줄 설정" })).toHaveCount(0);
 });
 
 test("사전 저장 충돌은 재확정을 막고 AI 실패는 실제 관측에 영향이 없다", async ({ page }) => {
@@ -457,7 +462,7 @@ test("사전 저장 충돌은 재확정을 막고 AI 실패는 실제 관측에 
 test("AI 오류를 표시하며 미확정 경로를 저장하지 않는다", async ({ page }) => {
   const calls = await mockBoothMap(page, { boundary: true, aiFailure: true });
   await openPlan(page);
-  await page.getByRole("button", { name: "AI로 사전 줄 추천" }).click();
+  await page.getByRole("button", { name: "AI 추천", exact: true }).click();
   await expect(page.getByRole("region", { name: "사전 줄 설정" }).getByRole("alert")).toBeVisible();
   expect(calls.planWrites).toHaveLength(0);
   expect(calls.queueWrites).toHaveLength(0);
@@ -522,7 +527,7 @@ test("설정 조회 중 입력을 잠가 늦은 응답이 사용자 입력을 �
   try {
     await openPlan(page);
     await expect(page.getByLabel("대기자 간격(m)")).toBeDisabled();
-    await expect(page.getByLabel("분당 처리 인원(전체 창구 합계)")).toBeDisabled();
+    await expect(page.getByLabel("분당 처리 인원")).toBeDisabled();
     release();
     await expect(page.getByLabel("대기자 간격(m)")).toBeEnabled();
   } finally {
@@ -544,7 +549,8 @@ test("늦게 도착한 현재 줄 저장 응답은 새 사전 설정 패널을 �
     await page.getByRole("button", { name: "도면 대기선 점 2개" }).click();
     await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
     await expect.poll(() => calls.queueWrites.length).toBe(1);
-    await page.getByRole("button", { name: "사전 줄 설정", exact: true }).click();
+    await page.getByRole("button", { name: "그만두기", exact: true }).click();
+    await page.getByRole("button", { name: "사전 줄 수정", exact: true }).click();
     release();
     await expect(page.getByText("현재 대기줄과 자동 대기시간이 갱신되었습니다.")).toBeVisible();
     await expect(page.getByRole("region", { name: "사전 줄 설정" })).toBeVisible();
