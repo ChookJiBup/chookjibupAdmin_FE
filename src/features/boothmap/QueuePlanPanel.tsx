@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { QueuePointEditor } from "./QueuePointEditor";
+import { queueSegmentLength } from "./queueSnap";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import type { QueuePathPoint } from "@/features/staffMap/types";
@@ -23,7 +24,6 @@ export interface QueuePlanPanelProps {
   festivalId: string;
   boothId: number;
   boothName: string;
-  entry?: "manual" | "ai";
   nodeVersion: number | undefined;
   boundaryAvailable: boolean;
   path: QueuePathPoint[];
@@ -37,7 +37,6 @@ export function QueuePlanPanel({
   festivalId,
   boothId,
   boothName,
-  entry = "manual",
   nodeVersion,
   boundaryAvailable,
   path,
@@ -81,6 +80,7 @@ export function QueuePlanPanel({
   const [conflict, setConflict] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [showCoordinates, setShowCoordinates] = useState(false);
   const remove = useMutation({
     mutationFn: () => deleteQueuePlan(festivalId, boothId, revision, version!),
     onMutate: () => onBusyChange(true),
@@ -178,54 +178,94 @@ export function QueuePlanPanel({
   const unavailable =
     locked || busy || plan.isPending || plan.isError || version == null || conflict;
   const settingsLocked = busy || locked || plan.isPending || plan.isError;
+  const draftLength = path.reduce(
+    (total, point, index) => (index === 0 ? 0 : total + queueSegmentLength(path[index - 1], point)),
+    0,
+  );
+  const draftCapacity = validSettings && validPath ? Math.floor(draftLength / spacing) : null;
+  const savedPlan = plan.data && plan.data.path.length >= 2 ? plan.data : null;
+  const aiUnavailableReason = aiStatus.isError
+    ? "AI 상태를 확인하지 못했습니다. BE 업데이트와 서버 연결을 확인해 주세요."
+    : aiStatus.data && !aiStatus.data.available
+      ? (aiStatus.data.reason ?? "서버에서 AI 줄 추천을 사용할 수 없습니다.")
+      : null;
   return (
-    <section aria-label="사전 줄 설정" className="w-full space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="body-small-bold text-zinc-950">{boothName} · 사전 줄 설정</p>
-          <p className="body-caption text-zinc-500">
-            {entry === "ai"
-              ? "간격·처리 인원·목표 수용 인원을 확인하고 AI 추천을 요청하세요. 추천 경로는 확인 후 확정합니다."
-              : "지도에서 꺾이는 지점을 클릭하세요. 점선은 사전 경로이며 현재 대기시간을 바꾸지 않습니다."}
-          </p>
+    <section aria-label="사전 줄 설정" className="flex w-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="body-small text-zinc-950">
+          <span className="body-small-bold">{boothName}</span> · 지도를 눌러 줄이 꺾이는 지점을
+          찍으세요
+          <span className="body-small-bold ml-2 text-primary">
+            지점 {path.length}개
+            {path.length >= 2
+              ? ` · ${Math.round(draftLength)}m${draftCapacity != null ? ` · 약 ${draftCapacity}명` : ""}`
+              : ""}
+          </span>
+        </p>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={busy || locked || path.length <= 1}
+            onClick={() => onPathChange(path.slice(0, -1))}
+          >
+            한 점 취소
+          </Button>
+          <Button variant="outline" disabled={busy} onClick={onClose}>
+            그만두기
+          </Button>
+          <Button
+            disabled={
+              unavailable || !validSettings || !validPath || path.length < 2 || path.length > 500
+            }
+            onClick={() => {
+              setError(null);
+              save.mutate();
+            }}
+          >
+            {save.isPending ? "저장 중…" : "사전 줄 확정"}
+          </Button>
         </div>
-        <Button variant="outline" disabled={busy} onClick={onClose}>
-          닫기
-        </Button>
       </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-200 pt-3">
         <Input
+          layout="label-left"
           label="대기자 간격(m)"
           type="number"
           min={0.2}
           max={5}
           step={0.1}
+          className="w-20"
           value={Number.isNaN(spacing) ? "" : spacing}
           disabled={settingsLocked}
           onChange={(e) => setSpacing(e.target.valueAsNumber)}
         />
         <Input
-          label="분당 처리 인원(전체 창구 합계)"
+          layout="label-left"
+          label="분당 처리 인원"
+          title="전체 창구 합계"
           type="number"
           min={0.1}
           max={100}
           step={0.1}
+          className="w-20"
           value={Number.isNaN(speed) ? "" : speed}
           disabled={settingsLocked}
           onChange={(e) => setSpeed(e.target.valueAsNumber)}
         />
+        <span aria-hidden className="h-5 w-px bg-zinc-200" />
         <Input
-          label="AI 목표 수용 인원(명)"
+          layout="label-left"
+          label="AI 목표 인원"
           type="number"
           min={1}
           max={1000}
           step={1}
+          className="w-20"
           value={Number.isNaN(capacity) ? "" : capacity}
           disabled={settingsLocked}
           onChange={(e) => setCapacity(e.target.valueAsNumber)}
         />
-      </div>
-      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           disabled={
@@ -242,63 +282,136 @@ export function QueuePlanPanel({
             recommendation.mutate();
           }}
         >
-          {recommendation.isPending ? "AI 추천 중…" : "AI로 사전 줄 추천"}
+          {recommendation.isPending ? "AI 추천 중…" : "AI 추천"}
         </Button>
-        <Button
-          disabled={
-            unavailable || !validSettings || !validPath || path.length < 2 || path.length > 500
-          }
-          onClick={() => {
-            setError(null);
-            save.mutate();
-          }}
-        >
-          {save.isPending ? "저장 중…" : "사전 줄 확정"}
-        </Button>
-        <Button
-          variant="outline"
-          disabled={busy || !plan.data || plan.data.path.length < 2 || locked || plan.isFetching}
-          onClick={() => {
-            if (!plan.data) return;
-            onPathChange(plan.data.path);
-            setSpacing(plan.data.metersPerPerson);
-            setSpeed(plan.data.servedPersonsPerMinute);
-            setRevision(plan.data.revision);
-            setVersion(plan.data.nodeVersion);
-            setSource(plan.data.sourceNodeId);
-            setReason(null);
-            setWarnings([]);
-            setConflict(false);
-            setError(null);
-          }}
-        >
-          저장된 경로 불러오기
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy || locked || path.length <= 1}
-          onClick={() => onPathChange(path.slice(0, -1))}
-        >
-          마지막 점 취소
-        </Button>
-        <Button
-          variant="outline"
-          disabled={settingsLocked || path.length <= 1}
-          onClick={() => {
-            setSource(null);
-            onPathChange(path.slice(0, 1));
-          }}
-        >
-          초안 경로 지우기
-        </Button>
-        <Button
-          variant="destructive"
-          disabled={unavailable || !plan.data?.path.length}
-          onClick={() => setDeleteOpen(true)}
-        >
-          사전 경로 삭제
-        </Button>
+        {candidates.data?.map((candidate) => (
+          <Button
+            key={candidate.sourceNodeId}
+            variant="outline"
+            disabled={unavailable}
+            onClick={() => {
+              onPathChange(candidate.path);
+              setSource(candidate.sourceNodeId);
+              setRevision(candidate.expectedRevision);
+              setVersion(candidate.expectedNodeVersion);
+              setReason(null);
+              setWarnings([]);
+            }}
+          >
+            {candidate.name} {candidate.source === "AI" ? "(AI 인식)" : ""}
+          </Button>
+        ))}
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            selected={showCoordinates}
+            aria-expanded={showCoordinates}
+            onClick={() => setShowCoordinates(!showCoordinates)}
+          >
+            좌표 직접 입력
+          </Button>
+          {savedPlan ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || locked || plan.isFetching}
+              onClick={() => {
+                onPathChange(savedPlan.path);
+                setSpacing(savedPlan.metersPerPerson);
+                setSpeed(savedPlan.servedPersonsPerMinute);
+                setRevision(savedPlan.revision);
+                setVersion(savedPlan.nodeVersion);
+                setSource(savedPlan.sourceNodeId);
+                setReason(null);
+                setWarnings([]);
+                setConflict(false);
+                setError(null);
+              }}
+            >
+              저장된 경로 불러오기
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={settingsLocked || path.length <= 1}
+            onClick={() => {
+              setSource(null);
+              onPathChange(path.slice(0, 1));
+            }}
+          >
+            초안 지우기
+          </Button>
+          {savedPlan ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-error"
+              disabled={unavailable}
+              onClick={() => setDeleteOpen(true)}
+            >
+              사전 경로 삭제
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {showCoordinates ? (
+        <QueuePointEditor
+          path={path}
+          fixedStart
+          locked={settingsLocked || conflict}
+          onChange={(points) => {
+            setSource(null);
+            onPathChange(points);
+          }}
+        />
+      ) : null}
+
+      <div className="flex flex-col gap-1 empty:hidden">
+        <p className="body-caption text-zinc-500">
+          {savedPlan
+            ? `저장된 사전 줄 ${Math.round(savedPlan.lengthMeters)}m · 약 ${savedPlan.estimatedCapacity}명 수용`
+            : plan.isSuccess
+              ? "아직 설정된 사전 줄이 없습니다. 점선은 사전 경로이며 현재 대기시간을 바꾸지 않습니다."
+              : "사전 설정 조회 중…"}
+        </p>
+        {reason ? <p className="body-small text-zinc-950">추천 이유: {reason}</p> : null}
+        {warnings.map((warning) => (
+          <p key={warning} className="body-caption text-point-600">
+            {warning}
+          </p>
+        ))}
+        {recommendation.isPending ? (
+          <p role="status" className="body-caption text-zinc-500">
+            추천에는 최대 2분이 걸릴 수 있습니다. 완료 후 경로를 확인하고 확정해 주세요.
+          </p>
+        ) : aiUnavailableReason ? (
+          <p role="status" className="body-caption text-point-600">
+            {aiUnavailableReason}
+          </p>
+        ) : !boundaryAvailable ? (
+          <p className="body-caption text-point-600">
+            AI 추천은 지도에 행사장 경계를 저장한 뒤 사용할 수 있습니다.
+          </p>
+        ) : null}
+        {nodeVersion == null ? (
+          <p className="body-caption text-error">
+            지도 버전이 없습니다. BE 업데이트 후 지도를 다시 불러와 주세요.
+          </p>
+        ) : null}
+        {error || plan.isError || candidates.isError ? (
+          <p role="alert" className="body-caption text-error">
+            {error ??
+              getApiErrorMessage(
+                plan.error ?? candidates.error,
+                "설정이나 도면 후보를 불러오지 못했습니다.",
+              )}
+          </p>
+        ) : null}
+      </div>
+
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
@@ -311,87 +424,6 @@ export function QueuePlanPanel({
           remove.mutate();
         }}
       />
-      <p className="body-caption text-zinc-500">
-        {plan.data && plan.data.path.length >= 2
-          ? `저장된 사전 줄 ${Math.round(plan.data.lengthMeters)}m · 약 ${plan.data.estimatedCapacity}명 수용`
-          : plan.isSuccess
-            ? "아직 설정된 사전 줄이 없습니다."
-            : "사전 설정 조회 중…"}{" "}
-        · 초안 {path.length}개 지점
-      </p>
-      {aiStatus.isPending ? (
-        <p className="body-caption text-zinc-500">AI 사용 가능 여부 확인 중…</p>
-      ) : aiStatus.isError ? (
-        <p role="alert" className="body-caption text-error">
-          AI 상태를 확인하지 못했습니다. BE 업데이트와 서버 연결을 확인해 주세요.
-        </p>
-      ) : !aiStatus.data?.available ? (
-        <p role="status" className="body-caption text-point-600">
-          {aiStatus.data?.reason ?? "서버에서 AI 줄 추천을 사용할 수 없습니다."}
-        </p>
-      ) : null}
-      <QueuePointEditor
-        path={path}
-        fixedStart
-        locked={settingsLocked || conflict}
-        onChange={(points) => {
-          setSource(null);
-          onPathChange(points);
-        }}
-      />
-      {!boundaryAvailable ? (
-        <p className="body-caption text-point-600">
-          AI 추천은 지도에 행사장 경계를 저장한 뒤 사용할 수 있습니다.
-        </p>
-      ) : null}
-      {nodeVersion == null ? (
-        <p className="body-caption text-error">
-          지도 버전이 없습니다. BE 업데이트 후 지도를 다시 불러와 주세요.
-        </p>
-      ) : null}
-      {candidates.data?.length ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="body-caption text-zinc-500">도면 대기선</span>
-          {candidates.data.map((candidate) => (
-            <Button
-              key={candidate.sourceNodeId}
-              variant="outline"
-              size="sm"
-              disabled={unavailable}
-              onClick={() => {
-                onPathChange(candidate.path);
-                setSource(candidate.sourceNodeId);
-                setRevision(candidate.expectedRevision);
-                setVersion(candidate.expectedNodeVersion);
-                setReason(null);
-                setWarnings([]);
-              }}
-            >
-              {candidate.name} {candidate.source === "AI" ? "(AI 인식)" : ""}
-            </Button>
-          ))}
-        </div>
-      ) : null}
-      {reason ? <p className="body-small text-zinc-950">추천 이유: {reason}</p> : null}
-      {warnings.map((warning) => (
-        <p key={warning} className="body-caption text-point-600">
-          {warning}
-        </p>
-      ))}
-      {recommendation.isPending ? (
-        <p role="status" className="body-caption text-zinc-500">
-          추천에는 최대 2분이 걸릴 수 있습니다. 완료 후 경로를 확인하고 확정해 주세요.
-        </p>
-      ) : null}
-      {error || plan.isError || candidates.isError ? (
-        <p role="alert" className="body-caption text-error">
-          {error ??
-            getApiErrorMessage(
-              plan.error ?? candidates.error,
-              "설정이나 도면 후보를 불러오지 못했습니다.",
-            )}
-        </p>
-      ) : null}
     </section>
   );
 }

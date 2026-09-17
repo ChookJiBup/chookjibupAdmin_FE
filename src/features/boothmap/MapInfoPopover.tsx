@@ -62,7 +62,7 @@ export function MapInfoPopover({
   hideCancel = false,
   typeLabel,
   parentZoneName = "-",
-  boothActions,
+  extraSection,
 }: {
   mode: MapInfoPopoverMode;
   initialName: string;
@@ -84,21 +84,20 @@ export function MapInfoPopover({
   typeLabel?: string;
   /** 그룹 내 시설이면 소속 상위 구역명을 표시한다. */
   parentZoneName?: string;
-  boothActions?: ReactNode;
+  /** 유형·상위구역 아래 구분선 밑에 붙는 대상별 영역(부스 대기줄, 도형 모양 편집). */
+  extraSection?: ReactNode;
 }) {
   const [name, setName] = useState(initialName);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [typeCategory, setTypeCategory] = useState<MapObjectTypeCategory | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const editingDetails = !boothActions || detailsOpen;
   const popoverRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   // 열리자마자 이름을 고칠 수 있게 커서를 넣고 기존 값을 모두 선택해 둔다.
   useEffect(() => {
-    if (editingDetails) nameInputRef.current?.select();
-  }, [editingDetails]);
+    nameInputRef.current?.select();
+  }, []);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
@@ -125,7 +124,8 @@ export function MapInfoPopover({
 
   return (
     <div ref={popoverRef} className="absolute z-20" style={style}>
-      <MapOverlayCard showPointer>
+      {/* 카카오 오버레이 안은 줄바꿈이 막혀 있어, 고정폭 카드에서 긴 안내문이 밖으로 넘친다. */}
+      <MapOverlayCard showPointer className="whitespace-normal">
         <div className="flex items-center gap-2">
           <span className="size-4 shrink-0 text-zinc-950 [&_svg]:size-4">
             <Pencil2Icon />
@@ -135,18 +135,14 @@ export function MapInfoPopover({
             아무 일도 안 일어난다는 이야기가 반복됐다. 열릴 때 커서를 넣어 바로 고칠 수
             있게 하고, 마우스를 올리면 입력칸 테두리를 보여 준다.
           */}
-          {editingDetails ? (
-            <input
-              ref={nameInputRef}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="이름을 입력하세요"
-              aria-label="이름"
-              className="body-large-bold min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 text-zinc-950 outline-none hover:border-zinc-200 focus:border-primary"
-            />
-          ) : (
-            <span className="body-large-bold min-w-0 flex-1 text-zinc-950">{initialName}</span>
-          )}
+          <input
+            ref={nameInputRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="이름을 입력하세요"
+            aria-label="이름"
+            className="body-large-bold min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 text-zinc-950 outline-none hover:border-zinc-200 focus:border-primary"
+          />
           <IconButton
             variant="ghost"
             size="sm"
@@ -157,135 +153,122 @@ export function MapInfoPopover({
           />
         </div>
 
-        {boothActions ? (
-          <div className="mt-3 border-b border-zinc-200 pb-3">{boothActions}</div>
-        ) : null}
-        {boothActions ? (
-          <Button
-            variant="link"
-            size="sm"
-            className="mt-2 px-0"
-            onClick={() => setDetailsOpen(!detailsOpen)}
-          >
-            {detailsOpen ? "부스 정보 접기" : "부스 정보 수정"}
-          </Button>
-        ) : null}
-        {editingDetails ? (
-          <div className="mt-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="body-small text-zinc-500">유형</span>
-              <span className="body-small text-zinc-950">{typeLabel ?? TYPE_LABEL[mode]}</span>
-            </div>
-            {onChangeType || onChangeNodeType ? (
-              <div className="relative">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  icon={<UpdateIcon />}
-                  onClick={() => setTypeMenuOpen((prev) => !prev)}
-                  className="w-full"
-                >
-                  유형 변경하기
-                </Button>
-                {typeMenuOpen ? (
-                  <div className="absolute top-full left-0 z-10 mt-1 w-21 rounded-md border border-zinc-200 bg-white p-2 shadow-md">
-                    {TYPE_CATEGORY_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => {
-                          if (onChangeNodeType) {
-                            setTypeCategory(option.value);
-                            return;
-                          }
-                          onChangeType?.(option.value);
-                          setTypeMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-sm py-2 text-left hover:bg-zinc-100"
-                      >
-                        <span className="size-4 shrink-0 text-zinc-500">{option.icon}</span>
-                        <span className="body-small flex-1 text-zinc-950">{option.label}</span>
-                      </button>
-                    ))}
-                    {typeCategory ? (
-                      <div
-                        className={`absolute top-0 left-full ml-2 rounded-md border border-zinc-200 bg-white p-2 shadow-md ${
-                          typeCategory === "pin" ? "w-25" : "w-21"
-                        }`}
-                      >
-                        {(typeCategory === "pin"
-                          ? PIN_TYPE_OPTIONS
-                          : typeCategory === "polygon"
-                            ? POLYGON_TYPE_OPTIONS
-                            : LINE_TYPE_OPTIONS
-                        ).map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => {
-                              onChangeNodeType?.(option.value);
-                              setTypeCategory(null);
-                              setTypeMenuOpen(false);
-                            }}
-                            className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
-                          >
-                            <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
-                              {option.icon}
-                            </span>
-                            <span className="body-small text-zinc-950">{option.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between">
-              <span className="body-small text-zinc-500">상위구역</span>
-              <span className="body-small text-zinc-950">{parentZoneName}</span>
-            </div>
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="body-small text-zinc-500">유형</span>
+            <span className="body-small text-zinc-950">{typeLabel ?? TYPE_LABEL[mode]}</span>
           </div>
-        ) : null}
-
-        {editingDetails ? (
-          <div className="mt-4 flex items-center gap-2">
-            {onDelete && hideCancel ? (
+          {onChangeType || onChangeNodeType ? (
+            <div className="relative">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setPendingDelete(true)}
-                className="flex-1"
+                size="sm"
+                icon={<UpdateIcon />}
+                onClick={() => setTypeMenuOpen((prev) => !prev)}
+                className="w-full"
               >
-                삭제
+                유형 변경하기
               </Button>
-            ) : null}
-            {onDelete && !hideCancel ? (
-              <Button
-                type="button"
-                variant="link"
-                onClick={onDelete}
-                className="text-error mr-auto px-0"
-              >
-                삭제
-              </Button>
-            ) : null}
-            {hideCancel ? null : (
-              <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
-                취소
-              </Button>
-            )}
+              {typeMenuOpen ? (
+                <div className="absolute top-full left-0 z-10 mt-1 w-21 rounded-md border border-zinc-200 bg-white p-2 shadow-md">
+                  {TYPE_CATEGORY_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        if (onChangeNodeType) {
+                          setTypeCategory(option.value);
+                          return;
+                        }
+                        onChangeType?.(option.value);
+                        setTypeMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-sm py-2 text-left hover:bg-zinc-100"
+                    >
+                      <span className="size-4 shrink-0 text-zinc-500">{option.icon}</span>
+                      <span className="body-small flex-1 text-zinc-950">{option.label}</span>
+                    </button>
+                  ))}
+                  {typeCategory ? (
+                    <div
+                      className={`absolute top-0 left-full ml-2 rounded-md border border-zinc-200 bg-white p-2 shadow-md ${
+                        typeCategory === "pin" ? "w-25" : "w-21"
+                      }`}
+                    >
+                      {(typeCategory === "pin"
+                        ? PIN_TYPE_OPTIONS
+                        : typeCategory === "polygon"
+                          ? POLYGON_TYPE_OPTIONS
+                          : LINE_TYPE_OPTIONS
+                      ).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            onChangeNodeType?.(option.value);
+                            setTypeCategory(null);
+                            setTypeMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
+                        >
+                          <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
+                            {option.icon}
+                          </span>
+                          <span className="body-small text-zinc-950">{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <span className="body-small text-zinc-500">상위구역</span>
+            <span className="body-small text-zinc-950">{parentZoneName}</span>
+          </div>
+        </div>
+
+        {extraSection ? (
+          <div className="mt-3 border-t border-zinc-200 pt-3">{extraSection}</div>
+        ) : null}
+
+        <div className="mt-4 flex items-center gap-2">
+          {onDelete && hideCancel ? (
             <Button
               type="button"
-              variant="primary"
-              onClick={() => onConfirm(name.trim() || initialName)}
+              variant="outline"
+              onClick={() => setPendingDelete(true)}
               className="flex-1"
             >
-              {confirmLabel}
+              삭제
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+          {onDelete && !hideCancel ? (
+            <Button
+              type="button"
+              variant="link"
+              onClick={onDelete}
+              className="text-error mr-auto px-0"
+            >
+              삭제
+            </Button>
+          ) : null}
+          {hideCancel ? null : (
+            <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+              취소
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => onConfirm(name.trim() || initialName)}
+            className="flex-1"
+          >
+            {confirmLabel}
+          </Button>
+        </div>
       </MapOverlayCard>
 
       {hideCancel && onDelete ? (
