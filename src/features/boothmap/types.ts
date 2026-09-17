@@ -83,6 +83,7 @@ export interface MapPresentation {
 }
 
 export interface NodeResponse {
+  version?: number;
   nodeId: string;
   nodeType: NodeType;
   name: string;
