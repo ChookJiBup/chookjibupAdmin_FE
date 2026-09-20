@@ -29,6 +29,7 @@ import {
   validateFestivalPeriod,
 } from "./dateFormat";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
+import { ReviewQrDialog } from "./ReviewQrDialog";
 import {
   FESTIVAL_SEARCH_HELPER_ITEMS,
   FESTIVAL_SEARCH_HELPER_TEXT,
@@ -218,7 +219,13 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
     <div className="col-span-3 flex min-w-0 flex-col gap-6 pb-24">
       <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-3">
         <div className="col-span-1 flex min-w-0 flex-col gap-4 rounded-lg border border-zinc-300 bg-white px-5 py-6 sm:px-8">
-          <p className="body-large-bold text-zinc-950">축제 정보</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="body-large-bold text-zinc-950">축제 정보</p>
+            <ReviewQrDialog
+              festivalPublicId={festival.festivalId}
+              festivalName={festival.festivalName ?? "축제"}
+            />
+          </div>
 
           {isCompleted ? (
             <div className="flex flex-col gap-1 rounded-md bg-zinc-100 px-4 py-3">
