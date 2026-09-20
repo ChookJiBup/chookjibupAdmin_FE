@@ -68,7 +68,7 @@ export function ConfirmDialog({
         */}
         <Dialog.Content
           className={cn(
-            "fixed top-1/2 left-1/2 z-30 max-h-[calc(100dvh-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-2xl bg-white p-8",
+            "fixed top-1/2 left-1/2 z-[1001] max-h-[calc(100dvh-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-2xl bg-white p-8",
             className,
           )}
           onEscapeKeyDown={(event) => {

@@ -42,9 +42,8 @@ export interface MissingVisitorCountDialogProps {
  * 일차를 한 화면에 모아 받는다. 축제가 끝나기를 기다리지 않는다 — 끝난 뒤에 몰아서
  * 물으면 열흘 전 인원을 기억으로 적게 된다.
  *
- * 닫기(X)·바깥 클릭·ESC를 모두 막는다. 필수값이라 빠져나갈 길을 열어 두면 게이트가
- * 의미를 잃기 때문이다. 대신 딤은 상단바 아래에서 시작해(`DIALOG_OVERLAY_CLASSES`)
- * 뒤편 화면이 비치고 헤더로 다른 화면에 갈 수 있으므로 화면에 갇히지는 않는다.
+ * 바깥 클릭으로 닫을 수 있지만, 입력이 끝나기 전에는 다음 방문 때 다시 나타난다.
+ * 딤은 상단바 아래에서 시작한다(`DIALOG_OVERLAY_CLASSES`).
  */
 export function MissingVisitorCountDialog({
   festivalId,
@@ -57,6 +56,7 @@ export function MissingVisitorCountDialog({
     목록을 다시 받아도 서버 값과 같아져 자연스럽게 «바뀐 날 없음»이 된다.
   */
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(true);
 
   const savedValues = days.map((day) => day.visitorCount?.toString() ?? "");
   const values = days.map((day, index) => edits[day.visitDate] ?? savedValues[index]);
@@ -88,7 +88,7 @@ export function MissingVisitorCountDialog({
   const blockedReason = filled ? null : "지나간 일차의 방문 인원을 모두 입력해 주세요.";
 
   return (
-    <Dialog.Root open>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
         {/*
@@ -100,9 +100,8 @@ export function MissingVisitorCountDialog({
         */}
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-[calc(var(--console-topbar-height,0px)+20px)] left-1/2 z-30 flex max-h-[calc(100dvh-var(--console-topbar-height,0px)-40px)] max-w-[calc(100vw-40px)] -translate-x-1/2 flex-col"
+          className="fixed top-[calc(var(--console-topbar-height,0px)+20px)] left-1/2 z-[1001] flex max-h-[calc(100dvh-var(--console-topbar-height,0px)-40px)] max-w-[calc(100vw-40px)] -translate-x-1/2 flex-col"
           onEscapeKeyDown={(event) => event.preventDefault()}
-          onInteractOutside={(event) => event.preventDefault()}
         >
           <VisitorCountCard
             className="min-h-0 flex-1"
