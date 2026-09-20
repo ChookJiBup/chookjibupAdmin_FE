@@ -131,7 +131,7 @@ test("부스검색에서 고른 부스가 지도 화면 하단바에 반영된�
   await expect(page.getByText("체험 구역 > 솜사탕 부스")).toBeVisible();
 });
 
-test("줄끝 갱신 시트는 자동 환산된 혼잡도를 보여주고 줄 끝은 지도에서 찍는다", async ({ page }) => {
+test("줄끝 갱신 시트는 자동 환산된 혼잡도와 존 선택을 보여준다", async ({ page }) => {
   const requests = await mockStaffApis(page);
   await page.goto(`/staff/dashboard?boothId=1`);
 
@@ -142,9 +142,13 @@ test("줄끝 갱신 시트는 자동 환산된 혼잡도를 보여주고 줄 끝
   await expect(page.getByLabel("예상 대기시간(분)")).toHaveCount(0);
   await expect(page.getByText("마지막 줄끝갱신자")).toBeVisible();
 
-  // 줄 끝은 지도에서 찍는다. 찍기 전에는 갱신할 수 없다.
-  await expect(page.getByRole("button", { name: "지도에서 줄 끝 찍기" })).toBeVisible();
+  // 존을 고르기 전에는 갱신할 수 없다.
+  const zoneSelect = page.getByRole("combobox", { name: "줄끝 존 선택" });
+  await expect(zoneSelect).toBeVisible();
   await expect(page.getByRole("button", { name: "줄끝 갱신하기" })).toBeDisabled();
+  await zoneSelect.click();
+  await page.getByRole("option", { name: "존 2 · 20m" }).click();
+  await expect(page.getByRole("button", { name: "줄끝 갱신하기" })).toBeEnabled();
 
   // 혼잡도는 서버가 계산하므로 프런트가 직접 보내지 않는다.
   expect(requests.filter((request) => request.method() === "PUT")).toEqual([]);

@@ -424,7 +424,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
               <DashboardStatsBar
                 festivalId={festivalId}
                 selectedBooth={activeBooth}
-                zones={mapZones}
                 canUpdateQueue={isRealtimeScope && Boolean(festival?.role)}
                 onUpdated={refetchRealtime}
               />

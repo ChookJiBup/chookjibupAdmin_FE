@@ -169,7 +169,7 @@ export function StaffMapPanel() {
     );
   }
 
-  // 줄 끝은 지도에서 직접 찍을 수 있으므로 구역이 없어도 갱신할 수 있다.
+  // 줄끝 존은 거리 기준으로 고르므로 지도 구역이 없어도 갱신할 수 있다.
   const queueDisabledReason = !selectedQueue
     ? festival.queuesError
       ? "대기열 정보를 불러오지 못해 줄끝을 갱신할 수 없습니다."
@@ -243,7 +243,7 @@ export function StaffMapPanel() {
 
       {selectedBooth && selectedQueue && queueSheetOpen ? (
         <QueueUpdateSheet
-          // 부스가 바뀌면 찍어 둔 줄 끝을 초기화하기 위해 새로 마운트한다.
+          // 부스가 바뀌면 선택한 줄끝 존을 초기화하기 위해 새로 마운트한다.
           key={selectedBooth.boothId}
           festivalId={festival.festivalId}
           booth={selectedBooth}
