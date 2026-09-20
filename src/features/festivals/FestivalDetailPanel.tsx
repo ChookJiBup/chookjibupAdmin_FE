@@ -21,9 +21,8 @@ import {
   updateFestival,
   updateFestivalVisitorCountInputMode,
 } from "./api";
+import { DateField } from "./DateField";
 import {
-  DATE_FORMAT_LABEL,
-  formatDateInput,
   hasFestivalPeriodError,
   toDisplayDate,
   toIsoDate,
@@ -271,28 +270,22 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
           </div>
 
           <div className="flex gap-3">
-            <Input
+            <DateField
               label="시작날짜"
               wrapperClassName="flex-1"
-              placeholder={DATE_FORMAT_LABEL}
-              inputMode="numeric"
-              maxLength={10}
               disabled={isCompleted}
               value={displayStartDate}
               errorText={visiblePeriodErrors.startDate ?? undefined}
-              onChange={(event) => setStartDate(formatDateInput(event.target.value))}
+              onChange={setStartDate}
               onBlur={() => setPeriodTouched((prev) => ({ ...prev, startDate: true }))}
             />
-            <Input
+            <DateField
               label="종료날짜"
               wrapperClassName="flex-1"
-              placeholder={DATE_FORMAT_LABEL}
-              inputMode="numeric"
-              maxLength={10}
               disabled={isCompleted}
               value={displayEndDate}
               errorText={visiblePeriodErrors.endDate ?? undefined}
-              onChange={(event) => setEndDate(formatDateInput(event.target.value))}
+              onChange={setEndDate}
               onBlur={() => setPeriodTouched((prev) => ({ ...prev, endDate: true }))}
             />
           </div>

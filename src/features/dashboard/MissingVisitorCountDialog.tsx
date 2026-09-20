@@ -15,6 +15,13 @@ export interface MissingVisitorCountDialogProps {
   festivalId: string;
   /** 지나간 날 중 방문 인원이 비어 있는 날들. 비어 있으면 이 모달은 뜨지 않는다. */
   missingDays: FestivalVisitorDay[];
+  /**
+   * 끝난 축제를 대신 물을 때 그 축제 이름.
+   *
+   * 대시보드에서 뜰 때는 지금 보고 있는 축제라 이름이 필요 없지만, 로그인 직후
+   * 콘솔 첫 화면에서 뜰 때는 어느 축제 이야기인지 밝히지 않으면 알 수 없다.
+   */
+  festivalName?: string;
 }
 
 /**
@@ -32,6 +39,7 @@ export interface MissingVisitorCountDialogProps {
 export function MissingVisitorCountDialog({
   festivalId,
   missingDays,
+  festivalName,
 }: MissingVisitorCountDialogProps) {
   const queryClient = useQueryClient();
   const [counts, setCounts] = useState<Record<string, string>>({});
@@ -76,11 +84,15 @@ export function MissingVisitorCountDialog({
         >
           <div className="flex shrink-0 flex-col gap-2 px-5 py-6 sm:px-8">
             <Dialog.Title className="heading-small text-zinc-950">
-              지난 날짜의 방문 인원이 비어 있습니다
+              {festivalName
+                ? `«${festivalName}» 축제가 끝났습니다`
+                : "지난 날짜의 방문 인원이 비어 있습니다"}
             </Dialog.Title>
             <p className="body-small text-zinc-950">
               결과리포트가 이 값을 근거로 축제성과를 계산합니다. 밀린 날짜를 모두 입력해야
-              대시보드를 이어서 볼 수 있습니다.
+              {festivalName
+                ? " 축제를 마무리할 수 있습니다."
+                : " 대시보드를 이어서 볼 수 있습니다."}
             </p>
           </div>
 
@@ -109,7 +121,8 @@ export function MissingVisitorCountDialog({
               </p>
             ) : null}
             <p className="body-caption text-zinc-500">
-              {blockedReason ?? "저장하면 대시보드로 돌아갑니다."}
+              {blockedReason ??
+                (festivalName ? "저장하면 콘솔로 돌아갑니다." : "저장하면 대시보드로 돌아갑니다.")}
             </p>
             <Button
               type="button"
