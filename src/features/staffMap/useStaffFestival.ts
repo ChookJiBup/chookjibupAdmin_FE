@@ -22,6 +22,17 @@ export const STAFF_DASHBOARD_QUERY_KEY = "staff-festival-dashboard";
 export const STAFF_QUEUES_QUERY_KEY = "staff-festival-queues";
 export const STAFF_OPERATIONS_MAP_QUERY_KEY = "staff-festival-operations-map";
 
+/*
+  현장 데이터를 다시 물어보는 주기.
+
+  한 부스를 여러 스태프가 나눠 맡기 때문에, 옆 사람이 줄을 갱신해도 내 화면이 그대로면
+  이미 처리된 줄을 또 찍게 된다. 축제 현장에서 줄이 눈에 띄게 달라지는 데 30초쯤
+  걸린다고 보고 그 간격으로 다시 읽는다. 분석 상태 폴링(`useMapAnalysis` 3초,
+  `ReportFlow` 1.5초)은 «끝날 때까지 기다리는 작업»이라 훨씬 촘촘한데, 이쪽은 끝이 없는
+  상시 조회라 같은 간격을 쓰면 배터리와 서버만 축낸다.
+*/
+const STAFF_POLL_INTERVAL_MS = 30_000;
+
 function toBooth(
   booth: FestivalDashboard["booths"][number],
   zoneId: string,
@@ -56,12 +67,20 @@ export function useStaffFestival() {
     queryKey: [STAFF_DASHBOARD_QUERY_KEY, festivalId],
     queryFn: () => getStaffFestivalDashboard(festivalId),
     enabled: Boolean(festivalId),
+    refetchInterval: STAFF_POLL_INTERVAL_MS,
+    /*
+      화면을 안 보고 있을 때(탭 전환·화면 잠금)는 폴링하지 않는다. 현장 스태프는
+      배터리로 하루를 버텨야 하고, 돌아오면 focus refetch가 최신값을 채워 준다.
+    */
+    refetchIntervalInBackground: false,
   });
 
   const queuesQuery = useQuery({
     queryKey: [STAFF_QUEUES_QUERY_KEY, festivalId],
     queryFn: () => getFestivalQueues(festivalId),
     enabled: Boolean(festivalId),
+    refetchInterval: STAFF_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: false,
   });
 
   /*
@@ -69,7 +88,8 @@ export function useStaffFestival() {
     총괄관리자 전용 편집 계약이라 스태프 토큰으로는 열리지 않고, 스태프는 경계·팜플렛을
     보기만 하면 된다. 지도 미등록·권한 부족은 재시도로 풀리지 않으므로 재시도하지 않고,
     이 조회가 실패해도 부스 핀·줄·대기시간은 그대로 보여야 하므로 isLoading·error에
-    섞지 않는다.
+    섞지 않는다. 경계·팜플렛은 축제 중에 바뀌지 않으므로 아래 두 조회와 달리 주기적으로
+    다시 읽지 않는다.
   */
   const operationsMapQuery = useQuery({
     queryKey: [STAFF_OPERATIONS_MAP_QUERY_KEY, festivalId],
@@ -200,9 +220,12 @@ export function useStaffFestival() {
       busiestBooth: busiestBooth(booths),
       updatedAt: dashboardQuery.data?.updatedAt ?? null,
     },
-    refetch: () => {
-      void dashboardQuery.refetch();
-      void queuesQuery.refetch();
+    /**
+     * 부스·줄 정보를 다시 읽는다. 갱신이 화면에 반영된 뒤에 시트를 닫을 수 있도록
+     * 완료를 기다릴 수 있는 Promise를 돌려준다.
+     */
+    refetch: async () => {
+      await Promise.all([dashboardQuery.refetch(), queuesQuery.refetch()]);
     },
     isRefetching: dashboardQuery.isRefetching || queuesQuery.isRefetching,
   };

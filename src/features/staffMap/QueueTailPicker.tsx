@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Map, CustomOverlayMap, Polyline } from "react-kakao-maps-sdk";
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
+import { QUEUE_LINE_COLOR, QUEUE_LINE_WEIGHT } from "@/features/boothmap/QueuePathLayer";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
@@ -169,9 +170,10 @@ function QueueTailMapArea({
     >
       {boothPoint && tail ? (
         <Polyline
+          // 미리보기와 저장 뒤 지도에 남는 줄이 같아 보이도록 색·굵기를 한곳에서 가져온다.
           path={[boothPoint, tail]}
-          strokeColor="#FD7E14"
-          strokeWeight={4}
+          strokeColor={QUEUE_LINE_COLOR}
+          strokeWeight={QUEUE_LINE_WEIGHT}
           strokeOpacity={0.9}
         />
       ) : null}

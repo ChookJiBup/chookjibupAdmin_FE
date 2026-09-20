@@ -45,6 +45,20 @@ export function overallCongestion(booths: Booth[]): CongestionLevel | null {
   return SCORE_CONGESTION[Math.round(average)];
 }
 
+/**
+ * 대기시간이 입력된 부스들의 평균(분).
+ *
+ * 축제 전체 평균은 서버가 내려주지만 구역별 평균은 없다. 구역을 고른 화면에서
+ * 전체 평균을 그대로 두면 구역을 바꿔도 숫자가 그대로라 안 바뀐 것처럼 보인다.
+ */
+export function averageWaitMinutes(booths: Booth[]): number | null {
+  const values = booths
+    .map((booth) => booth.waitMinutes)
+    .filter((minutes): minutes is number => typeof minutes === "number");
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((sum, minutes) => sum + minutes, 0) / values.length);
+}
+
 /** 혼잡도가 가장 높고, 같으면 대기시간이 긴 부스. */
 export function busiestBooth(booths: Booth[]): Booth | null {
   const scored = booths.filter((booth) => booth.congestionLevel);
