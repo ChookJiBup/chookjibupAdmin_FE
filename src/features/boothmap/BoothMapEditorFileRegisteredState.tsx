@@ -1404,8 +1404,13 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       />
     ) : null;
   const panOverride = spaceHeld || modifierHeld;
-  /** 하단 선택 바가 떠 있는지. 지도 위 다른 하단 요소를 그만큼 띄우는 데 쓴다. */
-  const selectionBarOpen = drawTool === "select" && !editingLocked && checkedIds.size > 0;
+  /*
+    하단 선택 바가 떠 있는지. 지도 위 다른 하단 요소를 그만큼 띄우는 데 쓴다.
+
+    하나만 골랐을 때는 띄우지 않는다. 그때는 이미 그 대상의 말풍선이 떠 있어 할 일이
+    거기 다 있고, 바를 함께 띄우면 화면 아래쪽에 있는 말풍선의 대기줄 버튼을 덮는다.
+  */
+  const selectionBarOpen = drawTool === "select" && !editingLocked && checkedIds.size >= 2;
   const queuePathItems = useMemo(() => {
     const items = boothsToQueuePathItems(
       booths

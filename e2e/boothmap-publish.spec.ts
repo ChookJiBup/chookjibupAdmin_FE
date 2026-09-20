@@ -139,7 +139,7 @@ test("공개된 부스맵은 «공개됨»을 눌러 확인 모달을 거쳐 다
   await publishedButton.click();
 
   // 그려 둔 내용까지 사라지는 줄 알면 해제를 못 누른다. 무엇이 남는지 먼저 알린다.
-  await expect(page.getByText("더 이상 보이지 않습니다", { exact: false })).toBeVisible();
+  await expect(page.getByText("그려 둔 내용은 그대로 남습니다", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "공개 해제", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "공개하기", exact: true })).toBeVisible();
