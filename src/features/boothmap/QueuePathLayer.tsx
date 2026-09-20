@@ -10,11 +10,24 @@ export interface QueuePathItem {
   queueId: string;
   boothId: string;
   path: LatLng[] | null;
+  /**
+   * 줄 끝 좌표. 경로(`path`) 없이 줄 끝만 저장하는 스태프 화면을 위해 받는다.
+   * 경로가 없을 때 부스에서 이 지점까지 직선을 그려 «현재 줄»을 보여 준다.
+   */
+  tail?: LatLng | null;
   waitMinutes: number | null | undefined;
   congestionLevel?: CongestionLevel | null;
   boothLat: number;
   boothLng: number;
 }
+
+/*
+  대기줄 선 색. 카카오 Polyline은 CSS 클래스를 받지 못해 값으로 줄 수밖에 없다.
+  globals.css의 `point-600`(#FD7E14)과 같은 색이고, 줄 끝을 찍는 미리보기
+  (`staffMap/QueueTailPicker`)도 같은 색·굵기를 쓴다.
+*/
+export const QUEUE_LINE_COLOR = "#FD7E14";
+export const QUEUE_LINE_WEIGHT = 4;
 
 /** 대기시간 표가 서로 닿지 않는다고 볼 최소 간격(px). 표 하나의 크기에서 왔다. */
 const LABEL_GAP_X = 64;
@@ -39,6 +52,9 @@ export function boothsToQueuePathItems(
     {
       queueId: string;
       path: LatLng[] | null;
+      /** 줄 끝 좌표. 경로 없이 줄 끝만 저장하는 화면이 있어 선택 항목으로 받는다. */
+      tailLatitude?: number | null;
+      tailLongitude?: number | null;
       waitMinutes?: number | null;
       congestionLevel?: CongestionLevel | null;
     }
@@ -52,6 +68,10 @@ export function boothsToQueuePathItems(
         queueId: queue?.queueId ?? `wait-${booth.boothId}`,
         boothId: booth.boothId,
         path: queue?.path ?? null,
+        tail:
+          queue?.tailLatitude != null && queue?.tailLongitude != null
+            ? { lat: queue.tailLatitude, lng: queue.tailLongitude }
+            : null,
         waitMinutes:
           queue?.waitMinutes !== undefined ? queue.waitMinutes : (booth.waitMinutes ?? null),
         congestionLevel:
@@ -191,14 +211,33 @@ function WaitLabelLayer({ queues }: { queues: QueuePathItem[] }) {
   );
 }
 
+/**
+ * 이 줄을 그릴 선. 경로가 있으면 그대로, 줄 끝만 있으면 부스에서 줄 끝까지 직선이다.
+ *
+ * 스태프 화면은 줄 끝 좌표 하나만 저장하는 계약이라(경로를 보내지 않는다) 경로만
+ * 보던 시절에는 줄을 아무리 갱신해도 지도에 아무것도 그려지지 않았다.
+ */
+function queueLineOf(queue: QueuePathItem): LatLng[] | null {
+  if (queue.path && queue.path.length >= 2) return queue.path;
+  if (!queue.tail) return null;
+  return [{ lat: queue.boothLat, lng: queue.boothLng }, queue.tail];
+}
+
 /** 대기줄 끝(없으면 부스 자리)에 표를 단다. */
 function labelPositionOf(queue: QueuePathItem): LatLng {
-  const path = queue.path && queue.path.length >= 2 ? queue.path : null;
-  return path ? path[path.length - 1] : { lat: queue.boothLat, lng: queue.boothLng };
+  const line = queueLineOf(queue);
+  return line ? line[line.length - 1] : { lat: queue.boothLat, lng: queue.boothLng };
 }
 
 function QueuePathItemView({ queue }: { queue: QueuePathItem }) {
-  const path = queue.path && queue.path.length >= 2 ? queue.path : null;
-  if (!path) return null;
-  return <Polyline path={path} strokeWeight={4} strokeColor="#fd7e14" strokeOpacity={0.95} />;
+  const line = queueLineOf(queue);
+  if (!line) return null;
+  return (
+    <Polyline
+      path={line}
+      strokeWeight={QUEUE_LINE_WEIGHT}
+      strokeColor={QUEUE_LINE_COLOR}
+      strokeOpacity={0.95}
+    />
+  );
 }

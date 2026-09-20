@@ -21,7 +21,14 @@ import {
   updateFestival,
   updateFestivalVisitorCountInputMode,
 } from "./api";
-import { formatDateInput, isRealDate, toDisplayDate, toIsoDate } from "./dateFormat";
+import {
+  DATE_FORMAT_LABEL,
+  formatDateInput,
+  hasFestivalPeriodError,
+  toDisplayDate,
+  toIsoDate,
+  validateFestivalPeriod,
+} from "./dateFormat";
 import { SearchDialog, type SearchDialogState } from "./SearchDialog";
 import {
   FESTIVAL_SEARCH_HELPER_ITEMS,
@@ -55,6 +62,11 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
   const [visitorCountInputMode, setVisitorCountInputMode] =
     useState<FestivalVisitorCountInputMode | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  /*
+    축제 기간 오류를 이미 건드린 칸에만 보여 주기 위한 표시. 타이핑 도중에는
+    «2026-0»처럼 형식이 안 맞는 게 당연하므로, 포커스가 빠졌거나 수정을 눌러 본 뒤에만 띄운다.
+  */
+  const [periodTouched, setPeriodTouched] = useState({ startDate: false, endDate: false });
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
   const [festivalSearchState, setFestivalSearchState] = useState<SearchDialogState>("default");
@@ -162,6 +174,15 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
 
   const displayStartDate = startDate ?? toDisplayDate(festival.startDate ?? "");
   const displayEndDate = endDate ?? toDisplayDate(festival.endDate ?? "");
+  const periodErrors = validateFestivalPeriod(displayStartDate, displayEndDate);
+  const visiblePeriodErrors = {
+    startDate: periodTouched.startDate ? periodErrors.startDate : null,
+    endDate: periodTouched.endDate ? periodErrors.endDate : null,
+  };
+  /** 기간 오류가 화면에 보이는 동안에는 수정을 막는다. 잠긴 이유는 버튼 위에도 적는다. */
+  const periodBlocksSubmit = hasFestivalPeriodError(visiblePeriodErrors);
+  const submitBlockedMessage =
+    formError ?? (periodBlocksSubmit ? "축제 기간을 확인해 주세요." : null);
   /*
     종료된 축제의 정보와 부스 배치는 결과리포트가 근거로 삼는 자료라, 뒤늦게 바뀌면
     이미 뽑은 리포트와 어긋난다. 그래서 축제가 끝나면 이 화면을 읽기 전용으로 돌린다.
@@ -184,12 +205,10 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
       setFormError("축제 내용은 1~1000자로 입력해 주세요.");
       return;
     }
-    if (!isRealDate(displayStartDate) || !isRealDate(displayEndDate)) {
-      setFormError("날짜는 YYYY.mm.dd 형식의 실제 날짜로 입력해 주세요.");
-      return;
-    }
-    if (toIsoDate(displayStartDate) > toIsoDate(displayEndDate)) {
-      setFormError("종료날짜는 시작날짜보다 빠를 수 없습니다.");
+    if (hasFestivalPeriodError(periodErrors)) {
+      // 어느 칸이 잘못됐는지는 해당 입력칸 아래에 적히므로, 두 칸을 모두 «건드린» 상태로 만든다.
+      setPeriodTouched({ startDate: true, endDate: true });
+      setFormError(null);
       return;
     }
     setFormError(null);
@@ -255,26 +274,32 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
             <Input
               label="시작날짜"
               wrapperClassName="flex-1"
-              placeholder="YYYY.mm.dd"
+              placeholder={DATE_FORMAT_LABEL}
               inputMode="numeric"
               maxLength={10}
               disabled={isCompleted}
               value={displayStartDate}
+              errorText={visiblePeriodErrors.startDate ?? undefined}
               onChange={(event) => setStartDate(formatDateInput(event.target.value))}
+              onBlur={() => setPeriodTouched((prev) => ({ ...prev, startDate: true }))}
             />
             <Input
               label="종료날짜"
               wrapperClassName="flex-1"
-              placeholder="YYYY.mm.dd"
+              placeholder={DATE_FORMAT_LABEL}
               inputMode="numeric"
               maxLength={10}
               disabled={isCompleted}
               value={displayEndDate}
+              errorText={visiblePeriodErrors.endDate ?? undefined}
               onChange={(event) => setEndDate(formatDateInput(event.target.value))}
+              onBlur={() => setPeriodTouched((prev) => ({ ...prev, endDate: true }))}
             />
           </div>
 
-          {formError ? <p className="body-caption text-error">{formError}</p> : null}
+          {submitBlockedMessage ? (
+            <p className="body-caption text-error">{submitBlockedMessage}</p>
+          ) : null}
         </div>
 
         <div className="relative min-h-[360px] xl:col-span-2 xl:min-h-[calc(100vh-252px)] overflow-hidden rounded-lg bg-zinc-100">
@@ -297,7 +322,7 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
         cancelLabel="삭제하기"
         onCancel={() => setDeleteDialogOpen(true)}
         submitLabel="수정하기"
-        submitDisabled={isCompleted}
+        submitDisabled={isCompleted || periodBlocksSubmit}
         onSubmit={handleEditClick}
       />
 

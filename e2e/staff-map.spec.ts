@@ -167,6 +167,26 @@ test.describe("갱신 시각 표기", () => {
   });
 });
 
+test("구역을 고르면 지도와 요약이 그 구역 기준으로 바뀐다", async ({ page }) => {
+  await mockStaffApis(page);
+  await page.goto("/staff/dashboard");
+
+  // 기본값은 «전체»다. 축제 전체에서 가장 혼잡한 부스는 떡볶이 부스(HIGH)다.
+  const zoneSelect = page.getByRole("combobox", { name: "구역 선택" });
+  await expect(zoneSelect).toHaveText("전체");
+  await expect(page.getByText("떡볶이 부스")).toBeVisible();
+
+  await zoneSelect.click();
+  await page.getByRole("option", { name: "체험 구역" }).click();
+
+  // 고른 구역은 URL에 남아 새로고침해도 유지된다.
+  await expect(page).toHaveURL(/[?&]zoneId=zone-2/);
+  await expect(page.getByText("테스트 축제 · 체험 구역")).toBeVisible();
+  // 요약이 그 구역 부스만으로 다시 계산된다(떡볶이 부스는 먹거리 구역이라 빠진다).
+  await expect(page.getByText("떡볶이 부스")).toHaveCount(0);
+  await expect(page.getByText("솜사탕 부스")).toBeVisible();
+});
+
 test("지도 확대 버튼은 최대 확대 상태에서 비활성화된다", async ({ page }) => {
   await mockStaffApis(page);
   await page.goto("/staff/dashboard");

@@ -24,7 +24,8 @@ export interface QueueUpdateSheetProps {
   /** 최신 정보를 다시 받아오는 중인지. 참이면 새로고침 아이콘이 돈다. */
   refreshing?: boolean;
   onClose: () => void;
-  onUpdated: () => void;
+  /** 최신 정보를 다시 읽는다. Promise를 돌려주면 다 읽을 때까지 시트를 닫지 않는다. */
+  onUpdated: () => void | Promise<unknown>;
 }
 
 /**
@@ -72,9 +73,15 @@ export function QueueUpdateSheet({
         queueTailMeters: tailMeters ?? undefined,
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("줄끝 위치를 갱신했습니다.");
-      onUpdated();
+      /*
+        다시 읽기를 기다리지 않고 닫으면, 시트가 사라진 자리의 부스 바가 잠깐 옛 거리를
+        보여 준다(방금 저장한 값이 아니라 저장 직전 값이라 「먹지 않았나?」 싶어진다).
+        TanStack Query는 onSuccess가 끝날 때까지 mutation을 pending으로 두므로, 기다리는
+        동안 버튼도 「갱신 중...」으로 남는다.
+      */
+      await onUpdated();
       // 갱신된 값은 부스 바에서 다시 확인할 수 있으므로 시트는 닫는다.
       onClose();
     },
@@ -121,7 +128,7 @@ export function QueueUpdateSheet({
               setSpinning(true);
               if (spinTimer.current) clearTimeout(spinTimer.current);
               spinTimer.current = setTimeout(() => setSpinning(false), 700);
-              onUpdated();
+              void onUpdated();
             }}
           />
         </div>
