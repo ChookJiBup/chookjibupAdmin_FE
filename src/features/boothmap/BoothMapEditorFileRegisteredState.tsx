@@ -2251,34 +2251,58 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   }
 
   /**
-   * 구역 순서를 한 칸 옮긴다.
+   * 구역을 끌어 다른 구역 자리에 놓는다.
    *
    * 이 순서가 저장 요청의 sortOrder가 되고, 스태프 앱의 구역 고르기 목록이 그 순서대로
    * 나열된다. 현장에서 자주 쓰는 구역을 위로 올릴 수 있어야 한다.
+   *
+   * 묶어 만든 구역과 폴리곤으로 그린 구역은 서로 다른 목록에 있어 자기들끼리만 자리를
+   * 바꾼다. 저장할 때도 묶음 구역이 먼저 담기므로 둘 사이 순서는 바꿀 수 없다.
    */
-  function moveZoneOrder(zoneId: string, direction: -1 | 1) {
-    if (zones.some((zone) => zone.id === zoneId)) {
-      setZones((prev) => {
-        const from = prev.findIndex((zone) => zone.id === zoneId);
-        const to = from + direction;
-        if (from === -1 || to < 0 || to >= prev.length) return prev;
-        const next = [...prev];
-        [next[from], next[to]] = [next[to], next[from]];
-        return next;
-      });
+  function moveZoneOrder(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const reorder = <T extends { id: string }>(list: T[]) => {
+      const from = list.findIndex((item) => item.id === sourceId);
+      const to = list.findIndex((item) => item.id === targetId);
+      if (from === -1 || to === -1) return list;
+      const next = [...list];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    };
+    if (zones.some((zone) => zone.id === sourceId)) {
+      setZones((prev) => reorder(prev));
       return;
     }
-    // 폴리곤 구역은 shapes 배열 순서를 따른다. 사이에 낀 선 도형은 건너뛰고 폴리곤끼리 바꾼다.
-    setShapes((prev) => {
-      const from = prev.findIndex((shape) => shape.id === zoneId);
-      if (from === -1) return prev;
-      let to = from + direction;
-      while (to >= 0 && to < prev.length && prev[to].kind !== "polygon") to += direction;
-      if (to < 0 || to >= prev.length) return prev;
-      const next = [...prev];
-      [next[from], next[to]] = [next[to], next[from]];
-      return next;
-    });
+    setShapes((prev) => reorder(prev));
+  }
+
+  /** 끌고 있는 구역 행. 부스 행과 같은 방식으로 손잡이에서 시작한 끌기만 받는다. */
+  const [dragZoneId, setDragZoneId] = useState<string | null>(null);
+  const [draggableZoneRowId, setDraggableZoneRowId] = useState<string | null>(null);
+
+  /** 구역 행에 붙일 끌기 배선. 두 목록(묶음·폴리곤)이 같은 동작을 쓴다. */
+  function zoneReorderProps(zoneId: string) {
+    return {
+      dragging: dragZoneId === zoneId,
+      draggable: draggableZoneRowId === zoneId,
+      disabled: editingLocked,
+      onHandleDown: () => setDraggableZoneRowId(zoneId),
+      onHandleUp: () => setDraggableZoneRowId(null),
+      onDragStart: (event: React.DragEvent<HTMLDivElement>) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setDragImage(getEmptyDragImage(), 0, 0);
+        setDragZoneId(zoneId);
+      },
+      onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        if (dragZoneId && dragZoneId !== zoneId) moveZoneOrder(dragZoneId, zoneId);
+      },
+      onDragEnd: () => {
+        setDragZoneId(null);
+        setDraggableZoneRowId(null);
+      },
+    };
   }
 
   function moveBooth(sourceId: string, targetId: string) {
@@ -3373,7 +3397,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </div>
 
           <div className="flex flex-col gap-1">
-            {standaloneZones.map((zone, index) => {
+            {standaloneZones.map((zone) => {
               const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
               const expanded = expandedZoneIds.has(zone.id);
               return (
@@ -3384,10 +3408,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   expanded={expanded}
                   checked={selectedZoneId === zone.id}
                   selected={selectedZoneId === zone.id}
-                  onMoveUp={() => moveZoneOrder(zone.id, -1)}
-                  onMoveDown={() => moveZoneOrder(zone.id, 1)}
-                  moveUpDisabled={editingLocked || index === 0}
-                  moveDownDisabled={editingLocked || index === standaloneZones.length - 1}
+                  reorder={zoneReorderProps(zone.id)}
                   onToggleExpanded={() => toggleZoneExpanded(zone.id)}
                   onCheckedChange={(checked) =>
                     checked ? selectZone(zone.id) : setSelectedZoneId(null)
@@ -3404,7 +3425,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
           {polygonShapes.length > 0 ? (
             <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
-              {polygonShapes.map((shape, index) => {
+              {polygonShapes.map((shape) => {
                 const members = booths.filter(
                   (booth) => shapeIdByBoothId.get(booth.id) === shape.id,
                 );
@@ -3416,10 +3437,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     expanded={expandedZoneIds.has(shape.id)}
                     checked={selectedShapeId === shape.id || checkedIds.has(shape.id)}
                     selected={selectedShapeId === shape.id || checkedIds.has(shape.id)}
-                    onMoveUp={() => moveZoneOrder(shape.id, -1)}
-                    onMoveDown={() => moveZoneOrder(shape.id, 1)}
-                    moveUpDisabled={editingLocked || index === 0}
-                    moveDownDisabled={editingLocked || index === polygonShapes.length - 1}
+                    reorder={zoneReorderProps(shape.id)}
                     onToggleExpanded={() => toggleZoneExpanded(shape.id)}
                     onCheckedChange={(checked) => {
                       setEditingBoothId(null);

@@ -1,14 +1,11 @@
 import type { ReactNode } from "react";
 import {
-  ArrowDownIcon,
-  ArrowUpIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   CornersIcon,
   HamburgerMenuIcon,
 } from "@radix-ui/react-icons";
 import { Checkbox } from "@/components/ui/checkbox";
-import { IconButton } from "@/components/ui/IconButton";
 import { cn } from "@/lib/utils";
 
 export interface ZoneListItemProps {
@@ -20,11 +17,22 @@ export interface ZoneListItemProps {
   onToggleExpanded: () => void;
   onCheckedChange: (checked: boolean) => void;
   onSelect: () => void;
-  /** 구역 순서를 한 칸 올린다. 이 순서가 저장 때 sortOrder가 되고 스태프 앱 목록 순서가 된다. */
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  moveUpDisabled?: boolean;
-  moveDownDisabled?: boolean;
+  /**
+   * 순서 바꾸기. 부스 행과 같은 방식으로 손잡이를 잡아 끈다 — 화살표 버튼을 따로 두면
+   * 한 줄에 버튼이 넷이 되어 구역 이름이 잘리고, 같은 목록 안에서 조작 방식이 둘로 갈린다.
+   */
+  reorder?: {
+    /** 지금 이 행을 끌고 있는지. 끌고 있는 행은 흐리게 둔다. */
+    dragging: boolean;
+    /** 손잡이에서 시작한 끌기만 허용한다. 행 전체를 draggable로 두면 체크박스 클릭이 샌다. */
+    draggable: boolean;
+    disabled?: boolean;
+    onHandleDown: () => void;
+    onHandleUp: () => void;
+    onDragStart: (event: React.DragEvent<HTMLDivElement>) => void;
+    onDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
+    onDragEnd: () => void;
+  };
   children?: ReactNode;
 }
 
@@ -38,18 +46,22 @@ export function ZoneListItem({
   onToggleExpanded,
   onCheckedChange,
   onSelect,
-  onMoveUp,
-  onMoveDown,
-  moveUpDisabled = false,
-  moveDownDisabled = false,
+  reorder,
   children,
 }: ZoneListItemProps) {
   return (
     <div className="flex flex-col">
       <div
+        draggable={reorder?.draggable ?? false}
+        onDragStart={reorder?.onDragStart}
+        onDragOver={reorder?.onDragOver}
+        onDrop={(event) => event.preventDefault()}
+        onDragEnd={reorder?.onDragEnd}
         className={cn(
-          "flex items-center gap-2 border-b border-zinc-200 pt-4 pb-3 pl-1",
+          // 고른 행의 배경은 부스 행과 같이 패널 좌우 여백까지 넓힌다.
+          "-mx-6 flex items-center gap-2 border-b border-zinc-200 px-6 pt-4 pb-3 transition-[background-color,opacity] duration-150",
           selected && "bg-primary/10",
+          reorder?.dragging && "opacity-40",
         )}
       >
         <button
@@ -76,41 +88,17 @@ export function ZoneListItem({
           <span className="body-regular-bold truncate text-zinc-950">{name}</span>
           <span className="body-regular-bold text-primary">{count}</span>
         </button>
-        {onMoveUp ? (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            icon={<ArrowUpIcon />}
-            aria-label={`${name} 순서 올리기`}
-            title="순서 올리기"
-            disabled={moveUpDisabled}
-            onClick={onMoveUp}
-          />
-        ) : null}
-        {onMoveDown ? (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            icon={<ArrowDownIcon />}
-            aria-label={`${name} 순서 내리기`}
-            title="순서 내리기"
-            disabled={moveDownDisabled}
-            onClick={onMoveDown}
-          />
-        ) : null}
-        {/*
-          순서 버튼이 붙으면 한 줄에 버튼이 네 개가 되어 구역 이름이 «로스...»로 잘린다.
-          햄버거는 이름을 누르는 것과 같은 동작이라 그때는 뺀다.
-        */}
-        {onMoveUp || onMoveDown ? null : (
-          <IconButton
-            variant="ghost"
-            size="sm"
-            icon={<HamburgerMenuIcon />}
-            aria-label={`${name} 메뉴`}
-            onClick={onSelect}
-          />
-        )}
+        <span
+          onMouseDown={reorder && !reorder.disabled ? reorder.onHandleDown : undefined}
+          onMouseUp={reorder?.onHandleUp}
+          title={reorder ? "끌어서 순서 바꾸기" : undefined}
+          className={cn(
+            "shrink-0 touch-none text-zinc-400",
+            reorder && !reorder.disabled ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+          )}
+        >
+          <HamburgerMenuIcon />
+        </span>
       </div>
       {expanded ? children : null}
     </div>

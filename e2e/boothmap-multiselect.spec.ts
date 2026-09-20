@@ -377,15 +377,21 @@ test("구역 순서를 바꾸면 저장 요청의 sortOrder가 따라 바뀐다"
     저장하면 서버 응답으로 목록을 다시 채우느라 행이 통째로 새로 그려진다. 순서를 먼저
     바꾸고 저장은 한 번만 해, 다시 그리는 도중의 행을 누르는 일이 없게 한다.
   */
+  const zoneHandles = page.locator('[title="끌어서 순서 바꾸기"]');
   const zoneNames = () =>
     page
-      .locator('[aria-label$="순서 내리기"]')
-      .evaluateAll((els) =>
-        els.map((el) => (el.getAttribute("aria-label") ?? "").replace(" 순서 내리기", "")),
-      );
+      .getByRole("complementary")
+      .locator("span.body-regular-bold.truncate")
+      .evaluateAll((els) => els.map((el) => el.textContent ?? ""));
   expect(await zoneNames()).toEqual(["체험존", "야시장존", "먹거리존"]);
 
-  await page.getByRole("button", { name: "체험존 순서 내리기" }).click();
+  // 부스 행과 같이 손잡이를 잡아 끌어 자리를 바꾼다.
+  const handle = (await zoneHandles.nth(0).boundingBox())!;
+  const target = (await zoneHandles.nth(1).boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+  await page.mouse.up();
   expect(await zoneNames()).toEqual(["야시장존", "체험존", "먹거리존"]);
 
   await save(page);
