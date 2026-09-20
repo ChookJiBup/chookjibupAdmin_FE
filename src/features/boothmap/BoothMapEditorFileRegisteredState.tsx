@@ -1633,18 +1633,43 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   /** 끌어 옮긴 결과를 한 번에 반영한다. 되돌리기 한 번으로 원위치된다. */
   function applyMove(ids: Set<string>, delta: LatLngDelta) {
     if (!delta.dLat && !delta.dLng) return;
-    setBooths((prev) =>
-      prev.map((booth) =>
-        ids.has(booth.id)
-          ? { ...booth, ...shiftPoint({ lat: booth.lat, lng: booth.lng }, delta) }
-          : booth,
-      ),
+    const nextBooths = booths.map((booth) =>
+      ids.has(booth.id)
+        ? { ...booth, ...shiftPoint({ lat: booth.lat, lng: booth.lng }, delta) }
+        : booth,
     );
-    setShapes((prev) =>
-      prev.map((shape) =>
-        ids.has(shape.id) ? { ...shape, points: shiftPoints(shape.points, delta) } : shape,
-      ),
+    const nextShapes = shapes.map((shape) =>
+      ids.has(shape.id) ? { ...shape, points: shiftPoints(shape.points, delta) } : shape,
     );
+    setBooths(nextBooths);
+    setShapes(nextShapes);
+    warnZoneChanges(nextBooths, nextShapes);
+  }
+
+  /**
+   * 옮기고 나서 구역 소속이 바뀐 부스를 알린다.
+   *
+   * 소속은 구역 폴리곤 안에 있는지로 판정하므로, 부스를 끌면 저장 때의 구역 배정이
+   * 조용히 달라진다. 여럿을 한꺼번에 옮기면서부터는 이 일이 눈에 띄지 않게 자주
+   * 일어나, 저장하고 나서야 「구역 인원이 왜 달라졌지」를 뒤늦게 발견하게 된다.
+   */
+  function warnZoneChanges(nextBooths: LocalBoothPin[], nextShapes: LocalMapShape[]) {
+    const ownerName = (booth: LocalBoothPin, shapes: LocalMapShape[]) =>
+      shapes.find((shape) => shape.kind === "polygon" && containsPoint(shape.points, booth))
+        ?.name ?? null;
+    const changed = nextBooths.filter((booth, index) => {
+      if (booth.nodeType !== "BOOTH") return false;
+      const before = booths[index];
+      return before && ownerName(before, shapes) !== ownerName(booth, nextShapes);
+    });
+    if (changed.length === 0) return;
+    const first = changed[0];
+    const target = ownerName(first, nextShapes);
+    toast.info(`구역 소속이 바뀐 부스 ${changed.length}개`, {
+      description: `${first.name}${changed.length > 1 ? ` 외 ${changed.length - 1}개` : ""}가 ${
+        target ? `«${target}»으로 들어갔습니다` : "구역 밖으로 나갔습니다"
+      }. 되돌리려면 실행취소(⌘Z)를 누르세요.`,
+    });
   }
 
   /**

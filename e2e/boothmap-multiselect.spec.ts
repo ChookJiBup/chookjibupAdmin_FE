@@ -340,6 +340,18 @@ test("줄 세우기는 고른 부스를 한 줄로 다시 놓는다", async ({ p
   expect(Math.abs(cross)).toBeLessThan(1e-14);
 });
 
+test("부스를 끌어 구역 밖으로 내보내면 소속이 바뀐 사실을 알린다", async ({ page }) => {
+  await mockBoothMap(page);
+  await openEditor(page);
+
+  // 구역 안의 부스 하나를 폴리곤 밖으로 멀리 끌어낸다.
+  const pin = await pinCenter(page, "튀김마차");
+  await drag(page, pin, { x: pin.x, y: pin.y + 260 });
+
+  await expect(page.getByText(/구역 소속이 바뀐 부스 1개/)).toBeVisible();
+  await expect(page.getByText(/구역 밖으로 나갔습니다/)).toBeVisible();
+});
+
 test("구역 순서를 바꾸면 저장 요청의 sortOrder가 따라 바뀐다", async ({ page }) => {
   const saves = await mockBoothMap(page);
   await openEditor(page);
