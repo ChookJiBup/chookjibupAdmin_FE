@@ -32,7 +32,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
-import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getFestivalDashboard, getFestivalQueues } from "@/features/dashboard/api";
 import type { FestivalQueue, FestivalQueueList } from "@/features/staffMap/types";
 import { QueuePlanPanel } from "./QueuePlanPanel";
@@ -329,7 +328,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const setToastBelowActionBar = useConsoleUiStore((state) => state.setToastBelowActionBar);
-  const [mapLevel, setMapLevel] = useState(DEFAULT_MAP_LEVEL);
   const [boothListOpen, setBoothListOpen] = useState(false);
   const [drawTool, setDrawTool] = useState<DrawTool>("select");
   const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
@@ -1623,18 +1621,43 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   /** 끌어 옮긴 결과를 한 번에 반영한다. 되돌리기 한 번으로 원위치된다. */
   function applyMove(ids: Set<string>, delta: LatLngDelta) {
     if (!delta.dLat && !delta.dLng) return;
-    setBooths((prev) =>
-      prev.map((booth) =>
-        ids.has(booth.id)
-          ? { ...booth, ...shiftPoint({ lat: booth.lat, lng: booth.lng }, delta) }
-          : booth,
-      ),
+    const nextBooths = booths.map((booth) =>
+      ids.has(booth.id)
+        ? { ...booth, ...shiftPoint({ lat: booth.lat, lng: booth.lng }, delta) }
+        : booth,
     );
-    setShapes((prev) =>
-      prev.map((shape) =>
-        ids.has(shape.id) ? { ...shape, points: shiftPoints(shape.points, delta) } : shape,
-      ),
+    const nextShapes = shapes.map((shape) =>
+      ids.has(shape.id) ? { ...shape, points: shiftPoints(shape.points, delta) } : shape,
     );
+    setBooths(nextBooths);
+    setShapes(nextShapes);
+    warnZoneChanges(nextBooths, nextShapes);
+  }
+
+  /**
+   * 옮기고 나서 구역 소속이 바뀐 부스를 알린다.
+   *
+   * 소속은 구역 폴리곤 안에 있는지로 판정하므로, 부스를 끌면 저장 때의 구역 배정이
+   * 조용히 달라진다. 여럿을 한꺼번에 옮기면서부터는 이 일이 눈에 띄지 않게 자주
+   * 일어나, 저장하고 나서야 「구역 인원이 왜 달라졌지」를 뒤늦게 발견하게 된다.
+   */
+  function warnZoneChanges(nextBooths: LocalBoothPin[], nextShapes: LocalMapShape[]) {
+    const ownerName = (booth: LocalBoothPin, shapes: LocalMapShape[]) =>
+      shapes.find((shape) => shape.kind === "polygon" && containsPoint(shape.points, booth))
+        ?.name ?? null;
+    const changed = nextBooths.filter((booth, index) => {
+      if (booth.nodeType !== "BOOTH") return false;
+      const before = booths[index];
+      return before && ownerName(before, shapes) !== ownerName(booth, nextShapes);
+    });
+    if (changed.length === 0) return;
+    const first = changed[0];
+    const target = ownerName(first, nextShapes);
+    toast.info(`구역 소속이 바뀐 부스 ${changed.length}개`, {
+      description: `${first.name}${changed.length > 1 ? ` 외 ${changed.length - 1}개` : ""}가 ${
+        target ? `«${target}»으로 들어갔습니다` : "구역 밖으로 나갔습니다"
+      }. 되돌리려면 실행취소(⌘Z)를 누르세요.`,
+    });
   }
 
   /**
@@ -2216,34 +2239,58 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   }
 
   /**
-   * 구역 순서를 한 칸 옮긴다.
+   * 구역을 끌어 다른 구역 자리에 놓는다.
    *
    * 이 순서가 저장 요청의 sortOrder가 되고, 스태프 앱의 구역 고르기 목록이 그 순서대로
    * 나열된다. 현장에서 자주 쓰는 구역을 위로 올릴 수 있어야 한다.
+   *
+   * 묶어 만든 구역과 폴리곤으로 그린 구역은 서로 다른 목록에 있어 자기들끼리만 자리를
+   * 바꾼다. 저장할 때도 묶음 구역이 먼저 담기므로 둘 사이 순서는 바꿀 수 없다.
    */
-  function moveZoneOrder(zoneId: string, direction: -1 | 1) {
-    if (zones.some((zone) => zone.id === zoneId)) {
-      setZones((prev) => {
-        const from = prev.findIndex((zone) => zone.id === zoneId);
-        const to = from + direction;
-        if (from === -1 || to < 0 || to >= prev.length) return prev;
-        const next = [...prev];
-        [next[from], next[to]] = [next[to], next[from]];
-        return next;
-      });
+  function moveZoneOrder(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const reorder = <T extends { id: string }>(list: T[]) => {
+      const from = list.findIndex((item) => item.id === sourceId);
+      const to = list.findIndex((item) => item.id === targetId);
+      if (from === -1 || to === -1) return list;
+      const next = [...list];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    };
+    if (zones.some((zone) => zone.id === sourceId)) {
+      setZones((prev) => reorder(prev));
       return;
     }
-    // 폴리곤 구역은 shapes 배열 순서를 따른다. 사이에 낀 선 도형은 건너뛰고 폴리곤끼리 바꾼다.
-    setShapes((prev) => {
-      const from = prev.findIndex((shape) => shape.id === zoneId);
-      if (from === -1) return prev;
-      let to = from + direction;
-      while (to >= 0 && to < prev.length && prev[to].kind !== "polygon") to += direction;
-      if (to < 0 || to >= prev.length) return prev;
-      const next = [...prev];
-      [next[from], next[to]] = [next[to], next[from]];
-      return next;
-    });
+    setShapes((prev) => reorder(prev));
+  }
+
+  /** 끌고 있는 구역 행. 부스 행과 같은 방식으로 손잡이에서 시작한 끌기만 받는다. */
+  const [dragZoneId, setDragZoneId] = useState<string | null>(null);
+  const [draggableZoneRowId, setDraggableZoneRowId] = useState<string | null>(null);
+
+  /** 구역 행에 붙일 끌기 배선. 두 목록(묶음·폴리곤)이 같은 동작을 쓴다. */
+  function zoneReorderProps(zoneId: string) {
+    return {
+      dragging: dragZoneId === zoneId,
+      draggable: draggableZoneRowId === zoneId,
+      disabled: editingLocked,
+      onHandleDown: () => setDraggableZoneRowId(zoneId),
+      onHandleUp: () => setDraggableZoneRowId(null),
+      onDragStart: (event: React.DragEvent<HTMLDivElement>) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setDragImage(getEmptyDragImage(), 0, 0);
+        setDragZoneId(zoneId);
+      },
+      onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        if (dragZoneId && dragZoneId !== zoneId) moveZoneOrder(dragZoneId, zoneId);
+      },
+      onDragEnd: () => {
+        setDragZoneId(null);
+        setDraggableZoneRowId(null);
+      },
+    };
   }
 
   function moveBooth(sourceId: string, targetId: string) {
@@ -2573,7 +2620,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           <KakaoMap
             center={mapCenter}
             isPanto={false}
-            level={mapLevel}
+            /*
+              확대 단계는 지도를 만들 때 한 번만 준다. 이 값을 React 상태로 되먹이면
+              휠을 한 번 굴린 뒤 지도가 얼어붙는다 — 카카오는 확대가 «끝난» 단계가 아니라
+              바뀌기 직전 단계로 zoom_changed를 알려 주는 때가 있어, 그 값을 다시
+              level로 내려보내면 다음 휠이 방금 벗어난 단계로 되돌려진다. 버튼 확대도
+              지도에 직접 건다.
+            */
+            level={DEFAULT_MAP_LEVEL}
             /*
               휠로 바로 확대·축소한다. 예전에는 이 값을 false로 두고 Ctrl+휠만 직접 받았는데,
               그냥 휠을 굴리면 아무 일도 일어나지 않아 지도가 멈춘 것처럼 보였다.
@@ -2593,11 +2647,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               map.setMinLevel(MIN_MAP_LEVEL);
               map.setMaxLevel(MAX_MAP_LEVEL);
             }}
-            /*
-              휠로 확대하면 카카오가 제 확대 단계를 직접 바꾼다. 그 값을 되받아 두지
-              않으면 확대/축소 버튼이 화면과 어긋난 단계에서 다시 시작해 지도가 튄다.
-            */
-            onZoomChanged={(map) => setMapLevel(map.getLevel())}
             onClick={(_target, mouseEvent) => {
               if (editingLocked || panOverride || queuePlanBusy || queueSaveMutation.isPending)
                 return;
@@ -3334,7 +3383,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </div>
 
           <div className="flex flex-col gap-1">
-            {standaloneZones.map((zone, index) => {
+            {standaloneZones.map((zone) => {
               const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
               const expanded = expandedZoneIds.has(zone.id);
               return (
@@ -3345,10 +3394,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   expanded={expanded}
                   checked={selectedZoneId === zone.id}
                   selected={selectedZoneId === zone.id}
-                  onMoveUp={() => moveZoneOrder(zone.id, -1)}
-                  onMoveDown={() => moveZoneOrder(zone.id, 1)}
-                  moveUpDisabled={editingLocked || index === 0}
-                  moveDownDisabled={editingLocked || index === standaloneZones.length - 1}
+                  reorder={zoneReorderProps(zone.id)}
                   onToggleExpanded={() => toggleZoneExpanded(zone.id)}
                   onCheckedChange={(checked) =>
                     checked ? selectZone(zone.id) : setSelectedZoneId(null)
@@ -3365,7 +3411,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
           {polygonShapes.length > 0 ? (
             <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
-              {polygonShapes.map((shape, index) => {
+              {polygonShapes.map((shape) => {
                 const members = booths.filter(
                   (booth) => shapeIdByBoothId.get(booth.id) === shape.id,
                 );
@@ -3377,10 +3423,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     expanded={expandedZoneIds.has(shape.id)}
                     checked={selectedShapeId === shape.id || checkedIds.has(shape.id)}
                     selected={selectedShapeId === shape.id || checkedIds.has(shape.id)}
-                    onMoveUp={() => moveZoneOrder(shape.id, -1)}
-                    onMoveDown={() => moveZoneOrder(shape.id, 1)}
-                    moveUpDisabled={editingLocked || index === 0}
-                    moveDownDisabled={editingLocked || index === polygonShapes.length - 1}
+                    reorder={zoneReorderProps(shape.id)}
                     onToggleExpanded={() => toggleZoneExpanded(shape.id)}
                     onCheckedChange={(checked) => {
                       setEditingBoothId(null);
@@ -3711,12 +3754,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             />
           </span>
         </div>
-        <MapZoomControls
-          onZoomIn={() => setMapLevel((level) => Math.max(level - 1, MIN_MAP_LEVEL))}
-          onZoomOut={() => setMapLevel((level) => Math.min(level + 1, MAX_MAP_LEVEL))}
-          zoomInDisabled={mapLevel <= MIN_MAP_LEVEL}
-          zoomOutDisabled={mapLevel >= MAX_MAP_LEVEL}
-        />
+        {/*
+          확대·축소 버튼은 두지 않는다. 휠로 바로 조작할 수 있게 된 뒤로는 같은 일을 하는
+          컨트롤이 둘이 되어 지도 위 자리만 차지했다. 터치 기기는 카카오가 두 손가락
+          확대를 기본으로 받는다.
+        */}
       </div>
 
       {drawTool === "polygon" || drawTool === "line" ? (

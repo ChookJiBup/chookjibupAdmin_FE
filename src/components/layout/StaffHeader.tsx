@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "./Logo";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -36,10 +37,8 @@ export function StaffHeader() {
           href={isLoggedIn ? "/staff/dashboard" : staffLoginPath({ festivalId })}
           className="flex min-w-0 items-center gap-2"
         >
-          {/* 콘솔 헤더와 같은 워드마크. `primary` 변경에 영향받지 않도록 색을 직접 지정한다. */}
-          <span className="flex h-8 w-12 shrink-0 items-center justify-center bg-zinc-200">
-            <span className="body-small-bold text-zinc-900">축지법</span>
-          </span>
+          {/* 콘솔 헤더와 같은 로고. `primary` 변경에 영향받지 않도록 point 토큰을 쓴다. */}
+          <Logo className="h-8 w-auto shrink-0 text-point-500" />
           <StaffBadge className="shrink-0" />
         </Link>
 

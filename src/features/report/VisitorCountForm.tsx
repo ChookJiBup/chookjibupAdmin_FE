@@ -1,13 +1,19 @@
 "use client";
 
-import { Cross2Icon, InfoCircledIcon } from "@radix-ui/react-icons";
+import { Cross2Icon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { VisitorCountModeField } from "@/features/festivals/VisitorCountModeField";
 import type { FestivalVisitorCountInputMode } from "@/features/festivals/types";
+import {
+  VisitorCountCard,
+  VisitorCountTotalField,
+  VisitorDayFields,
+  formatVisitorCount,
+  visitorCountHint,
+} from "./VisitorCountCard";
 import type { FestivalVisitorDay } from "./types";
 
 export interface VisitorCountFormProps {
@@ -32,6 +38,13 @@ export interface VisitorCountFormProps {
   onClose?: () => void;
 }
 
+/**
+ * 결과리포트 첫 진입에서 여는 방문 인원 입력 폼.
+ *
+ * 겉모양(말풍선·제목·총합·버튼)은 하루 마감 모달과 `VisitorCountCard`를 함께 써서
+ * 맞춘다. 다만 «집계 방식 선택»과 «총 방문객 한 칸 입력»은 이 화면에만 있는 단계라
+ * 여기 남는다 — 모달은 이미 일자별로 쌓고 있는 축제만 상대한다.
+ */
 export function VisitorCountForm({
   days,
   mode,
@@ -58,11 +71,6 @@ export function VisitorCountForm({
       const value = dailyCounts[index];
       return value.trim() !== "" && Number(value) >= 0;
     });
-  const dailyTotal = dailyCounts.reduce((sum, value) => sum + (Number(value) || 0), 0);
-
-  function numbersOnly(value: string) {
-    return value.replace(/\D/g, "");
-  }
 
   function handleSubmit() {
     if (!pickedMode) return;
@@ -97,96 +105,67 @@ export function VisitorCountForm({
 
   return (
     /*
-      기간이 긴 축제는 일차 입력칸이 그만큼 늘어난다. 높이를 안 잡아 두면 세로 중앙
-      정렬이 위아래를 동시에 밀어내, 218일 축제에서는 제목·닫기가 화면 위로 1만 px
-      밖으로 나가 아예 닿을 수 없었다. 카드를 화면 높이 안에 가두고 입력칸만 안에서
-      스크롤시킨다. 버튼 줄은 스크롤 밖에 둬서 「입력하기」가 항상 보이게 한다.
-
-      `my-auto`는 오버레이가 `items-start`로 바뀐 데 따른 것이다. 카드가 화면보다
-      작을 때는 지금까지처럼 가운데에 놓이고, 어떤 이유로든 카드가 화면보다 커지면
+      `my-auto`는 감싼 오버레이가 `items-start`인 데 따른 것이다. 카드가 화면보다
+      작을 때는 가운데에 놓이고, 기간이 긴 축제로 카드가 화면보다 커지면
       `items-center`와 달리 위쪽이 스크롤로 닿지 않는 영역에 잘려 들어가지 않는다.
     */
-    <div className="my-auto flex max-h-full w-[480px] max-w-full flex-col overflow-hidden rounded-2xl border border-zinc-300 bg-white">
-      <div className="flex shrink-0 items-center gap-1.5 px-5 py-4 sm:px-8">
-        {/* 좌우 균형을 맞추려 닫기 버튼과 같은 폭의 자리를 왼쪽에 비워 둔다. */}
-        <span aria-hidden className="size-8 shrink-0" />
-        <div className="flex flex-1 items-center justify-center gap-1.5">
-          <h2 className="heading-small text-center text-zinc-950">축제 방문 인원</h2>
-          <Tooltip>
-            <TooltipTrigger aria-label="도움말">
-              <InfoCircledIcon className="size-4 text-zinc-400" />
-            </TooltipTrigger>
-            <TooltipContent>방문인원을 입력하면 축제성과를 분석할 수 있어요.</TooltipContent>
-          </Tooltip>
-        </div>
-        {onClose ? (
+    <VisitorCountCard
+      className="my-auto max-h-full"
+      hint={visitorCountHint(days)}
+      headerAction={
+        onClose ? (
           <IconButton aria-label="닫기" variant="ghost" icon={<Cross2Icon />} onClick={onClose} />
-        ) : (
-          <span aria-hidden className="size-8 shrink-0" />
-        )}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto border-t border-zinc-200 p-5 sm:p-8">
-        <div className="flex flex-col gap-5">
-          {mode === "UNSET" ? (
-            <VisitorCountModeField
-              label="방문 인원 집계 방식"
-              value={pickedMode}
-              onChange={setPickedMode}
-            />
-          ) : null}
-          {!pickedMode ? null : pickedMode === "TOTAL" ? (
-            <Input
-              label="총 방문객"
-              inputMode="numeric"
-              placeholder="전체 방문 인원을 입력해 주세요"
-              value={totalCount ? Number(totalCount).toLocaleString() : ""}
-              onChange={(event) => setTotalCount(numbersOnly(event.target.value))}
-            />
-          ) : (
-            dailyCounts.map((value, index) => (
-              <Input
-                key={days[index].visitDate}
-                label={`${days[index].dayIndex}일차`}
-                disabled={!days[index].inputAllowed}
-                helperText={days[index].inputAllowed ? undefined : "마감 후 입력할 수 있어요"}
-                inputMode="numeric"
-                placeholder="방문인원을 입력해 주세요"
-                value={value ? Number(value).toLocaleString() : ""}
-                onChange={(event) => {
-                  const next = [...dailyCounts];
-                  next[index] = numbersOnly(event.target.value);
-                  setDailyCounts(next);
-                }}
-              />
-            ))
-          )}
-          {pickedMode === "DAILY" ? (
-            <Input
-              label="총합"
-              disabled
-              placeholder="자동 계산"
-              value={dailyValid ? dailyTotal.toLocaleString() : ""}
-            />
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex shrink-0 flex-col gap-2 px-5 pb-5 sm:px-8 sm:pb-8">
-        <p className="body-caption text-zinc-500">
-          {blockedReason ?? "입력한 방문 인원으로 결과리포트를 만듭니다."}
-        </p>
-        <Button
-          type="button"
-          size="lg"
-          className="w-full"
-          disabled={!valid || isPending}
-          title={blockedReason ?? undefined}
-          onClick={handleSubmit}
-        >
-          {isPending ? "저장 중..." : "입력하기"}
-        </Button>
-      </div>
-    </div>
+        ) : undefined
+      }
+      footer={
+        <>
+          <p className="body-caption text-zinc-500">
+            {blockedReason ?? "입력한 방문 인원으로 결과리포트를 만듭니다."}
+          </p>
+          <Button
+            type="button"
+            size="lg"
+            className="w-full"
+            disabled={!valid || isPending}
+            title={blockedReason ?? undefined}
+            onClick={handleSubmit}
+          >
+            {isPending ? "저장 중..." : "입력하기"}
+          </Button>
+        </>
+      }
+    >
+      {mode === "UNSET" ? (
+        <VisitorCountModeField
+          label="방문 인원 집계 방식"
+          value={pickedMode}
+          onChange={setPickedMode}
+        />
+      ) : null}
+      {!pickedMode ? null : pickedMode === "TOTAL" ? (
+        <Input
+          label="총 방문객"
+          inputMode="numeric"
+          placeholder="전체 방문 인원을 입력해 주세요"
+          value={formatVisitorCount(totalCount)}
+          onChange={(event) => setTotalCount(event.target.value.replace(/\D/g, ""))}
+        />
+      ) : (
+        <>
+          <VisitorDayFields
+            days={days}
+            values={dailyCounts}
+            onChange={(index, value) =>
+              setDailyCounts((current) => {
+                const next = [...current];
+                next[index] = value;
+                return next;
+              })
+            }
+          />
+          <VisitorCountTotalField values={dailyCounts} />
+        </>
+      )}
+    </VisitorCountCard>
   );
 }

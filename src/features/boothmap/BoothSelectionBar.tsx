@@ -78,7 +78,11 @@ export function BoothSelectionBar({
       </p>
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
-        <span className="flex" title={lineUpDisabledReason}>
+        {/* 대기줄(사전 줄·현재 줄)과 헷갈리지 않게 무엇을 하는 버튼인지 적어 둔다. */}
+        <span
+          className="flex"
+          title={lineUpDisabledReason ?? "고른 부스를 양 끝 사이에 한 줄로 나란히 놓습니다"}
+        >
           <Button
             type="button"
             variant="outline"

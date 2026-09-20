@@ -15,21 +15,37 @@ export function todayIsoDate(now: Date = new Date()): string {
 }
 
 /**
- * 이미 지나간 날 중 방문 인원이 비어 있는 날들.
+ * 이미 하루가 끝난 일차들. 비어 있든 이미 채웠든 모두 돌려준다.
  *
- * - 오늘은 아직 끝나지 않았으니 누락으로 치지 않는다(`visitDate < today`).
- * - `inputAllowed`가 false인 날은 백엔드가 아직 입력을 받지 않는다(일일마감 전).
- *   보내 봐야 거절당하므로 목록에 넣지 않는다.
- * - 집계 방식이 «총합»이거나 아직 정해지지 않은(UNSET) 축제는 일자별로 쌓는 값이
- *   아니므로 판정 대상에서 뺀다. UNSET인 축제에 일자별 값을 저장하면 백엔드가
- *   집계 방식을 DAILY로 잠가 버려, 묻지도 않고 축제 설정을 바꾸는 꼴이 된다.
+ * - 「하루가 끝났다」 = `visitDate < 오늘`. 백엔드도 같은 규칙이다 — 일자별 저장 API는
+ *   오늘 이후 날짜를 거절하고(`!visitDate.isBefore(today)` → 400), 조회 응답의
+ *   `inputAllowed`도 `visitDate < today`를 그대로 실어 보낸다. 그래서 그날 당일에는
+ *   묻지 않고, 하루가 끝난 «다음 날» 들어왔을 때 비로소 대상이 된다.
+ * - 두 조건을 모두 보는 이유는 사용자 기기 시계와 서버 시계가 어긋날 수 있어서다.
+ *   어느 한쪽이라도 아직 안 끝났다고 보면 묻지 않는다.
+ * - 집계 방식이 «총합»인 축제는 일자별로 쌓는 값이 아니므로 제외한다. 아직 정해지지
+ *   않은(UNSET) 축제는 포함한다 — 첫 일차를 여기서 받는 순간 백엔드가 DAILY로
+ *   잠그는데, 그게 축제 기간 중 매일 받는다는 이 화면의 전제와 같다. UNSET을 빼면
+ *   진행 중 축제에서는 이 물음이 영영 뜨지 않는다(한 번도 입력된 적이 없으므로).
+ */
+export function elapsedVisitorDays(
+  counts: FestivalVisitorCounts | undefined,
+  today: string = todayIsoDate(),
+): FestivalVisitorDay[] {
+  if (!counts || counts.visitorCountInputMode === "TOTAL") return [];
+  return counts.days.filter((day) => day.visitDate < today && day.inputAllowed);
+}
+
+/**
+ * 하루가 끝난 일차 중 아직 방문 인원이 비어 있는 날들.
+ *
+ * 모달을 띄울지 말지를 이 값으로 정한다. 모달에 보여 줄 목록은
+ * `elapsedVisitorDays`(지나간 일차 전부)라 다르다 — 이미 채운 날도 함께 보여 주고
+ * 고칠 수 있어야 하기 때문이다.
  */
 export function missingPastVisitorDays(
   counts: FestivalVisitorCounts | undefined,
   today: string = todayIsoDate(),
 ): FestivalVisitorDay[] {
-  if (!counts || counts.visitorCountInputMode !== "DAILY") return [];
-  return counts.days.filter(
-    (day) => day.visitDate < today && day.inputAllowed && day.visitorCount === null,
-  );
+  return elapsedVisitorDays(counts, today).filter((day) => day.visitorCount === null);
 }

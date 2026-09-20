@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { FestivalVisitorCounts, FestivalVisitorDay } from "./types";
-import { missingPastVisitorDays, todayIsoDate } from "./visitorDays";
+import { elapsedVisitorDays, missingPastVisitorDays, todayIsoDate } from "./visitorDays";
 
 function day(overrides: Partial<FestivalVisitorDay> & { visitDate: string }): FestivalVisitorDay {
   return {
@@ -64,7 +64,7 @@ describe("missingPastVisitorDays", () => {
     assert.deepEqual(missing, []);
   });
 
-  it("총합 집계나 미설정 축제는 일자별로 묻지 않는다", () => {
+  it("총합 집계 축제는 일자별로 묻지 않는다", () => {
     assert.deepEqual(
       missingPastVisitorDays(
         counts({ days: allDays, visitorCountInputMode: "TOTAL" }),
@@ -72,16 +72,52 @@ describe("missingPastVisitorDays", () => {
       ),
       [],
     );
+  });
+
+  it("집계 방식이 아직 정해지지 않은 축제도 일자별로 묻는다", () => {
+    // 진행 중 축제는 첫 입력 전까지 UNSET이다. 여기서 빼면 물음이 영영 뜨지 않는다.
+    const missing = missingPastVisitorDays(
+      counts({ days: allDays, visitorCountInputMode: "UNSET" }),
+      "2026-05-05",
+    );
     assert.deepEqual(
-      missingPastVisitorDays(
-        counts({ days: allDays, visitorCountInputMode: "UNSET" }),
-        "2026-05-05",
-      ),
-      [],
+      missing.map((entry) => entry.dayIndex),
+      [2, 4],
     );
   });
 
   it("조회 실패로 값이 없으면 게이트를 걸지 않는다", () => {
     assert.deepEqual(missingPastVisitorDays(undefined, "2026-05-05"), []);
+  });
+});
+
+describe("elapsedVisitorDays", () => {
+  const allDays = [
+    day({ visitDate: "2026-05-01", dayIndex: 1, visitorCount: 100, saved: true }),
+    day({ visitDate: "2026-05-02", dayIndex: 2 }),
+    day({ visitDate: "2026-05-03", dayIndex: 3, inputAllowed: false }),
+    day({ visitDate: "2026-05-04", dayIndex: 4 }),
+  ];
+
+  it("하루가 끝난 일차는 이미 채운 날까지 모두 돌려준다", () => {
+    // 모달은 누적으로 보여 준다 — 1일차(입력됨)와 2일차(빈칸)가 함께 떠야 한다.
+    const elapsed = elapsedVisitorDays(counts({ days: allDays }), "2026-05-03");
+    assert.deepEqual(
+      elapsed.map((entry) => entry.dayIndex),
+      [1, 2],
+    );
+  });
+
+  it("오늘과 아직 마감되지 않은 날은 빼고, 다음 날이 되어야 들어온다", () => {
+    assert.deepEqual(elapsedVisitorDays(counts({ days: allDays }), "2026-05-01"), []);
+    assert.deepEqual(
+      elapsedVisitorDays(counts({ days: allDays }), "2026-05-02").map((entry) => entry.dayIndex),
+      [1],
+    );
+    // 3일차는 visitDate가 지났어도 inputAllowed가 false라 서버가 아직 안 받는다.
+    assert.deepEqual(
+      elapsedVisitorDays(counts({ days: allDays }), "2026-05-05").map((entry) => entry.dayIndex),
+      [1, 2, 4],
+    );
   });
 });

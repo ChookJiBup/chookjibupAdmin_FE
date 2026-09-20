@@ -13,6 +13,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { formatDday } from "@/features/festivals/dateFormat";
+import { CompletedFestivalVisitorGate } from "@/features/report/CompletedFestivalVisitorGate";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { getManagedFestivals } from "./api";
 import type { FestivalProgressStatus, FestivalSummary } from "./types";
@@ -184,6 +185,8 @@ export function HomeFestivalBoard() {
       {festivalsByStatus.map(({ status, festivals }) => (
         <StatusColumn key={status} status={status} festivals={festivals} />
       ))}
+      {/* 끝난 축제의 방문 인원이 비어 있으면 콘솔에 들어오자마자 채우게 한다. */}
+      <CompletedFestivalVisitorGate festivals={festivals} />
     </div>
   );
 }

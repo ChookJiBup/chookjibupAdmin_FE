@@ -14,13 +14,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  DATE_FORMAT_LABEL,
-  formatDateInput,
-  hasFestivalPeriodError,
-  toIsoDate,
-  validateFestivalPeriod,
-} from "./dateFormat";
+import { DateField } from "./DateField";
+import { hasFestivalPeriodError, toIsoDate, validateFestivalPeriod } from "./dateFormat";
 import {
   createFestival,
   createFestivalWithMap,
@@ -411,26 +406,20 @@ export function FestivalRegisterForm() {
               />
               {index === 0 ? (
                 <div className="flex gap-3">
-                  <Input
+                  <DateField
                     label="시작날짜"
                     wrapperClassName="flex-1"
-                    placeholder={DATE_FORMAT_LABEL}
-                    inputMode="numeric"
-                    maxLength={10}
                     value={startDate}
                     errorText={visiblePeriodErrors.startDate ?? undefined}
-                    onChange={(event) => setStartDate(formatDateInput(event.target.value))}
+                    onChange={setStartDate}
                     onBlur={() => setPeriodTouched((prev) => ({ ...prev, startDate: true }))}
                   />
-                  <Input
+                  <DateField
                     label="종료날짜"
                     wrapperClassName="flex-1"
-                    placeholder={DATE_FORMAT_LABEL}
-                    inputMode="numeric"
-                    maxLength={10}
                     value={endDate}
                     errorText={visiblePeriodErrors.endDate ?? undefined}
-                    onChange={(event) => setEndDate(formatDateInput(event.target.value))}
+                    onChange={setEndDate}
                     onBlur={() => setPeriodTouched((prev) => ({ ...prev, endDate: true }))}
                   />
                 </div>
