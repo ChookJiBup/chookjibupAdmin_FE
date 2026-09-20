@@ -245,7 +245,7 @@ export function FestivalRegisterForm() {
     }
     if (file.size > MAP_IMAGE_MAX_BYTES) {
       setMapImage(null);
-      setMapImageError("배치도 이미지는 50MB까지 첨부할 수 있습니다.");
+      setMapImageError("축제 이미지는 50MB까지 첨부할 수 있습니다.");
       return;
     }
     setMapImage(file);
@@ -439,7 +439,7 @@ export function FestivalRegisterForm() {
         </Button>
       </FormSection>
 
-      <FormSection label="축제부스지도 첨부">
+      <FormSection label="축제 이미지 첨부">
         <AttachmentField
           file={mapImage}
           onSelect={selectMapImage}
@@ -448,7 +448,7 @@ export function FestivalRegisterForm() {
             setMapImageError(null);
           }}
           accept={MAP_IMAGE_ACCEPT}
-          description="배치도를 첨부하면 AI가 부스 위치를 찾아 부스맵에 표시합니다. 나중에 부스맵 화면에서 첨부해도 됩니다. (PNG·JPG, 50MB 이하)"
+          description="축제를 소개하는 이미지를 첨부해 주세요. 사용자 화면의 축제 이미지로 표시됩니다. (PNG·JPG, 50MB 이하)"
           error={mapImageError}
           disabled={createMutation.isPending}
         />
