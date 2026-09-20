@@ -1403,6 +1403,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         onCurrent={openCurrentQueue}
       />
     ) : null;
+  /** 확대·축소 버튼. 지금 지도가 있는 단계에서 한 칸 움직인다(휠로 바뀐 값이 기준이다). */
+  function stepZoom(direction: -1 | 1) {
+    const map = kakaoMapRef.current;
+    if (!map) return;
+    const next = map.getLevel() + direction;
+    if (next < MIN_MAP_LEVEL || next > MAX_MAP_LEVEL) return;
+    map.setLevel(next);
+    setMapLevel(next);
+  }
+
   const panOverride = spaceHeld || modifierHeld;
   /*
     하단 선택 바가 떠 있는지. 지도 위 다른 하단 요소를 그만큼 띄우는 데 쓴다.
@@ -2573,7 +2583,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           <KakaoMap
             center={mapCenter}
             isPanto={false}
-            level={mapLevel}
+            /*
+              확대 단계는 지도를 만들 때 한 번만 준다. 이 값을 React 상태로 되먹이면
+              휠을 한 번 굴린 뒤 지도가 얼어붙는다 — 카카오는 확대가 «끝난» 단계가 아니라
+              바뀌기 직전 단계로 zoom_changed를 알려 주는 때가 있어, 그 값을 다시
+              level로 내려보내면 다음 휠이 방금 벗어난 단계로 되돌려진다. 버튼 확대도
+              지도에 직접 건다.
+            */
+            level={DEFAULT_MAP_LEVEL}
             /*
               휠로 바로 확대·축소한다. 예전에는 이 값을 false로 두고 Ctrl+휠만 직접 받았는데,
               그냥 휠을 굴리면 아무 일도 일어나지 않아 지도가 멈춘 것처럼 보였다.
@@ -2593,10 +2610,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               map.setMinLevel(MIN_MAP_LEVEL);
               map.setMaxLevel(MAX_MAP_LEVEL);
             }}
-            /*
-              휠로 확대하면 카카오가 제 확대 단계를 직접 바꾼다. 그 값을 되받아 두지
-              않으면 확대/축소 버튼이 화면과 어긋난 단계에서 다시 시작해 지도가 튄다.
-            */
+            /* 확대·축소 버튼을 언제 잠글지 판단하는 데만 쓴다. 지도로 되돌려보내지 않는다. */
             onZoomChanged={(map) => setMapLevel(map.getLevel())}
             onClick={(_target, mouseEvent) => {
               if (editingLocked || panOverride || queuePlanBusy || queueSaveMutation.isPending)
@@ -3712,8 +3726,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </span>
         </div>
         <MapZoomControls
-          onZoomIn={() => setMapLevel((level) => Math.max(level - 1, MIN_MAP_LEVEL))}
-          onZoomOut={() => setMapLevel((level) => Math.min(level + 1, MAX_MAP_LEVEL))}
+          onZoomIn={() => stepZoom(-1)}
+          onZoomOut={() => stepZoom(1)}
           zoomInDisabled={mapLevel <= MIN_MAP_LEVEL}
           zoomOutDisabled={mapLevel >= MAX_MAP_LEVEL}
         />

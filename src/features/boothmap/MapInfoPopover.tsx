@@ -104,6 +104,12 @@ export function MapInfoPopover({
       if (pendingDelete) return;
       if (popoverRef.current?.contains(event.target as Node)) return;
       if (keepsPopoverOpen(event.target)) return;
+      /*
+        Shift는 «선택에 더하기»다. 이때까지 닫으면서 onCancel을 부르면 지금까지 골라 둔
+        것을 통째로 비워, 두 번째를 Shift로 눌러도 늘 하나만 남는다. 말풍선은 여러 개를
+        고른 순간 어차피 숨으므로 여기서는 아무것도 하지 않고 비켜 준다.
+      */
+      if (event.shiftKey) return;
       setTypeMenuOpen(false);
       setTypeCategory(null);
       onCancel();
