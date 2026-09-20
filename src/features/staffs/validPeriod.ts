@@ -1,8 +1,19 @@
-/** 스태프 계정 유효 기간 표기. 값이 날짜로 읽히지 않으면 원문을 그대로 보여준다. */
+import { toCalendarDate } from "@/features/festivals/dateFormat";
+
+/**
+ * 스태프 계정 유효 기간 표기. 값이 날짜로 읽히지 않으면 원문을 그대로 보여준다.
+ *
+ * <p>예전에는 `new Date(value).toLocaleDateString("ko-KR")`로 찍어 `2026. 9. 13.`처럼
+ * 마침표와 들쑥날쑥한 자릿수로 보였다. 화면 전체를 `yyyy-MM-dd`로 맞추면서 바꿨다.</p>
+ *
+ * <p>Date를 거치지 않는 이유가 하나 더 있다. 백엔드는 유효 종료일을
+ * `LocalDateTime.of(endDate, LocalTime.MAX)` — 즉 `2026-09-20T23:59:59.999...` 로
+ * 내려주는데, 타임존 없는 이 문자열을 UTC로 읽으면 한국 시간으로는 다음 날 08:59가 되어
+ * **유효 기간이 하루 늘어난 것처럼 보인다.** 여기서 보여 줄 값은 «그 지역의 달력 날짜»라
+ * 시간대 변환이 필요 없으므로 문자열에서 날짜 부분만 잘라 쓴다.</p>
+ */
 export function formatStaffDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("ko-KR");
+  return toCalendarDate(value);
 }
 
 /**

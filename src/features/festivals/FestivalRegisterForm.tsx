@@ -14,7 +14,13 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateInput, isRealDate, toIsoDate } from "./dateFormat";
+import {
+  DATE_FORMAT_LABEL,
+  formatDateInput,
+  hasFestivalPeriodError,
+  toIsoDate,
+  validateFestivalPeriod,
+} from "./dateFormat";
 import {
   createFestival,
   createFestivalWithMap,
@@ -95,6 +101,23 @@ export function FestivalRegisterForm() {
     검증을 통과한 목록과 실제로 전송되는 목록이 어긋나지 않게 한다.
   */
   const [submitLocations, setSubmitLocations] = useState<LocationDraft[]>([]);
+  /*
+    축제 기간 오류를 이미 건드린 칸에만 보여 주기 위한 표시.
+    타이핑 도중에는 «2026-0»처럼 형식이 안 맞는 게 당연하므로, 칸에서 포커스가
+    빠졌을 때나 등록을 눌러 봤을 때만 빨간 문구를 띄운다.
+  */
+  const [periodTouched, setPeriodTouched] = useState({ startDate: false, endDate: false });
+
+  const periodErrors = validateFestivalPeriod(startDate, endDate);
+  const visiblePeriodErrors = {
+    startDate: periodTouched.startDate ? periodErrors.startDate : null,
+    endDate: periodTouched.endDate ? periodErrors.endDate : null,
+  };
+  /** 기간 오류가 화면에 보이는 동안에는 등록을 막는다. 막힌 이유는 등록 버튼 위에도 적는다. */
+  const periodBlocksSubmit = hasFestivalPeriodError(visiblePeriodErrors);
+  /** 등록 버튼 위에 띄울 한 줄. 기간 오류는 입력칸마다 따로 적히므로 여기서는 잠긴 이유만 알린다. */
+  const submitBlockedMessage =
+    formError ?? (periodBlocksSubmit ? "축제 기간을 확인해 주세요." : null);
 
   useKakaoMapLoader();
 
@@ -243,12 +266,10 @@ export function FestivalRegisterForm() {
       setFormError("축제 설명을 입력해 주세요.");
       return;
     }
-    if (!isRealDate(startDate) || !isRealDate(endDate)) {
-      setFormError("날짜는 YYYY.mm.dd 형식의 실제 날짜로 입력해 주세요.");
-      return;
-    }
-    if (toIsoDate(startDate) > toIsoDate(endDate)) {
-      setFormError("종료날짜는 시작날짜보다 빠를 수 없습니다.");
+    if (hasFestivalPeriodError(periodErrors)) {
+      // 어느 칸이 잘못됐는지는 해당 입력칸 아래에 적히므로, 두 칸을 모두 «건드린» 상태로 만든다.
+      setPeriodTouched({ startDate: true, endDate: true });
+      setFormError(null);
       return;
     }
     if (locations.some((location) => !isLocationDraftComplete(location))) {
@@ -393,20 +414,24 @@ export function FestivalRegisterForm() {
                   <Input
                     label="시작날짜"
                     wrapperClassName="flex-1"
-                    placeholder="YYYY.mm.dd"
+                    placeholder={DATE_FORMAT_LABEL}
                     inputMode="numeric"
                     maxLength={10}
                     value={startDate}
+                    errorText={visiblePeriodErrors.startDate ?? undefined}
                     onChange={(event) => setStartDate(formatDateInput(event.target.value))}
+                    onBlur={() => setPeriodTouched((prev) => ({ ...prev, startDate: true }))}
                   />
                   <Input
                     label="종료날짜"
                     wrapperClassName="flex-1"
-                    placeholder="YYYY.mm.dd"
+                    placeholder={DATE_FORMAT_LABEL}
                     inputMode="numeric"
                     maxLength={10}
                     value={endDate}
+                    errorText={visiblePeriodErrors.endDate ?? undefined}
                     onChange={(event) => setEndDate(formatDateInput(event.target.value))}
+                    onBlur={() => setPeriodTouched((prev) => ({ ...prev, endDate: true }))}
                   />
                 </div>
               ) : null}
@@ -444,7 +469,9 @@ export function FestivalRegisterForm() {
         「축제명을 입력해 주세요」가 상세정보 카드 맨 아래(장소 추가 밑)에 떠서, 정작
         비어 있는 축제명 칸과 카드 하나만큼 떨어져 있었다. 등록 버튼 바로 위로 옮긴다.
       */}
-      {formError ? <p className="body-small text-error">{formError}</p> : null}
+      {submitBlockedMessage ? (
+        <p className="body-small text-error">{submitBlockedMessage}</p>
+      ) : null}
 
       {createMutation.isError ? (
         <p className="body-small text-error">{getApiErrorMessage(createMutation.error)}</p>
@@ -454,7 +481,7 @@ export function FestivalRegisterForm() {
         onCancel={() => setCancelDialogOpen(true)}
         onSubmit={handleSubmitClick}
         submitLabel={geocodePending ? "주소 확인 중..." : undefined}
-        submitDisabled={geocodePending}
+        submitDisabled={geocodePending || periodBlocksSubmit}
       />
 
       <SearchDialog
