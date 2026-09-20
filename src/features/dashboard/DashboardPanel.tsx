@@ -17,7 +17,7 @@ import type { NodeType } from "@/features/boothmap/types";
 import { getManagedFestival } from "@/features/festivals/api";
 import { formatDday } from "@/features/festivals/dateFormat";
 import { getFestivalVisitorCounts } from "@/features/report/api";
-import { missingPastVisitorDays } from "@/features/report/visitorDays";
+import { elapsedVisitorDays, missingPastVisitorDays } from "@/features/report/visitorDays";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import {
@@ -123,8 +123,15 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     enabled: isFestivalOwner,
     queryFn: () => getFestivalVisitorCounts(festivalId),
   });
-  const missingVisitorDays = useMemo(
-    () => missingPastVisitorDays(visitorCountsQuery.data),
+  /*
+    모달을 띄울지는 «비어 있는 날»로 정하고, 모달에 넘기는 목록은 «하루가 끝난 일차
+    전부»다. 이미 채운 날도 값이 보여야 그날 것을 고치거나 총합을 확인할 수 있다.
+  */
+  const visitorGate = useMemo(
+    () => ({
+      days: elapsedVisitorDays(visitorCountsQuery.data),
+      missingCount: missingPastVisitorDays(visitorCountsQuery.data).length,
+    }),
     [visitorCountsQuery.data],
   );
   const mapBooths = useMemo((): Booth[] => {
@@ -292,12 +299,12 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       {/*
-        지나간 날의 방문 인원이 비어 있으면 대시보드를 덮는다. 조회 실패로 목록을
-        못 받았을 때는 게이트를 걸지 않는다 — 입력해야 할 날을 모르는 채로 막으면
-        빠져나갈 방법이 없다.
+        하루가 끝난 일차의 방문 인원이 비어 있으면 대시보드를 덮는다. 조회 실패로
+        목록을 못 받았을 때는 게이트를 걸지 않는다 — 입력해야 할 날을 모르는 채로
+        막으면 빠져나갈 방법이 없다.
       */}
-      {missingVisitorDays.length > 0 ? (
-        <MissingVisitorCountDialog festivalId={festivalId} missingDays={missingVisitorDays} />
+      {visitorGate.missingCount > 0 ? (
+        <MissingVisitorCountDialog festivalId={festivalId} days={visitorGate.days} />
       ) : null}
       {dashboardMapCenter ? (
         <BoothMapView

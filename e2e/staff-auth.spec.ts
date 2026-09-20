@@ -117,13 +117,13 @@ async function mockStaffApis(page: Page, options: MockOptions = {}) {
   return requests;
 }
 
-test("스태프 상단바는 축지법 워드마크만 보여주고 이름은 넣지 않는다", async ({ page }) => {
+test("스태프 상단바는 로고만 보여주고 이름은 넣지 않는다", async ({ page }) => {
   await mockStaffApis(page);
   await page.goto("/staff/dashboard");
 
   const header = page.getByRole("banner");
-  await expect(header.getByText("축지법")).toBeVisible();
-  await expect(header.getByText("로고")).toHaveCount(0);
+  // 워드마크는 글자가 아니라 로고 그림이다. 이름표(aria-label)로 확인한다.
+  await expect(header.getByRole("img", { name: "축지법" })).toBeVisible();
   // 상단바는 로고·역할 배지·검색·로그아웃까지만 둔다.
   await expect(header.getByText(`${staffName} 님`)).toHaveCount(0);
 });
