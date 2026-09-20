@@ -1,4 +1,5 @@
 import { PersonIcon } from "@radix-ui/react-icons";
+import { Logo } from "./Logo";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FestivalOwnerBadge, OperatorBadge } from "@/components/ui/RoleBadge";
@@ -46,15 +47,13 @@ const USER_MENU_LINK_CLASSES =
 const CTA_LINK_CLASSES =
   "inline-flex items-center justify-center gap-2.5 rounded-md border border-zinc-300 bg-white px-4 py-2 body-regular text-zinc-950 transition-colors hover:bg-zinc-100";
 
-/** 로고 박스(87x48) + 현재 축제명. Figma 스펙: 로고-축제명 간격 16px(gap-4). */
+/** 로고 + 현재 축제명. Figma 스펙: 로고-축제명 간격 16px(gap-4). */
 function HeaderBrand({ href, festivalName }: { href: string; festivalName?: string }) {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
-      <Link
-        href={href}
-        className="flex h-12 w-[87px] shrink-0 items-center justify-center bg-zinc-200"
-      >
-        <span className="heading-small text-zinc-900">축지법</span>
+      {/* 로고가 워드마크를 겸한다. 자리를 비워 두던 회색 상자와 「축지법」 글자를 대신한다. */}
+      <Link href={href} className="flex h-12 shrink-0 items-center">
+        <Logo className="h-full w-auto text-point-500" />
       </Link>
       {festivalName ? (
         <span title={festivalName} className="body-regular-bold min-w-0 truncate text-zinc-950">
