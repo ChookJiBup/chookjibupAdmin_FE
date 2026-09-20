@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import {
@@ -16,12 +16,17 @@ import { CongestionText } from "@/components/ui/CongestionBadge";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import { updateQueueTailAsAdmin } from "./api";
 import type { Booth } from "./types";
-import { QUEUE_DISTANCE_ZONES, queueTailPointForMeters } from "./queueDistanceZones";
+import { getQueuePlan } from "@/features/boothmap/queuePlanApi";
+import {
+  buildQueueZones,
+  queueTailPointForMeters,
+  queueTailPointOnPath,
+} from "./queueDistanceZones";
 
 /**
- * 선택한 부스의 줄끝을 갱신하는 폼. 스태프 앱의 `QueueUpdateSheet`와 같은 방식으로
- * 존을 고르면 정해진 보고 거리를 보낸다. 관리자 콘솔은 지도 하단바
- * 한 줄 안에 들어가야 해서 시트 대신 인라인 폼으로 둔다.
+ * 선택한 부스의 줄끝을 갱신하는 폼. 스태프 앱의 `QueueUpdateSheet`와 같은 방식으로,
+ * 미리 그려 둔 대기 동선이 있으면 그 줄을 나눈 존을 고르고 없으면 눈대중 존을 고른다.
+ * 관리자 콘솔은 지도 하단바 한 줄 안에 들어가야 해서 시트 대신 인라인 폼으로 둔다.
  */
 function QueueTailForm({
   festivalId,
@@ -34,11 +39,31 @@ function QueueTailForm({
 }) {
   const [zoneId, setZoneId] = useState("");
 
+  const planQuery = useQuery({
+    queryKey: ["queuePlan", festivalId, booth.boothId],
+    queryFn: () => getQueuePlan(festivalId, Number(booth.boothId)),
+    staleTime: 5 * 60 * 1000,
+    // 동선을 못 읽어도 줄 보고는 막지 않는다. 눈대중 존으로 바로 넘어간다.
+    retry: false,
+  });
+  const plan = planQuery.data?.path?.length ? planQuery.data : null;
+  const zones = buildQueueZones(plan?.lengthMeters);
+
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!booth.queueId) throw new Error("이 부스의 대기열 정보를 찾을 수 없습니다.");
-      const zone = QUEUE_DISTANCE_ZONES.find((candidate) => candidate.id === zoneId);
+      const zone = zones.find((candidate) => candidate.id === zoneId);
       if (!zone) throw new Error("줄끝 존을 선택해 주세요.");
+      if (plan) {
+        // 경로를 빼고 보내야 서버가 사전 동선에 투영해 실제 줄 길이를 계산한다.
+        const tail = queueTailPointOnPath(plan.path, zone.meters);
+        return updateQueueTailAsAdmin(festivalId, booth.queueId, {
+          tailLatitude: tail.lat,
+          tailLongitude: tail.lng,
+          expectedRevision: booth.observationRevision,
+          planRevision: plan.revision,
+        });
+      }
       if (booth.lat === undefined || booth.lng === undefined) {
         throw new Error("부스 좌표를 찾을 수 없습니다.");
       }
@@ -76,12 +101,13 @@ function QueueTailForm({
         updateMutation.mutate();
       }}
     >
-      <Select value={zoneId} onValueChange={setZoneId}>
+      {/* 동선을 읽는 동안 고르게 두면 존 개수가 줄면서 고른 값이 사라진다. */}
+      <Select value={zoneId} onValueChange={setZoneId} disabled={planQuery.isPending}>
         <SelectTrigger className="h-10 w-36" aria-label="줄끝 존 선택">
-          <SelectValue placeholder="존 선택" />
+          <SelectValue placeholder={planQuery.isPending ? "불러오는 중..." : "존 선택"} />
         </SelectTrigger>
         <SelectContent>
-          {QUEUE_DISTANCE_ZONES.map((zone) => (
+          {zones.map((zone) => (
             <SelectItem key={zone.id} value={zone.id}>
               {zone.label} · {zone.meters}m
             </SelectItem>

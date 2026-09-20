@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Cross2Icon, UpdateIcon } from "@radix-ui/react-icons";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { CongestionText } from "@/components/ui/CongestionBadge";
@@ -17,12 +17,13 @@ import {
 } from "@/components/ui/select";
 import type { Booth } from "@/features/dashboard/types";
 import {
-  QUEUE_DISTANCE_ZONES,
+  buildQueueZones,
   QUEUE_ZONE_METERS,
   queueTailPointForMeters,
+  queueTailPointOnPath,
 } from "@/features/dashboard/queueDistanceZones";
 import { getApiErrorMessage } from "@/lib/api/httpError";
-import { updateQueueTail } from "./api";
+import { getStaffQueuePlan, updateQueueTail } from "./api";
 import type { FestivalQueue } from "./types";
 import { formatRelativeTime } from "./utils";
 
@@ -42,8 +43,12 @@ export interface QueueUpdateSheetProps {
 /**
  * 선택한 부스의 줄끝 위치를 갱신하는 하단 시트.
  *
- * 스태프가 존을 고르면 존당 10m 기준의 보고 거리를 서버에 보낸다.
- * 혼잡도와 예상 대기시간은 서버가 거리로 환산한다.
+ * 미리 그려 둔 대기 동선이 있으면 그 줄을 10m씩 나눠 존으로 보여 주고, 고른 존만큼
+ * 줄을 따라간 지점을 줄끝으로 보낸다. 줄이 꺾여 있어도 서버가 그 지점까지의 경로
+ * 길이를 그대로 되짚으므로 직선거리로 뭉개지지 않는다.
+ *
+ * 동선을 아직 그리지 않은 부스는 예전처럼 눈대중 존의 보고 거리만 보낸다.
+ * 혼잡도와 예상 대기시간은 어느 쪽이든 서버가 환산한다.
  */
 export function QueueUpdateSheet({
   festivalId,
@@ -70,11 +75,39 @@ export function QueueUpdateSheet({
 
   const boothPoint =
     booth.lat !== undefined && booth.lng !== undefined ? { lat: booth.lat, lng: booth.lng } : null;
-  const zone = QUEUE_DISTANCE_ZONES.find((item) => item.id === zoneId);
+
+  /*
+    동선은 축제 준비 단계에서 그려 두고 현장에서는 거의 바뀌지 않으므로, 시트를 열 때
+    한 번만 읽는다. 없는 부스는 404를 null로 받아 눈대중 존으로 넘어간다.
+  */
+  const planQuery = useQuery({
+    queryKey: ["staffQueuePlan", festivalId, queue.boothId],
+    queryFn: () => getStaffQueuePlan(festivalId, queue.boothId),
+    staleTime: 5 * 60 * 1000,
+    // 동선을 못 읽어도 줄 보고는 막지 않는다. 눈대중 존으로 바로 넘어간다.
+    retry: false,
+  });
+  const plan = planQuery.data?.path?.length ? planQuery.data : null;
+  const zones = buildQueueZones(plan?.lengthMeters);
+  const zone = zones.find((item) => item.id === zoneId);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!zone) throw new Error("줄끝 존을 선택해 주세요.");
+      if (plan) {
+        /*
+          경로를 함께 보내지 않아야 서버가 사전 동선에 투영해 실제 줄 길이를 계산한다.
+          planRevision을 같이 보내 두면 그 사이 동선이 바뀐 경우 409로 막힌다.
+        */
+        const tail = queueTailPointOnPath(plan.path, zone.meters);
+        await updateQueueTail(festivalId, queue.queueId, {
+          tailLatitude: tail.lat,
+          tailLongitude: tail.lng,
+          expectedRevision: queue.observationRevision,
+          planRevision: plan.revision,
+        });
+        return;
+      }
       const point = boothPoint ?? mapCenter;
       const tail = queueTailPointForMeters(point, zone.meters);
       await updateQueueTail(festivalId, queue.queueId, {
@@ -181,12 +214,17 @@ export function QueueUpdateSheet({
           updateMutation.mutate();
         }}
       >
-        <Select value={zoneId} onValueChange={setZoneId} disabled={updateMutation.isPending}>
+        {/* 동선을 읽는 동안 고르게 두면 존 개수가 줄면서 고른 값이 사라진다. */}
+        <Select
+          value={zoneId}
+          onValueChange={setZoneId}
+          disabled={updateMutation.isPending || planQuery.isPending}
+        >
           <SelectTrigger className="min-w-0 flex-1" aria-label="줄끝 존 선택">
-            <SelectValue placeholder="존 선택" />
+            <SelectValue placeholder={planQuery.isPending ? "불러오는 중..." : "존 선택"} />
           </SelectTrigger>
           <SelectContent>
-            {QUEUE_DISTANCE_ZONES.map((item) => (
+            {zones.map((item) => (
               <SelectItem key={item.id} value={item.id}>
                 {item.label} · {item.meters}m
               </SelectItem>
@@ -197,7 +235,11 @@ export function QueueUpdateSheet({
           {updateMutation.isPending ? "갱신 중..." : "줄끝 갱신하기"}
         </Button>
       </form>
-      <p className="body-caption mt-2 text-zinc-500">존 1개당 {QUEUE_ZONE_METERS}m로 계산합니다.</p>
+      <p className="body-caption mt-2 text-zinc-500">
+        {plan
+          ? `미리 그린 줄을 ${QUEUE_ZONE_METERS}m씩 나눈 존입니다.`
+          : `존 1개당 ${QUEUE_ZONE_METERS}m로 계산합니다.`}
+      </p>
 
       {updateMutation.isError ? (
         <p className="body-caption mt-2 text-error">

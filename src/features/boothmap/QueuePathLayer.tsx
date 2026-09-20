@@ -15,6 +15,12 @@ export interface QueuePathItem {
    * 경로가 없을 때 부스에서 이 지점까지 직선을 그려 «현재 줄»을 보여 준다.
    */
   tail?: LatLng | null;
+  /**
+   * 줄 끝 좌표가 실제 방향을 담고 있는지. 사전 동선이 없는 부스는 거리만 보고하고
+   * 좌표는 부스 정북쪽으로 맞춰 만들기 때문에, 그 좌표로 선을 그으면 엉뚱한 쪽으로
+   * 뻗는다. 그런 줄은 선을 그리지 않고 대기시간 표만 남긴다.
+   */
+  tailDirectionKnown?: boolean;
   waitMinutes: number | null | undefined;
   congestionLevel?: CongestionLevel | null;
   boothLat: number;
@@ -23,8 +29,7 @@ export interface QueuePathItem {
 
 /*
   대기줄 선 색. 카카오 Polyline은 CSS 클래스를 받지 못해 값으로 줄 수밖에 없다.
-  globals.css의 `point-600`(#FD7E14)과 같은 색이고, 줄 끝을 찍는 미리보기
-  (`staffMap/QueueTailPicker`)도 같은 색·굵기를 쓴다.
+  globals.css의 `point-600`(#FD7E14)과 같은 색이다.
 */
 export const QUEUE_LINE_COLOR = "#FD7E14";
 export const QUEUE_LINE_WEIGHT = 4;
@@ -55,6 +60,8 @@ export function boothsToQueuePathItems(
       /** 줄 끝 좌표. 경로 없이 줄 끝만 저장하는 화면이 있어 선택 항목으로 받는다. */
       tailLatitude?: number | null;
       tailLongitude?: number | null;
+      /** 서버가 줄 길이를 구한 방법. `REPORTED`는 거리만 보고돼 방향을 알 수 없다. */
+      calculationMethod?: string | null;
       waitMinutes?: number | null;
       congestionLevel?: CongestionLevel | null;
     }
@@ -72,6 +79,7 @@ export function boothsToQueuePathItems(
           queue?.tailLatitude != null && queue?.tailLongitude != null
             ? { lat: queue.tailLatitude, lng: queue.tailLongitude }
             : null,
+        tailDirectionKnown: queue?.calculationMethod !== "REPORTED",
         waitMinutes:
           queue?.waitMinutes !== undefined ? queue.waitMinutes : (booth.waitMinutes ?? null),
         congestionLevel:
@@ -216,10 +224,13 @@ function WaitLabelLayer({ queues }: { queues: QueuePathItem[] }) {
  *
  * 스태프 화면은 줄 끝 좌표 하나만 저장하는 계약이라(경로를 보내지 않는다) 경로만
  * 보던 시절에는 줄을 아무리 갱신해도 지도에 아무것도 그려지지 않았다.
+ *
+ * 다만 방향을 모르는 줄 끝은 선을 그리지 않는다. 거리만 보고된 좌표는 부스 정북쪽에
+ * 찍히므로, 실제로 남쪽에 선 줄이 북쪽으로 뻗은 것처럼 보이던 문제가 있었다.
  */
 function queueLineOf(queue: QueuePathItem): LatLng[] | null {
   if (queue.path && queue.path.length >= 2) return queue.path;
-  if (!queue.tail) return null;
+  if (!queue.tail || queue.tailDirectionKnown === false) return null;
   return [{ lat: queue.boothLat, lng: queue.boothLng }, queue.tail];
 }
 
