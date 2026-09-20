@@ -58,8 +58,11 @@ function formatFestivalDateRange(startDate: string, endDate: string) {
   return `${format(startDate)} - ${format(endDate)}`;
 }
 
-/** 역할에 따라 축제 카드 클릭 시 이동할 경로. 총괄관리자는 축제관리, 운영자는 대시보드로 간다. */
+/** 종료된 축제의 총괄관리자는 결과 리포트로 이동한다. */
 function getFestivalHref(festival: FestivalSummary) {
+  if (festival.progressStatus === "COMPLETED" && festival.role === "FESTIVAL_OWNER") {
+    return `/console/festivals/${festival.festivalId}/report`;
+  }
   return festival.role === "FESTIVAL_OWNER"
     ? `/console/festivals/${festival.festivalId}`
     : `/console/festivals/${festival.festivalId}/dashboard`;
