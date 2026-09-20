@@ -190,11 +190,14 @@ function savedPoint(save: SaveBody, nodeId: string) {
 async function openEditor(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(boothmapPath);
-  await expect(page.getByRole("button", { name: "김밥천국", exact: true }).first()).toBeVisible();
+  /*
+    지도가 떴는지부터 본다. 다른 것을 먼저 확인하면 지도가 없는 호스트에서 그 확인이
+    실패해, 「건너뛴다」가 아니라 「깨졌다」로 보고된다.
+  */
   const mapPin = page.locator('button[aria-label="김밥천국"]');
   const mapReady = await mapPin
     .first()
-    .waitFor({ state: "visible", timeout: 5000 })
+    .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => true)
     .catch(() => false);
   test.skip(!mapReady, "카카오맵이 뜨지 않는 호스트입니다(localhost:3000에서 실행하세요).");
