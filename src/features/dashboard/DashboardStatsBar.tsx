@@ -15,49 +15,39 @@ import { getApiErrorMessage } from "@/lib/api/httpError";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import { updateQueueTailAsAdmin } from "./api";
-import type { Booth, BoothZone } from "./types";
-
-/** 구역에 속한 부스 좌표의 평균. 좌표가 있는 부스가 하나도 없으면 줄끝으로 쓸 수 없다. */
-function zoneCenter(zone: BoothZone) {
-  const points = zone.booths.filter(
-    (booth): booth is Booth & { lat: number; lng: number } =>
-      booth.lat !== undefined && booth.lng !== undefined,
-  );
-  if (points.length === 0) return null;
-  return {
-    lat: points.reduce((sum, booth) => sum + booth.lat, 0) / points.length,
-    lng: points.reduce((sum, booth) => sum + booth.lng, 0) / points.length,
-  };
-}
+import type { Booth } from "./types";
+import { QUEUE_DISTANCE_ZONES, queueTailPointForMeters } from "./queueDistanceZones";
 
 /**
  * 선택한 부스의 줄끝을 갱신하는 폼. 스태프 앱의 `QueueUpdateSheet`와 같은 방식으로
- * 구역을 고르면 그 구역의 중심 좌표를 줄끝으로 보낸다. 관리자 콘솔은 지도 하단바
+ * 존을 고르면 정해진 보고 거리를 보낸다. 관리자 콘솔은 지도 하단바
  * 한 줄 안에 들어가야 해서 시트 대신 인라인 폼으로 둔다.
  */
 function QueueTailForm({
   festivalId,
   booth,
-  zones,
   onUpdated,
 }: {
   festivalId: string;
   booth: Booth;
-  zones: BoothZone[];
   onUpdated: () => void;
 }) {
   const [zoneId, setZoneId] = useState("");
-  const selectableZones = zones.filter((zone) => zoneCenter(zone) !== null);
 
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!booth.queueId) throw new Error("이 부스의 대기열 정보를 찾을 수 없습니다.");
-      const zone = zones.find((candidate) => candidate.zoneId === zoneId);
-      const center = zone ? zoneCenter(zone) : null;
-      if (!center) throw new Error("구역 좌표를 찾을 수 없습니다.");
+      const zone = QUEUE_DISTANCE_ZONES.find((candidate) => candidate.id === zoneId);
+      if (!zone) throw new Error("줄끝 존을 선택해 주세요.");
+      if (booth.lat === undefined || booth.lng === undefined) {
+        throw new Error("부스 좌표를 찾을 수 없습니다.");
+      }
+      const tail = queueTailPointForMeters({ lat: booth.lat, lng: booth.lng }, zone.meters);
       return updateQueueTailAsAdmin(festivalId, booth.queueId, {
-        tailLatitude: center.lat,
-        tailLongitude: center.lng,
+        tailLatitude: tail.lat,
+        tailLongitude: tail.lng,
+        queueTailMeters: zone.meters,
+        path: [],
         expectedRevision: booth.observationRevision,
       });
     },
@@ -69,7 +59,12 @@ function QueueTailForm({
     onError: (error) => toast.error(getApiErrorMessage(error, "줄끝을 갱신하지 못했습니다.")),
   });
 
-  if (!booth.queueId || selectableZones.length === 0) return null;
+  if (!booth.queueId) {
+    return <p className="body-caption text-zinc-500">이 부스에는 대기열이 아직 없습니다.</p>;
+  }
+  if (booth.lat === undefined || booth.lng === undefined) {
+    return <p className="body-caption text-zinc-500">부스 좌표를 등록하면 줄끝을 갱신할 수 있습니다.</p>;
+  }
 
   return (
     <form
@@ -80,13 +75,13 @@ function QueueTailForm({
       }}
     >
       <Select value={zoneId} onValueChange={setZoneId}>
-        <SelectTrigger className="h-10 w-36" aria-label="줄끝 구역 선택">
-          <SelectValue placeholder="구역 선택" />
+        <SelectTrigger className="h-10 w-36" aria-label="줄끝 존 선택">
+          <SelectValue placeholder="존 선택" />
         </SelectTrigger>
         <SelectContent>
-          {selectableZones.map((zone) => (
-            <SelectItem key={zone.zoneId} value={zone.zoneId}>
-              {zone.name}
+          {QUEUE_DISTANCE_ZONES.map((zone) => (
+            <SelectItem key={zone.id} value={zone.id}>
+              {zone.label} · {zone.meters}m
             </SelectItem>
           ))}
         </SelectContent>
@@ -101,13 +96,11 @@ function QueueTailForm({
 function BoothQueueUpdateBar({
   festivalId,
   booth,
-  zones,
   canUpdateQueue,
   onUpdated,
 }: {
   festivalId: string;
   booth: Booth;
-  zones: BoothZone[];
   canUpdateQueue: boolean;
   onUpdated: () => void;
 }) {
@@ -145,7 +138,6 @@ function BoothQueueUpdateBar({
             key={booth.boothId}
             festivalId={festivalId}
             booth={booth}
-            zones={zones}
             onUpdated={onUpdated}
           />
         ) : null}
@@ -157,8 +149,6 @@ function BoothQueueUpdateBar({
 export interface DashboardStatsBarProps {
   festivalId: string;
   selectedBooth: Booth;
-  /** 줄끝 위치로 고를 수 있는 구역 목록. */
-  zones: BoothZone[];
   /** 줄끝 갱신 폼 노출 여부. 진행중인 축제에 배정된 관리자에게만 연다. */
   canUpdateQueue: boolean;
   onUpdated: () => void;
@@ -167,7 +157,6 @@ export interface DashboardStatsBarProps {
 export function DashboardStatsBar({
   festivalId,
   selectedBooth,
-  zones,
   canUpdateQueue,
   onUpdated,
 }: DashboardStatsBarProps) {
@@ -175,7 +164,6 @@ export function DashboardStatsBar({
     <BoothQueueUpdateBar
       festivalId={festivalId}
       booth={selectedBooth}
-      zones={zones}
       canUpdateQueue={canUpdateQueue}
       onUpdated={onUpdated}
     />

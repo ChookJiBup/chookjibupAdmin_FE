@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import type { Booth } from "@/features/dashboard/types";
+import { QUEUE_DISTANCE_ZONES, QUEUE_ZONE_METERS } from "@/features/dashboard/queueDistanceZones";
 
 const METRIC_LABEL_CLASSES = "body-small text-zinc-500 [&_svg]:size-3";
 
@@ -74,14 +75,16 @@ export function StaffBoothBar({
           description="이 부스의 최신 혼잡도입니다."
         />
         <MapMetric
-          /*
-            줄 끝은 지도 아무 데나 찍을 수 있는데 이 칸만 구역명을 보여 줘서, 안전 구역
-            부스의 줄끝이 「메인」·「푸드」로 나오고 정작 저장한 66m는 화면 어디에도
-            없었다. 저장한 값 그대로 거리로 적는다.
-          */
           value={
             queueTailMeters === null ? (
               <span className="body-small text-zinc-400">미입력</span>
+            ) : queueTailMeters === 0 ? (
+              <span className="body-regular-bold">줄 없음</span>
+            ) : QUEUE_DISTANCE_ZONES.some((zone) => zone.meters === queueTailMeters) ? (
+              <>
+                <span className="body-regular-bold">존 {queueTailMeters / QUEUE_ZONE_METERS}</span>
+                <span className="body-caption text-zinc-500"> · {queueTailMeters}m</span>
+              </>
             ) : (
               <>
                 <span className="body-regular-bold">{queueTailMeters}</span>m
@@ -91,7 +94,7 @@ export function StaffBoothBar({
           valueClassName="body-regular"
           labelClassName={METRIC_LABEL_CLASSES}
           label="줄끝"
-          description="부스에서 대기 줄 끝까지의 거리입니다."
+          description="존 1개당 10m로 계산한 대기 줄 거리입니다."
         />
         <MapMetric
           value={
