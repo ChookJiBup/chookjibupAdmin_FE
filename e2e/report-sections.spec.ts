@@ -203,7 +203,8 @@ test("결과리포트는 브레드크럼으로 축제성과·방문객평가를 
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("긍정적인");
   await expect(page.getByText("종합 만족도 점수")).toBeVisible();
-  await expect(page.getByText("종합평가", { exact: true })).toBeVisible();
+  await expect(page.getByText("방문객 대표 리뷰")).toBeVisible();
+  await expect(page.getByText("방문객 평가 키워드")).toHaveCount(0);
 
   // 5-1. 전체 리뷰 보기 모달
   await page.getByRole("button", { name: "전체 리뷰 보기" }).click();
