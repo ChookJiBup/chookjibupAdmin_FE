@@ -1,11 +1,10 @@
 "use client";
 
-import { ChevronRightIcon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import { ChevronRightIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { cn } from "@/lib/utils";
 import { AllReviewsDialog } from "./AllReviewsDialog";
@@ -317,7 +316,7 @@ function PerformanceView({
       </div>
 
       {/* 3-3(2/3) 일자별 관광객 추이 + 3-4(1/3) 일차/시간대별 방문 패턴 */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div>
         <Panel title="일자별 관광객 추이" className="lg:col-span-2">
           <VisitorTrend data={metrics.dailyTrend} />
         </Panel>
@@ -382,74 +381,6 @@ const SENTIMENT_HEADLINE: Record<string, { highlight: string; tone: "up" | "down
   NEUTRAL: { highlight: "무난한", tone: "neutral" },
 };
 
-/** 설계서 6. 종합평가 — 요약 문단 + 긍정적인 점 + 미흡한 점/개선방안. */
-function OverallEvaluation({ summary }: { summary: FestivalReportTextSummary }) {
-  const hasContent =
-    summary.positives.length > 0 || summary.issues.length > 0 || summary.improvements.length > 0;
-  if (!hasContent) return null;
-  // 백엔드에 '종합평가 한 문단' 필드가 없어, 긍정/미흡 항목을 이어 붙여 개요를 만든다.
-  const overview = [...summary.positives, ...summary.issues].join(" · ");
-
-  return (
-    <Panel>
-      <div className="flex flex-col gap-8">
-        <div>
-          <div className="flex items-center gap-2 body-regular-bold text-zinc-950">
-            종합평가
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" aria-label="종합평가 설명">
-                  <QuestionMarkCircledIcon className="size-3.5 text-zinc-500" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                리뷰와 운영 데이터를 AI가 분석해 정리한 축제 총평입니다.
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <p className="mt-3 max-w-3xl body-small text-zinc-600">
-            {overview || "분석 내용이 없습니다."}
-          </p>
-        </div>
-
-        {summary.positives.length ? (
-          <div>
-            <p className="body-regular-bold text-zinc-950">긍정적인 점</p>
-            <ul className="mt-3 flex list-disc flex-col gap-1 pl-4 body-small text-zinc-600">
-              {summary.positives.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <div>
-            <p className="body-regular-bold text-zinc-950">미흡한 점</p>
-            <ul className="mt-3 flex list-disc flex-col gap-1 pl-4 body-small text-zinc-600">
-              {summary.issues.length ? (
-                summary.issues.map((item) => <li key={item}>{item}</li>)
-              ) : (
-                <li className="list-none pl-0 text-zinc-400">분석 내용이 없습니다.</li>
-              )}
-            </ul>
-          </div>
-          <div>
-            <p className="body-regular-bold text-zinc-950">개선방안</p>
-            <ul className="mt-3 flex list-disc flex-col gap-1 pl-4 body-small text-zinc-600">
-              {summary.improvements.length ? (
-                summary.improvements.map((item) => <li key={item}>{item}</li>)
-              ) : (
-                <li className="list-none pl-0 text-zinc-400">분석 내용이 없습니다.</li>
-              )}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
 function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
   const [allReviewsOpen, setAllReviewsOpen] = useState(false);
   // 백엔드의 evaluationAvailable은 AI 분석이 꺼져 있으면 항상 false다.
@@ -512,20 +443,6 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
           </div>
         </Panel>
 
-        <Panel title="방문객 평가 키워드" className="lg:col-span-2">
-          <div className="flex flex-col gap-6">
-            <KeywordGroup
-              title="긍정"
-              keywords={report.ai.positiveKeywords}
-              className="bg-primary-300"
-            />
-            <KeywordGroup
-              title="부정"
-              keywords={report.ai.negativeKeywords}
-              className="bg-red-300"
-            />
-          </div>
-        </Panel>
       </div>
 
       {/* 방문객 대표 리뷰 + 5-1. 전체 리뷰 보기 */}
@@ -552,8 +469,6 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
         )}
       </Panel>
 
-      <OverallEvaluation summary={report.ai.summary} />
-
       <AllReviewsDialog
         open={allReviewsOpen}
         onOpenChange={setAllReviewsOpen}
@@ -562,33 +477,6 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
         hasMore={reviews.hasMore}
       />
     </>
-  );
-}
-
-function KeywordGroup({
-  title,
-  keywords,
-  className,
-}: {
-  title: string;
-  keywords: string[];
-  className: string;
-}) {
-  return (
-    <div>
-      <p className="mb-2 body-small-bold text-zinc-950">{title}</p>
-      <div className="flex flex-wrap gap-2">
-        {keywords.length ? (
-          keywords.map((keyword) => (
-            <span key={keyword} className={`rounded-full px-3 py-1 body-small ${className}`}>
-              {keyword}
-            </span>
-          ))
-        ) : (
-          <span className="body-small text-zinc-400">키워드 없음</span>
-        )}
-      </div>
-    </div>
   );
 }
 
