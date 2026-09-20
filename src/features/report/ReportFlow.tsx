@@ -101,7 +101,14 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
 
   if (showForm && visitorsQuery.data) {
     return (
-      <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 flex items-center justify-center overflow-y-auto bg-dimmed p-4 sm:p-8">
+      /*
+        상단바 높이를 72px로 못박아 두면 축제명이 길어 헤더가 줄바꿈되는 좁은 화면에서
+        딤이 상단바 아래에 어긋나 걸린다. 다른 모달과 같이 HeaderNav가 실측해 내보내는
+        변수를 읽는다. 세로 정렬은 `items-start`+카드의 `my-auto` 조합이다 —
+        `items-center`는 내용이 화면보다 길어지는 순간 위쪽이 스크롤로 닿지 않는
+        영역으로 밀려나 제목과 닫기 버튼을 잘라먹는다.
+      */
+      <div className="fixed inset-x-0 top-[var(--console-topbar-height,72px)] bottom-0 z-10 flex items-start justify-center overflow-y-auto bg-dimmed p-4 sm:p-8">
         <VisitorCountForm
           days={visitorsQuery.data.days}
           mode={visitorsQuery.data.visitorCountInputMode}
@@ -145,7 +152,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
 
   if (isGenerating) {
     return (
-      <div className="fixed inset-x-0 top-[72px] bottom-0 z-10 flex flex-col items-center justify-center gap-4 bg-white">
+      <div className="fixed inset-x-0 top-[var(--console-topbar-height,72px)] bottom-0 z-10 flex flex-col items-center justify-center gap-4 bg-white">
         <p className="body-regular text-zinc-950">
           {statusQuery.data?.progressMessage ?? "축제 결과를 분석하고 있어요"}
         </p>

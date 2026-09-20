@@ -16,6 +16,8 @@ import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
 import type { NodeType } from "@/features/boothmap/types";
 import { getManagedFestival } from "@/features/festivals/api";
 import { formatDday } from "@/features/festivals/dateFormat";
+import { getFestivalVisitorCounts } from "@/features/report/api";
+import { missingPastVisitorDays } from "@/features/report/visitorDays";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import {
@@ -29,6 +31,7 @@ import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
+import { MissingVisitorCountDialog } from "./MissingVisitorCountDialog";
 import type { Booth, BoothZone } from "./types";
 
 /** 지도 위 흰 카드 안에서 쓰는 primary 링크 버튼. `Button`과 달리 실제 이동이 필요해 `Link`에 직접 스타일을 준다. */
@@ -109,6 +112,21 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     enabled: isRealtimeScope,
     queryFn: () => getFestivalQueues(festivalId),
   });
+  /*
+    방문 인원은 총괄관리자가 날짜별로 쌓는 값이다. 운영자(제2관리자)는 입력 주체가
+    아니라 조회조차 하지 않는다. 역할은 계정 세션이 아니라 «이 축제의 역할»로 본다 —
+    계정 대표 역할로 판단하면 다른 축제에서만 총괄인 사람에게도 게이트가 걸린다.
+  */
+  const isFestivalOwner = festivalQuery.data?.role === "FESTIVAL_OWNER";
+  const visitorCountsQuery = useQuery({
+    queryKey: ["festival-visitor-counts", festivalId],
+    enabled: isFestivalOwner,
+    queryFn: () => getFestivalVisitorCounts(festivalId),
+  });
+  const missingVisitorDays = useMemo(
+    () => missingPastVisitorDays(visitorCountsQuery.data),
+    [visitorCountsQuery.data],
+  );
   const mapBooths = useMemo((): Booth[] => {
     const dashboardBooths = dashboardQuery.data?.booths ?? [];
     const zoneIdByNodeId = new Map<string, string>();
@@ -252,7 +270,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
 
   const dashboard = dashboardQuery.data;
   const festival = festivalQuery.data;
-  const isFestivalOwner = festival?.role === "FESTIVAL_OWNER";
   // 종료된 축제의 부스 배치는 결과리포트의 근거 자료라 뒤늦게 바뀌면 안 된다.
   // 예전에는 `festivalStatus === "DRAFT"`(초안 여부)로 막고 있었는데, 그 값은
   // 공개 여부일 뿐이라 정작 종료된 축제는 그대로 편집됐다.
@@ -274,6 +291,14 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
 
   return (
     <div className="relative h-full w-full overflow-hidden">
+      {/*
+        지나간 날의 방문 인원이 비어 있으면 대시보드를 덮는다. 조회 실패로 목록을
+        못 받았을 때는 게이트를 걸지 않는다 — 입력해야 할 날을 모르는 채로 막으면
+        빠져나갈 방법이 없다.
+      */}
+      {missingVisitorDays.length > 0 ? (
+        <MissingVisitorCountDialog festivalId={festivalId} missingDays={missingVisitorDays} />
+      ) : null}
       {dashboardMapCenter ? (
         <BoothMapView
           booths={mapBooths}
