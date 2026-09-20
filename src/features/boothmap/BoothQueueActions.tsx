@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/Button";
 /**
  * 부스 말풍선 아래에 붙는 대기줄 요약과 진입 버튼.
  *
- * 사전 경로를 먼저 정해야 현재 줄을 기록할 수 있어서 버튼 두 개만 나란히 두고,
- * 막혀 있는 이유는 가장 먼저 풀어야 할 한 가지만 보여 준다.
+ * 준비 단계의 사전 경로와 현장 운영 단계의 줄 기록을 나눠 보여 준다.
  */
 export function BoothQueueActions({
   boothName,
@@ -14,10 +13,9 @@ export function BoothQueueActions({
   waitMinutes,
   planDisabledReason,
   currentDisabledReason,
-  onPlan,
+  onPlanAi,
+  onPlanManual,
   onCurrent,
-  planExists = false,
-  currentExists = false,
 }: {
   boothName: string;
   /** 저장된 사전 줄 요약. 없으면 미설정으로 표시한다. */
@@ -25,16 +23,14 @@ export function BoothQueueActions({
   waitMinutes?: number | null;
   planDisabledReason?: string;
   currentDisabledReason?: string;
-  onPlan: () => void;
+  onPlanAi: () => void;
+  onPlanManual: () => void;
   onCurrent: () => void;
-  planExists?: boolean;
-  currentExists?: boolean;
 }) {
-  const disabledReason = planDisabledReason ?? currentDisabledReason;
   return (
     <section aria-label={`${boothName} 줄 관리`} data-map-tools className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="body-small text-zinc-500">대기줄</span>
+        <span className="body-small-bold text-zinc-950">대기 줄</span>
         <span className="body-small truncate text-zinc-950">
           {planSummary ?? "미설정"}
           {waitMinutes != null ? (
@@ -42,27 +38,45 @@ export function BoothQueueActions({
           ) : null}
         </span>
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1"
-          disabled={Boolean(planDisabledReason)}
-          onClick={onPlan}
-        >
-          {planExists ? "사전 줄 수정" : "줄 직접 설정"}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1"
-          disabled={Boolean(currentDisabledReason)}
-          onClick={onCurrent}
-        >
-          {currentExists ? "현재 줄 수정" : "현재 줄 기록"}
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            disabled={Boolean(planDisabledReason)}
+            onClick={onPlanAi}
+          >
+            AI 추천
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            disabled={Boolean(planDisabledReason)}
+            onClick={onPlanManual}
+          >
+            줄 직접 설정
+          </Button>
+        </div>
+        {planDisabledReason ? (
+          <p className="body-caption text-zinc-500">{planDisabledReason}</p>
+        ) : null}
+        <div className="flex items-center justify-between border-t border-zinc-200 pt-2">
+          <span className="body-caption text-zinc-500">현장 운영</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={Boolean(currentDisabledReason)}
+            onClick={onCurrent}
+          >
+            줄끝 갱신
+          </Button>
+        </div>
+        {currentDisabledReason ? (
+          <p className="body-caption text-zinc-500">{currentDisabledReason}</p>
+        ) : null}
       </div>
-      {disabledReason ? <p className="body-caption text-zinc-500">{disabledReason}</p> : null}
     </section>
   );
 }
