@@ -1,3 +1,6 @@
+import { isAxiosError } from "axios";
+
+import type { QueuePlan } from "@/features/boothmap/queuePlanApi";
 import type { FestivalDashboard, FestivalOperationsMap } from "@/features/dashboard/types";
 import { staffApiClient } from "@/lib/api/staffApiClient";
 import type { ApiResponse } from "@/lib/api/types";
@@ -7,6 +10,9 @@ import type {
   UpdateBoothCongestionRequest,
   UpdateQueueTailRequest,
 } from "./types";
+
+/** 사전 동선을 아직 그리지 않은 부스. */
+const QUEUE_PLAN_NOT_FOUND = 40413;
 
 /** 담당 축제의 부스·구역·혼잡도를 한 번에 가져온다(스태프 토큰으로도 조회 가능). */
 export async function getStaffFestivalDashboard(festivalId: string): Promise<FestivalDashboard> {
@@ -65,4 +71,23 @@ export async function getStaffFestivalOperationsMap(
     `/festivals/${festivalId}/operations/map`,
   );
   return data.data;
+}
+
+/**
+ * 부스의 사전 대기 동선. 저장은 관리자만 하지만 조회는 담당 스태프에게도 열려 있다.
+ * 동선을 아직 그리지 않은 부스는 404를 주므로 null로 바꿔 눈대중 존으로 넘어가게 한다.
+ */
+export async function getStaffQueuePlan(
+  festivalId: string,
+  boothId: number,
+): Promise<QueuePlan | null> {
+  try {
+    const { data } = await staffApiClient.get<ApiResponse<QueuePlan>>(
+      `/festivals/${festivalId}/operations/booths/${boothId}/queue-plan`,
+    );
+    return data.data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.data?.code === QUEUE_PLAN_NOT_FOUND) return null;
+    throw error;
+  }
 }

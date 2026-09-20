@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import type { Booth } from "@/features/dashboard/types";
-import { QUEUE_DISTANCE_ZONES, QUEUE_ZONE_METERS } from "@/features/dashboard/queueDistanceZones";
+import { QUEUE_ZONE_METERS } from "@/features/dashboard/queueDistanceZones";
 
 const METRIC_LABEL_CLASSES = "body-small text-zinc-500 [&_svg]:size-3";
 
@@ -80,7 +80,9 @@ export function StaffBoothBar({
               <span className="body-small text-zinc-400">미입력</span>
             ) : queueTailMeters === 0 ? (
               <span className="body-regular-bold">줄 없음</span>
-            ) : QUEUE_DISTANCE_ZONES.some((zone) => zone.meters === queueTailMeters) ? (
+            ) : /* 존 경계에 딱 떨어질 때만 존 번호로 되돌린다. 줄 끝까지 찬 마지막
+                   존은 10m로 나누어떨어지지 않아 거리를 그대로 보여 준다. */
+            queueTailMeters % QUEUE_ZONE_METERS === 0 ? (
               <>
                 <span className="body-regular-bold">존 {queueTailMeters / QUEUE_ZONE_METERS}</span>
                 <span className="body-caption text-zinc-500"> · {queueTailMeters}m</span>

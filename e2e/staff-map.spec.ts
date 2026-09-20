@@ -16,11 +16,13 @@ interface MockOptions {
   /** 부스에 대기열이 붙어 있는지. 없으면 줄끝 갱신 버튼이 잠긴다. */
   withQueue?: boolean;
   congestionUpdatedAt?: string;
+  /** 부스 1의 사전 대기 동선. 없으면 404를 내려 눈대중 존으로 떨어뜨린다. */
+  queuePlan?: { path: Array<{ lat: number; lng: number }>; lengthMeters: number; revision: number };
 }
 
 /** 스태프 화면이 쓰는 API를 모두 가로채고, 지나간 요청을 기록해 돌려준다. */
 async function mockStaffApis(page: Page, options: MockOptions = {}) {
-  const { withQueue = true, congestionUpdatedAt = serverNow() } = options;
+  const { withQueue = true, congestionUpdatedAt = serverNow(), queuePlan } = options;
   const requests: Request[] = [];
 
   await page.route("**/api/**", async (route) => {
@@ -96,6 +98,22 @@ async function mockStaffApis(page: Page, options: MockOptions = {}) {
             ]
           : [],
       };
+    } else if (path.endsWith("/queue-plan")) {
+      if (queuePlan) {
+        data = {
+          planId: "plan-1",
+          boothId: 1,
+          path: queuePlan.path,
+          lengthMeters: queuePlan.lengthMeters,
+          metersPerPerson: 1,
+          servedPersonsPerMinute: 2,
+          estimatedCapacity: Math.round(queuePlan.lengthMeters),
+          revision: queuePlan.revision,
+          sourceNodeId: null,
+          nodeVersion: 1,
+          updatedAt: congestionUpdatedAt,
+        };
+      }
     } else if (path.endsWith("/operations/map")) {
       data = { mapId: "test-map", editRevision: 0, mapKind: "COORDINATE", booths: [] };
     } else if (path.endsWith("/congestion") && request.method() === "PUT") {
@@ -152,6 +170,47 @@ test("줄끝 갱신 시트는 자동 환산된 혼잡도와 존 선택을 보여
 
   // 혼잡도는 서버가 계산하므로 프런트가 직접 보내지 않는다.
   expect(requests.filter((request) => request.method() === "PUT")).toEqual([]);
+});
+
+test("사전 동선이 있으면 존을 줄 길이만큼만 주고 동선 위 지점을 보낸다", async ({ page }) => {
+  // 부스에서 북쪽으로 30m 뻗은 줄. 존은 10·20·30m 세 칸이어야 한다.
+  const requests = await mockStaffApis(page, {
+    queuePlan: {
+      path: [
+        { lat: 37.5663, lng: 126.978 },
+        { lat: 37.5663 + 30 / 111_320, lng: 126.978 },
+      ],
+      lengthMeters: 30,
+      revision: 4,
+    },
+  });
+  await page.goto(`/staff/dashboard?boothId=1`);
+  await page.getByRole("button", { name: "줄끝 갱신" }).click();
+  await expect(page.getByText("미리 그린 줄을 10m씩 나눈 존입니다.")).toBeVisible();
+
+  const zoneSelect = page.getByRole("combobox", { name: "줄끝 존 선택" });
+  await zoneSelect.click();
+  // 30m짜리 줄에 존 4(40m)까지 열어 두면 설 수 없는 길이가 보고된다.
+  await expect(page.getByRole("option", { name: "존 4 · 40m" })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: "존 3 · 30m" })).toBeVisible();
+  await page.getByRole("option", { name: "존 2 · 20m" }).click();
+  await page.getByRole("button", { name: "줄끝 갱신하기" }).click();
+
+  const patch = requests.find(
+    (request) => request.method() === "PATCH" && request.url().includes("/operations/queues/"),
+  );
+  const body = patch?.postDataJSON();
+  /*
+    경로와 보고 거리를 빼야 서버가 사전 동선에 투영해 실제 줄 길이를 잰다. 둘 중 하나라도
+    실려 있으면 직선거리나 눈대중 거리로 계산이 새 버린다.
+  */
+  expect(body).toMatchObject({ planRevision: 4 });
+  expect(body).not.toHaveProperty("path");
+  expect(body).not.toHaveProperty("queueTailMeters");
+  // 동선을 20m 따라간 지점이라 부스보다 북쪽이고 줄 끝(30m)보다는 남쪽이다.
+  expect(body.tailLatitude).toBeGreaterThan(37.5663);
+  expect(body.tailLatitude).toBeLessThan(37.5663 + 30 / 111_320);
+  expect(body.tailLongitude).toBeCloseTo(126.978, 6);
 });
 
 /*
