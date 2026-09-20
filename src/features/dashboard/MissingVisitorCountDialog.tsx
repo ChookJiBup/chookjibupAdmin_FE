@@ -75,10 +75,15 @@ export function MissingVisitorCountDialog({
           입력 행이 누락 일수만큼 늘어난다. 높이를 화면 안에 가두고 목록만 안에서
           스크롤시켜, 아무리 많이 밀려도 제목과 저장 버튼이 잘리지 않게 한다.
           모바일 주소창 때문에 `vh`는 실제 보이는 높이보다 커지므로 `dvh`를 쓴다.
+
+          세로 가운데 정렬을 쓰지 않는 이유: 누락 일수가 많으면 카드가 길어지면서
+          위로 자라 상단바를 덮는다. 딤은 상단바 아래에서 시작하는데 카드만 그 위로
+          올라가면 헤더가 반쯤 가린 채로 남는다. 상단바 바로 아래에서 시작하고
+          남은 높이만큼만 차지하게 둔다.
         */}
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 z-30 flex max-h-[calc(100dvh-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white"
+          className="fixed top-[calc(var(--console-topbar-height,0px)+20px)] left-1/2 z-30 flex max-h-[calc(100dvh-var(--console-topbar-height,0px)-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-white"
           onEscapeKeyDown={(event) => event.preventDefault()}
           onInteractOutside={(event) => event.preventDefault()}
         >
@@ -88,12 +93,20 @@ export function MissingVisitorCountDialog({
                 ? `«${festivalName}» 축제가 끝났습니다`
                 : "지난 날짜의 방문 인원이 비어 있습니다"}
             </Dialog.Title>
-            <p className="body-small text-zinc-950">
-              결과리포트가 이 값을 근거로 축제성과를 계산합니다. 밀린 날짜를 모두 입력해야
-              {festivalName
-                ? " 축제를 마무리할 수 있습니다."
-                : " 대시보드를 이어서 볼 수 있습니다."}
-            </p>
+            {/*
+              문장마다 줄을 나눈다. 두 문장을 한 덩어리로 흘리면 「입력해야 / 축제를」처럼
+              문장 한가운데서 줄이 꺾여 읽는 호흡이 끊긴다. 한국어는 낱말 안에서도 줄이
+              꺾이므로 break-keep으로 단어가 쪼개지는 것도 함께 막는다.
+            */}
+            <div className="body-small flex flex-col gap-0.5 break-keep text-zinc-950">
+              <p>결과리포트가 이 값을 근거로 축제성과를 계산합니다.</p>
+              <p>
+                밀린 날짜를 모두 입력해야
+                {festivalName
+                  ? " 축제를 마무리할 수 있습니다."
+                  : " 대시보드를 이어서 볼 수 있습니다."}
+              </p>
+            </div>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto border-t border-zinc-200 p-5 sm:p-8">
