@@ -32,7 +32,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
-import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getFestivalDashboard, getFestivalQueues } from "@/features/dashboard/api";
 import type { FestivalQueue, FestivalQueueList } from "@/features/staffMap/types";
 import { QueuePlanPanel } from "./QueuePlanPanel";
@@ -329,7 +328,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const setToastBelowActionBar = useConsoleUiStore((state) => state.setToastBelowActionBar);
-  const [mapLevel, setMapLevel] = useState(DEFAULT_MAP_LEVEL);
   const [boothListOpen, setBoothListOpen] = useState(false);
   const [drawTool, setDrawTool] = useState<DrawTool>("select");
   const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
@@ -1403,16 +1401,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         onCurrent={openCurrentQueue}
       />
     ) : null;
-  /** 확대·축소 버튼. 지금 지도가 있는 단계에서 한 칸 움직인다(휠로 바뀐 값이 기준이다). */
-  function stepZoom(direction: -1 | 1) {
-    const map = kakaoMapRef.current;
-    if (!map) return;
-    const next = map.getLevel() + direction;
-    if (next < MIN_MAP_LEVEL || next > MAX_MAP_LEVEL) return;
-    map.setLevel(next);
-    setMapLevel(next);
-  }
-
   const panOverride = spaceHeld || modifierHeld;
   /*
     하단 선택 바가 떠 있는지. 지도 위 다른 하단 요소를 그만큼 띄우는 데 쓴다.
@@ -2659,8 +2647,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               map.setMinLevel(MIN_MAP_LEVEL);
               map.setMaxLevel(MAX_MAP_LEVEL);
             }}
-            /* 확대·축소 버튼을 언제 잠글지 판단하는 데만 쓴다. 지도로 되돌려보내지 않는다. */
-            onZoomChanged={(map) => setMapLevel(map.getLevel())}
             onClick={(_target, mouseEvent) => {
               if (editingLocked || panOverride || queuePlanBusy || queueSaveMutation.isPending)
                 return;
@@ -3768,12 +3754,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             />
           </span>
         </div>
-        <MapZoomControls
-          onZoomIn={() => stepZoom(-1)}
-          onZoomOut={() => stepZoom(1)}
-          zoomInDisabled={mapLevel <= MIN_MAP_LEVEL}
-          zoomOutDisabled={mapLevel >= MAX_MAP_LEVEL}
-        />
+        {/*
+          확대·축소 버튼은 두지 않는다. 휠로 바로 조작할 수 있게 된 뒤로는 같은 일을 하는
+          컨트롤이 둘이 되어 지도 위 자리만 차지했다. 터치 기기는 카카오가 두 손가락
+          확대를 기본으로 받는다.
+        */}
       </div>
 
       {drawTool === "polygon" || drawTool === "line" ? (
