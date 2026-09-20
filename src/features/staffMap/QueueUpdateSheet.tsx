@@ -8,9 +8,19 @@ import { Button } from "@/components/ui/Button";
 import { CongestionText } from "@/components/ui/CongestionBadge";
 import { IconButton } from "@/components/ui/IconButton";
 import { AdminBadge, StaffBadge } from "@/components/ui/RoleBadge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Booth } from "@/features/dashboard/types";
-import { QUEUE_DISTANCE_ZONES, QUEUE_ZONE_METERS, queueTailPointForMeters } from "@/features/dashboard/queueDistanceZones";
+import {
+  QUEUE_DISTANCE_ZONES,
+  QUEUE_ZONE_METERS,
+  queueTailPointForMeters,
+} from "@/features/dashboard/queueDistanceZones";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { updateQueueTail } from "./api";
 import type { FestivalQueue } from "./types";
@@ -183,11 +193,7 @@ export function QueueUpdateSheet({
             ))}
           </SelectContent>
         </Select>
-        <Button
-          type="submit"
-          className="shrink-0"
-          disabled={!zone || updateMutation.isPending}
-        >
+        <Button type="submit" className="shrink-0" disabled={!zone || updateMutation.isPending}>
           {updateMutation.isPending ? "갱신 중..." : "줄끝 갱신하기"}
         </Button>
       </form>
@@ -198,7 +204,6 @@ export function QueueUpdateSheet({
           {getApiErrorMessage(updateMutation.error, "줄끝 위치를 갱신하지 못했습니다.")}
         </p>
       ) : null}
-
     </div>
   );
 }

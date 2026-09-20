@@ -442,7 +442,6 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
             </p>
           </div>
         </Panel>
-
       </div>
 
       {/* 방문객 대표 리뷰 + 5-1. 전체 리뷰 보기 */}

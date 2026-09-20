@@ -63,7 +63,9 @@ function QueueTailForm({
     return <p className="body-caption text-zinc-500">이 부스에는 대기열이 아직 없습니다.</p>;
   }
   if (booth.lat === undefined || booth.lng === undefined) {
-    return <p className="body-caption text-zinc-500">부스 좌표를 등록하면 줄끝을 갱신할 수 있습니다.</p>;
+    return (
+      <p className="body-caption text-zinc-500">부스 좌표를 등록하면 줄끝을 갱신할 수 있습니다.</p>
+    );
   }
 
   return (
