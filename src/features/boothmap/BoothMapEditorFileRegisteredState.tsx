@@ -3,17 +3,24 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CustomOverlayMap, Map as KakaoMap, Polygon, Polyline } from "react-kakao-maps-sdk";
+import {
+  CustomOverlayMap,
+  Map as KakaoMap,
+  Polygon,
+  Polyline,
+  Rectangle,
+} from "react-kakao-maps-sdk";
 import {
   CheckCircledIcon,
-  PlusIcon,
+  ClockIcon,
+  CornersIcon,
   Cross2Icon,
   DimensionsIcon,
   FileIcon,
+  GroupIcon,
   HamburgerMenuIcon,
   ImageIcon,
-  CornersIcon,
-  ClockIcon,
+  PlusIcon,
   RadiobuttonIcon,
   ResetIcon,
   RulerHorizontalIcon,
@@ -37,6 +44,7 @@ import {
   type PolygonPreset,
 } from "./shapeGeometry";
 import { BoothQueueActions } from "./BoothQueueActions";
+import { BoothSelectionBar } from "./BoothSelectionBar";
 import { QueuePointEditor } from "./QueuePointEditor";
 import { snapToQueuePath } from "./queueSnap";
 import { getQueuePlan } from "./queuePlanApi";
@@ -86,6 +94,21 @@ import { MapInfoPopover } from "./MapInfoPopover";
 import { fitBoothBounds } from "./fitBoothBounds";
 import { primaryFestivalCenter } from "./mapCenter";
 import type { CreateCoordinateMapResponse, MapAnalysisStatusResponse, NodeType } from "./types";
+import {
+  boundsContainPoint,
+  boundsFromCorners,
+  boundsTouchPoints,
+  deltaBetween,
+  isNegligibleBounds,
+  shiftPoint,
+  shiftPoints,
+  distanceToPolylinePx,
+  lineUpPoints,
+  pointInPolygonPx,
+  type LatLngBounds,
+  type LatLngDelta,
+  type Point2D,
+} from "./mapSelection";
 import { useEditHistory } from "./useEditHistory";
 import { useMapAnalysis } from "./useMapAnalysis";
 import { ZoneListItem } from "./ZoneListItem";
@@ -205,7 +228,7 @@ function PamphletStatusLabel({ status }: { status: PamphletUploadStatus }) {
 }
 
 /** 지도에서 고를 수 있는 그리기 도구. 핀·폴리곤·라인은 노드, 경계·대기줄은 표시 설정이다. */
-type DrawTool = "select" | "pin" | "polygon" | "line" | "boundary" | "queue-line";
+type DrawTool = "select" | "marquee" | "pin" | "polygon" | "line" | "boundary" | "queue-line";
 
 /** 폴리곤·라인의 기본 노드 유형. 세부 유형은 도형을 고른 뒤 팝오버에서 바꾼다. */
 const SHAPE_NODE_TYPE: Record<"polygon" | "line", NodeType> = {
@@ -234,6 +257,15 @@ function categoryOfNodeType(nodeType: NodeType): "pin" | "polygon" | "line" {
   if (nodeType === "PATH") return "line";
   return "pin";
 }
+
+/*
+  지도 확대 단계. 카카오는 숫자가 작을수록 확대다. 지도를 만들 때 거는
+  setMinLevel/setMaxLevel과 같은 값을 쓰지 않으면, 버튼으로는 더 눌리는데 지도는
+  그대로인 구간이 생긴다.
+*/
+const MIN_MAP_LEVEL = 1;
+const MAX_MAP_LEVEL = 8;
+const DEFAULT_MAP_LEVEL = 2;
 
 /** 위도 1도 ≈ 111,320m. 기본 도형 크기를 미터로 잡을 때 쓴다. */
 const METERS_PER_DEGREE_LAT = 111320;
@@ -297,7 +329,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
   const setToastBelowActionBar = useConsoleUiStore((state) => state.setToastBelowActionBar);
-  const [zoomStep, setZoomStep] = useState(0);
+  const [mapLevel, setMapLevel] = useState(DEFAULT_MAP_LEVEL);
   const [boothListOpen, setBoothListOpen] = useState(false);
   const [drawTool, setDrawTool] = useState<DrawTool>("select");
   const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
@@ -336,15 +368,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     갱신한다 — 매 프레임 booths를 바꾸면 드래그 한 번에 실행취소 기록이 수십 개 쌓인다.
     실제 좌표는 손을 뗄 때 한 번만 반영해 되돌리기 한 번으로 원위치되게 한다.
   */
-  const [draggingPin, setDraggingPin] = useState<{ id: string; lat: number; lng: number } | null>(
-    null,
-  );
+  const [moveDraft, setMoveDraft] = useState<{ ids: Set<string>; delta: LatLngDelta } | null>(null);
   /** 드래그로 끝난 포인터인지. 이 값이 true면 이어서 오는 click을 무시한다. */
-  const pinDraggedRef = useRef(false);
+  const movedRef = useRef(false);
   /** 핀 위에 커서가 올라와 있는지. 지도 드래그 잠금을 언제 풀지 판단하는 데 쓴다. */
   const pinHoveredRef = useRef(false);
-  /** 지금 핀을 끌고 있는지. 상태(draggingPin)는 이벤트 핸들러에서 늦게 보여 ref로 따로 둔다. */
-  const pinDraggingRef = useRef(false);
+  /** 지금 무언가를 끌고 있는지. 상태(moveDraft)는 이벤트 핸들러에서 늦게 보여 ref로 따로 둔다. */
+  const movingRef = useRef(false);
+  /** 드래그 박스로 고르는 중인 범위. 손을 뗄 때 이 안에 걸친 것을 모두 고른다. */
+  const [marquee, setMarquee] = useState<LatLngBounds | null>(null);
   const festivalQuery = useQuery({
     queryKey: ["managed-festival", festivalId],
     queryFn: () => getManagedFestival(festivalId),
@@ -403,6 +435,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [queueSaveError, setQueueSaveError] = useState<string | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [modifierHeld, setModifierHeld] = useState(false);
+  /** Shift를 누르고 있는지. 눌린 동안에는 클릭이 «선택에 더하기», 드래그가 «범위 선택»이 된다. */
+  const [shiftHeld, setShiftHeld] = useState(false);
   /** 지금 찍고 있는 도형의 꼭짓점들. "그리기 완료"를 눌러야 shapes로 넘어간다. */
   const [draftPoints, setDraftPoints] = useState<{ lat: number; lng: number }[]>([]);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
@@ -470,9 +504,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     () =>
       booths.filter((booth) => {
         const zoneId = zoneIdByBoothId.get(booth.id);
-        return !zoneId || zoneId === selectedZoneId;
+        // 골라 둔 부스는 구역에 묶여 있어도 남긴다 — 고른 것이 안 보이면 함께 옮길 수 없다.
+        return !zoneId || zoneId === selectedZoneId || checkedIds.has(booth.id);
       }),
-    [booths, zoneIdByBoothId, selectedZoneId],
+    [booths, zoneIdByBoothId, selectedZoneId, checkedIds],
   );
 
   function toggleZoneExpanded(id: string) {
@@ -602,6 +637,34 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     if (!seededKey || fittedKey === seededKey || mapLoading) return;
     if (fitBoothBounds(kakaoMapRef.current, booths)) setFittedKey(seededKey);
   }, [fittedKey, seededKey, mapLoading, booths]);
+  const checkedBooths = useMemo(
+    () => booths.filter((booth) => checkedIds.has(booth.id)),
+    [booths, checkedIds],
+  );
+  const checkedShapes = useMemo(
+    () => shapes.filter((shape) => checkedIds.has(shape.id)),
+    [shapes, checkedIds],
+  );
+  /* 서버는 구역 멤버로 부스만 받는다. 화장실·입구가 섞이면 저장 전체가 거부된다. */
+  const groupableBooths = useMemo(
+    () => checkedBooths.filter((booth) => booth.nodeType === "BOOTH"),
+    [checkedBooths],
+  );
+  /** 「구역에 넣기」에 띄울 목록. 묶어 둔 구역과 폴리곤으로 그린 구역을 함께 보여 준다. */
+  const zoneOptions = useMemo(
+    () => [
+      ...standaloneZones.map((zone) => ({ id: zone.id, name: zone.name, drawn: false })),
+      ...polygonShapes.map((shape) => ({ id: shape.id, name: shape.name, drawn: true })),
+    ],
+    [standaloneZones, polygonShapes],
+  );
+  const checkedInAnyZone = useMemo(
+    () =>
+      checkedBooths.some(
+        (booth) => zoneIdByBoothId.has(booth.id) || shapeIdByBoothId.has(booth.id),
+      ),
+    [checkedBooths, zoneIdByBoothId, shapeIdByBoothId],
+  );
   const pendingGroupMembers = useMemo(
     () => (groupPopoverOpen ? booths.filter((booth) => checkedIds.has(booth.id)) : []),
     [booths, checkedIds, groupPopoverOpen],
@@ -1341,6 +1404,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       />
     ) : null;
   const panOverride = spaceHeld || modifierHeld;
+  /** 하단 선택 바가 떠 있는지. 지도 위 다른 하단 요소를 그만큼 띄우는 데 쓴다. */
+  const selectionBarOpen = drawTool === "select" && !editingLocked && checkedIds.size > 0;
   const queuePathItems = useMemo(() => {
     const items = boothsToQueuePathItems(
       booths
@@ -1484,8 +1549,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     });
   }
 
-  /** 끌고 있는 꼭짓점은 아직 shapes에 반영되지 않았으므로 임시 좌표를 끼워 넣는다. */
+  /** 끌고 있는 도형은 아직 shapes에 반영되지 않았으므로 임시 좌표를 대신 쓴다. */
   function shapePointsOf(shape: LocalMapShape) {
+    if (moveDraft?.ids.has(shape.id)) return shiftPoints(shape.points, moveDraft.delta);
     if (draggingVertex?.shapeId !== shape.id) return shape.points;
     const moving = draggingVertex;
     return shape.points.map((point, index) =>
@@ -1495,83 +1561,272 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
 
   /** 끌고 있는 핀은 아직 booths에 반영되지 않았으므로 임시 위치를 대신 쓴다. */
   function pinPositionOf(booth: LocalBoothPin) {
-    return draggingPin?.id === booth.id
-      ? { lat: draggingPin.lat, lng: draggingPin.lng }
-      : { lat: booth.lat, lng: booth.lng };
+    const position = { lat: booth.lat, lng: booth.lng };
+    return moveDraft?.ids.has(booth.id) ? shiftPoint(position, moveDraft.delta) : position;
+  }
+
+  /** 화면 좌표를 지도 좌표로. 지도나 래퍼가 아직 없으면 null. */
+  function coordsAtClient(clientX: number, clientY: number): LatLng | null {
+    const map = kakaoMapRef.current;
+    const wrapper = mapWrapperRef.current;
+    if (!map || !wrapper || !window.kakao?.maps) return null;
+    const bounds = wrapper.getBoundingClientRect();
+    const coords = map
+      .getProjection()
+      .coordsFromContainerPoint(
+        new window.kakao.maps.Point(clientX - bounds.left, clientY - bounds.top),
+      );
+    return { lat: coords.getLat(), lng: coords.getLng() };
+  }
+
+  /** 지도 좌표를 지도 안 화면 좌표(px)로. 「커서가 이 도형을 짚었나」는 보이는 대로 판정한다. */
+  function pixelOf(point: LatLng): Point2D | null {
+    const map = kakaoMapRef.current;
+    if (!map || !window.kakao?.maps) return null;
+    const projected = map
+      .getProjection()
+      .containerPointFromCoords(new window.kakao.maps.LatLng(point.lat, point.lng));
+    return { x: projected.x, y: projected.y };
   }
 
   /**
-   * 지도 위 핀을 끌어 위치를 옮긴다.
+   * 하나를 끌면 무엇이 같이 움직이는지.
+   *
+   * 골라 둔 것 중 하나를 끌면 고른 것 전부가 함께 간다. 고르지 않은 것을 끌면 그것만 간다 —
+   * 여러 개를 골라 둔 채 다른 하나를 손보려다 선택 전체가 끌려가는 일을 막는다.
+   *
+   * 구역 폴리곤이 끌려가면 그 안에 든 부스도 함께 간다. 부스의 구역 소속은 좌표로 판정하므로
+   * (shapeIdByBoothId), 폴리곤만 옮기면 부스들이 제자리에 남아 소속이 통째로 끊긴다.
+   */
+  function moveTargetsOf(anchorId: string): Set<string> {
+    const targets =
+      checkedIds.has(anchorId) && checkedIds.size > 1 ? new Set(checkedIds) : new Set([anchorId]);
+    polygonShapes.forEach((shape) => {
+      if (!targets.has(shape.id)) return;
+      booths.forEach((booth) => {
+        if (shapeIdByBoothId.get(booth.id) === shape.id) targets.add(booth.id);
+      });
+    });
+    // 묶어 둔 구역(폴리곤 없이 부스만 모은 그룹)은 멤버 부스가 곧 그 구역의 실체다.
+    zones.forEach((zone) => {
+      if (!targets.has(zone.id)) return;
+      zone.boothIds.forEach((id) => targets.add(id));
+    });
+    return targets;
+  }
+
+  /** 끌어 옮긴 결과를 한 번에 반영한다. 되돌리기 한 번으로 원위치된다. */
+  function applyMove(ids: Set<string>, delta: LatLngDelta) {
+    if (!delta.dLat && !delta.dLng) return;
+    setBooths((prev) =>
+      prev.map((booth) =>
+        ids.has(booth.id)
+          ? { ...booth, ...shiftPoint({ lat: booth.lat, lng: booth.lng }, delta) }
+          : booth,
+      ),
+    );
+    setShapes((prev) =>
+      prev.map((shape) =>
+        ids.has(shape.id) ? { ...shape, points: shiftPoints(shape.points, delta) } : shape,
+      ),
+    );
+  }
+
+  /**
+   * 고른 객체들을 지도 위에서 통째로 끈다.
    *
    * 카카오맵 CustomOverlay에는 마커 같은 draggable 옵션이 없어 포인터 이벤트로 직접 처리한다.
-   * 끄는 동안 지도가 같이 따라 움직이지 않도록 지도 드래그를 잠갔다가 손을 뗄 때 되돌린다.
+   * 끄는 동안 지도가 따라 움직이거나 확대되지 않도록 잠갔다가 손을 뗄 때 되돌린다 — 확대까지
+   * 잠그는 이유는 좌표 변환 기준이 도중에 바뀌면 끌던 것이 커서에서 튀기 때문이다.
    */
-  function startPinDrag(booth: LocalBoothPin, event: React.PointerEvent<HTMLElement>) {
+  function startObjectDrag(
+    ids: Set<string>,
+    event: { clientX: number; clientY: number; button: number },
+    origin?: LatLng,
+  ) {
     // 핀 추가 모드에서는 지도 클릭이 곧 새 핀이라 이동을 받지 않는다.
     if (
       editingLocked ||
       panOverride ||
       queuePlanBusy ||
       drawTool !== "select" ||
-      event.button !== 0
+      event.button !== 0 ||
+      ids.size === 0
     )
       return;
     const map = kakaoMapRef.current;
-    const wrapper = mapWrapperRef.current;
-    if (!map || !wrapper || !window.kakao?.maps) return;
+    if (!map) return;
+    const start = origin ?? coordsAtClient(event.clientX, event.clientY);
+    if (!start) return;
 
-    event.preventDefault();
-    event.stopPropagation();
-    pinDraggedRef.current = false;
-    pinDraggingRef.current = true;
+    movedRef.current = false;
+    movingRef.current = true;
     // 커서가 핀에 올라온 시점에 이미 잠갔지만, 터치처럼 hover 없이 바로 누르는 입력도 있다.
     map.setDraggable(false);
-
-    const coordsAt = (clientX: number, clientY: number) => {
-      const bounds = wrapper.getBoundingClientRect();
-      return map
-        .getProjection()
-        .coordsFromContainerPoint(
-          new window.kakao.maps.Point(clientX - bounds.left, clientY - bounds.top),
-        );
-    };
+    map.setZoomable(false);
 
     const handleMove = (moveEvent: PointerEvent) => {
-      // 클릭 중의 작은 손 떨림을 부스 이동으로 저장하지 않는다.
+      // 클릭 중의 작은 손 떨림을 이동으로 저장하지 않는다.
       if (
-        !pinDraggedRef.current &&
+        !movedRef.current &&
         Math.hypot(moveEvent.clientX - event.clientX, moveEvent.clientY - event.clientY) < 5
       )
         return;
-      pinDraggedRef.current = true;
-      const coords = coordsAt(moveEvent.clientX, moveEvent.clientY);
-      setDraggingPin({ id: booth.id, lat: coords.getLat(), lng: coords.getLng() });
+      movedRef.current = true;
+      const now = coordsAtClient(moveEvent.clientX, moveEvent.clientY);
+      if (now) setMoveDraft({ ids, delta: deltaBetween(start, now) });
     };
     const handleUp = (upEvent: PointerEvent) => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleUp);
-      pinDraggingRef.current = false;
+      movingRef.current = false;
       // 손을 뗀 자리에 아직 핀이 있으면 잠금을 그대로 둔다 — 바로 다시 끌 수 있어야 한다.
       if (!pinHoveredRef.current) map.setDraggable(true);
-      setDraggingPin(null);
+      map.setZoomable(true);
+      setMoveDraft(null);
       if (upEvent.type === "pointercancel") {
-        pinDraggedRef.current = false;
+        movedRef.current = false;
         return;
       }
-      // 움직이지 않았다면 그냥 클릭이다. 이어지는 click 핸들러가 핀을 선택한다.
-      if (!pinDraggedRef.current) return;
-      const coords = coordsAt(upEvent.clientX, upEvent.clientY);
-      setBooths((prev) =>
-        prev.map((item) =>
-          item.id === booth.id ? { ...item, lat: coords.getLat(), lng: coords.getLng() } : item,
-        ),
-      );
+      // 움직이지 않았다면 그냥 클릭이다. 이어지는 click 핸들러가 선택을 맡는다.
+      if (!movedRef.current) return;
+      const end = coordsAtClient(upEvent.clientX, upEvent.clientY);
+      if (end) applyMove(ids, deltaBetween(start, end));
     };
 
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp);
     window.addEventListener("pointercancel", handleUp);
+  }
+
+  /**
+   * 지도의 이 화면 좌표에 걸리는 편집 대상. 위에 그려진 것부터 찾는다.
+   *
+   * 핀은 제 버튼이 포인터를 직접 받으므로 여기서는 도형과 구역만 본다. 선 도형은 두께가
+   * 몇 px뿐이라 정확히 짚기 어려워 가까이만 가도 집히게 한다.
+   */
+  function hitObjectAt(clientX: number, clientY: number): string | null {
+    const wrapper = mapWrapperRef.current;
+    if (!wrapper) return null;
+    const bounds = wrapper.getBoundingClientRect();
+    const at = { x: clientX - bounds.left, y: clientY - bounds.top };
+    const toPixels = (points: LatLng[]) => {
+      const pixels: Point2D[] = [];
+      for (const point of points) {
+        const pixel = pixelOf(point);
+        if (!pixel) return null;
+        pixels.push(pixel);
+      }
+      return pixels;
+    };
+
+    // 나중에 그린 것이 위에 있다. 뒤에서부터 본다.
+    for (let index = shapes.length - 1; index >= 0; index -= 1) {
+      const shape = shapes[index];
+      const pixels = toPixels(shapePointsOf(shape));
+      if (!pixels) continue;
+      if (
+        shape.kind === "polygon"
+          ? pointInPolygonPx(pixels, at)
+          : distanceToPolylinePx(pixels, at) <= 8
+      ) {
+        return shape.id;
+      }
+    }
+    for (const zone of standaloneZones) {
+      const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
+      if (members.length === 0) continue;
+      const pixels = toPixels(zonePolygonPath(members));
+      if (pixels && pointInPolygonPx(pixels, at)) return zone.id;
+    }
+    return null;
+  }
+
+  /**
+   * 빈 지도를 끌어 사각 범위 안의 부스·도형을 한꺼번에 고른다.
+   *
+   * 지도 자체의 드래그는 «이동»이라 같은 제스처를 쓸 수 없다. Shift를 누른 채 끌 때만
+   * 범위 선택으로 본다 — Shift+클릭이 이미 «선택에 더하기»라 같은 결을 잇는다.
+   */
+  function startMarquee(event: React.PointerEvent<HTMLDivElement>) {
+    const map = kakaoMapRef.current;
+    const start = coordsAtClient(event.clientX, event.clientY);
+    if (!map || !start) return;
+
+    const additive = checkedIds.size > 0;
+    const before = new Set(checkedIds);
+    movingRef.current = true;
+    map.setDraggable(false);
+    map.setZoomable(false);
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const now = coordsAtClient(moveEvent.clientX, moveEvent.clientY);
+      if (now) setMarquee(boundsFromCorners(start, now));
+    };
+    const handleUp = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      movingRef.current = false;
+      map.setDraggable(true);
+      map.setZoomable(true);
+      setMarquee(null);
+      if (upEvent.type === "pointercancel") return;
+      const end = coordsAtClient(upEvent.clientX, upEvent.clientY);
+      if (!end) return;
+      const box = boundsFromCorners(start, end);
+      // 끌지 않고 누르기만 했으면 선택을 비운다 — 빈 곳을 누른 셈이다.
+      if (isNegligibleBounds(box)) {
+        setCheckedIds(new Set());
+        setEditingBoothId(null);
+        setSelectedShapeId(null);
+        return;
+      }
+      const picked = new Set(additive ? before : []);
+      visibleBooths.forEach((booth) => {
+        if (boundsContainPoint(box, pinPositionOf(booth))) picked.add(booth.id);
+      });
+      shapes.forEach((shape) => {
+        if (boundsTouchPoints(box, shapePointsOf(shape))) picked.add(shape.id);
+      });
+      setCheckedIds(picked);
+      // 여러 개를 고른 뒤에는 개별 편집 말풍선이 자리를 가린다.
+      setEditingBoothId(null);
+      setSelectedShapeId(null);
+      // 고르고 나면 선택 도구로 돌아간다 — 바로 끌어 옮길 수 있어야 한 동작으로 이어진다.
+      setDrawTool("select");
+      if (picked.size === 0) toast.info("범위 안에 고를 것이 없습니다.");
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  }
+
+  /**
+   * 지도 바닥에서 시작한 포인터. 도형·구역을 끌거나, Shift면 범위 선택을 연다.
+   *
+   * 핀과 손잡이 버튼은 각자 포인터를 받으므로 여기까지 오지 않는다. 카카오가 mousedown을
+   * 먼저 잡아 패닝을 시작하므로, 여기서 곧바로 지도 드래그를 잠가야 한 박자 늦지 않는다.
+   */
+  function handleMapPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || editingLocked || queuePlanBusy) return;
+    if (drawTool !== "select" && drawTool !== "marquee") return;
+    const target = event.target as HTMLElement | null;
+    // 핀·도구 버튼 위에서 시작한 것은 그쪽 핸들러가 맡는다.
+    if (target?.closest("button") || target?.closest("[data-map-tools]")) return;
+    // 범위 선택 도구에서는 수정키 없이 바로 끌어 고른다. 고른 것을 옮기는 건 선택 도구에서.
+    if (drawTool === "marquee" || event.shiftKey) {
+      event.preventDefault();
+      startMarquee(event);
+      return;
+    }
+    // 스페이스·⌘을 누른 채로는 지도를 옮기는 중이다.
+    if (panOverride) return;
+    const hit = hitObjectAt(event.clientX, event.clientY);
+    if (!hit) return;
+    startObjectDrag(moveTargetsOf(hit), event);
   }
 
   function startQueuePointDrag(index: number, event: React.PointerEvent<HTMLElement>) {
@@ -1857,6 +2112,135 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   // 체크박스 클릭이나 텍스트 선택이 자꾸 드래그로 새서 부자연스러워진다.
   const [draggableRowId, setDraggableRowId] = useState<string | null>(null);
 
+  /**
+   * 고른 부스를 구역에 넣는다.
+   *
+   * 구역은 두 갈래다. 체크박스로 묶은 구역은 부스 목록만 고치면 되지만, 폴리곤으로 그린
+   * 구역은 소속을 좌표로 판정하므로(shapeIdByBoothId) 부스를 실제로 그 안으로 옮겨야 한다.
+   * 이때 고른 부스들의 상대 배치는 그대로 두고 무리째 옮긴다 — 한 점에 쌓아 놓으면
+   * 어느 부스가 어디였는지 다시 잡아야 한다.
+   */
+  function assignCheckedToZone(zoneId: string) {
+    const ids = new Set(groupableBooths.map((booth) => booth.id));
+    if (ids.size === 0) {
+      toast.error("구역에는 부스만 넣을 수 있습니다.");
+      return;
+    }
+    const polygon = polygonShapes.find((shape) => shape.id === zoneId);
+    if (polygon) {
+      const target = shapeAnchor(polygon);
+      const delta = deltaBetween(centroidOf(groupableBooths), target);
+      setBooths((prev) =>
+        prev.map((booth) => {
+          if (!ids.has(booth.id)) return booth;
+          let moved = shiftPoint({ lat: booth.lat, lng: booth.lng }, delta);
+          // 무리째 옮겨도 가장자리 부스는 구역 밖에 남을 수 있다. 안에 들어올 때까지 당긴다.
+          for (let step = 0; step < 8 && !containsPoint(polygon.points, moved); step += 1) {
+            moved = {
+              lat: moved.lat + (target.lat - moved.lat) * 0.4,
+              lng: moved.lng + (target.lng - moved.lng) * 0.4,
+            };
+          }
+          return { ...booth, ...moved };
+        }),
+      );
+      // 폴리곤 구역에 들어갔으니 체크박스로 묶어 둔 구역에서는 빼 준다. 두 구역에 겹치면
+      // 서버가 저장 전체를 거부한다.
+      setZones((prev) =>
+        prev
+          .map((zone) => ({
+            ...zone,
+            boothIds: zone.boothIds.filter((id) => !ids.has(id)),
+          }))
+          .filter((zone) => zone.boothIds.length > 0),
+      );
+      setSelectedShapeId(zoneId);
+      toast.success(`${polygon.name}에 부스 ${ids.size}개를 넣었습니다.`, {
+        description: "저장을 눌러야 서버에 반영됩니다.",
+      });
+      return;
+    }
+
+    const zone = zones.find((item) => item.id === zoneId);
+    if (!zone) return;
+    setZones((prev) =>
+      prev
+        .map((item) =>
+          item.id === zoneId
+            ? { ...item, boothIds: [...new Set([...item.boothIds, ...ids])] }
+            : { ...item, boothIds: item.boothIds.filter((id) => !ids.has(id)) },
+        )
+        .filter((item) => item.boothIds.length > 0),
+    );
+    setSelectedZoneId(zoneId);
+    setExpandedZoneIds((prev) => new Set(prev).add(zoneId));
+    toast.success(`${zone.name}에 부스 ${ids.size}개를 넣었습니다.`);
+  }
+
+  /** 고른 부스를 묶어 둔 구역에서 뺀다. 폴리곤 구역 소속은 좌표라 여기서 풀 수 없다. */
+  function ungroupChecked() {
+    const ids = new Set(checkedBooths.map((booth) => booth.id));
+    const inPolygon = checkedBooths.filter((booth) => shapeIdByBoothId.has(booth.id)).length;
+    setZones((prev) =>
+      prev
+        .map((zone) => ({ ...zone, boothIds: zone.boothIds.filter((id) => !ids.has(id)) }))
+        .filter((zone) => zone.boothIds.length > 0),
+    );
+    setSelectedZoneId(null);
+    if (inPolygon > 0) {
+      toast.info(`부스 ${inPolygon}개는 구역 폴리곤 안에 있어 그대로입니다.`, {
+        description: "폴리곤 구역은 부스를 밖으로 끌어내야 소속이 풀립니다.",
+      });
+    }
+  }
+
+  /** 고른 부스를 한 줄로 고르게 세운다. 양 끝 부스는 자리를 지킨다. */
+  function lineUpChecked() {
+    if (checkedBooths.length < 2) return;
+    const lined = lineUpPoints(checkedBooths.map((booth) => ({ lat: booth.lat, lng: booth.lng })));
+    const byId = new Map(checkedBooths.map((booth, index) => [booth.id, lined[index]]));
+    setBooths((prev) =>
+      prev.map((booth) => {
+        const placed = byId.get(booth.id);
+        return placed ? { ...booth, ...placed } : booth;
+      }),
+    );
+    toast.success(`부스 ${checkedBooths.length}개를 줄 세웠습니다.`, {
+      description: "되돌리려면 실행취소(⌘Z)를 누르세요.",
+    });
+  }
+
+  /**
+   * 구역 순서를 한 칸 옮긴다.
+   *
+   * 이 순서가 저장 요청의 sortOrder가 되고, 스태프 앱의 구역 고르기 목록이 그 순서대로
+   * 나열된다. 현장에서 자주 쓰는 구역을 위로 올릴 수 있어야 한다.
+   */
+  function moveZoneOrder(zoneId: string, direction: -1 | 1) {
+    if (zones.some((zone) => zone.id === zoneId)) {
+      setZones((prev) => {
+        const from = prev.findIndex((zone) => zone.id === zoneId);
+        const to = from + direction;
+        if (from === -1 || to < 0 || to >= prev.length) return prev;
+        const next = [...prev];
+        [next[from], next[to]] = [next[to], next[from]];
+        return next;
+      });
+      return;
+    }
+    // 폴리곤 구역은 shapes 배열 순서를 따른다. 사이에 낀 선 도형은 건너뛰고 폴리곤끼리 바꾼다.
+    setShapes((prev) => {
+      const from = prev.findIndex((shape) => shape.id === zoneId);
+      if (from === -1) return prev;
+      let to = from + direction;
+      while (to >= 0 && to < prev.length && prev[to].kind !== "polygon") to += direction;
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  }
+
   function moveBooth(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
     setBooths((prev) => {
@@ -1883,18 +2267,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   }, [setHideNav, setFullBleed, setToastBelowActionBar]);
 
   useEffect(() => {
-    const wrapper = mapWrapperRef.current;
-    if (!wrapper) return;
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      if (!(event.ctrlKey || event.metaKey)) return;
-      setZoomStep((step) => (event.deltaY > 0 ? Math.min(step + 1, 4) : Math.max(step - 1, -2)));
-    };
-    wrapper.addEventListener("wheel", handleWheel, { passive: false });
-    return () => wrapper.removeEventListener("wheel", handleWheel);
-  }, [mapLoading, mapError]);
-
-  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (
         isTypingTarget(event.target) ||
@@ -1914,6 +2286,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         return;
       }
       if (event.ctrlKey || event.metaKey) setModifierHeld(true);
+      if (event.shiftKey) setShiftHeld(true);
       if (event.key === "Escape") {
         cancelDraftShape();
         setBoundaryDraft([]);
@@ -1949,10 +2322,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     function handleKeyUp(event: KeyboardEvent) {
       if (event.code === "Space") setSpaceHeld(false);
       if (!event.ctrlKey && !event.metaKey) setModifierHeld(false);
+      if (!event.shiftKey) setShiftHeld(false);
     }
     function resetModifiers() {
       setSpaceHeld(false);
       setModifierHeld(false);
+      setShiftHeld(false);
     }
     window.addEventListener("blur", resetModifiers);
     window.addEventListener("keydown", handleKeyDown);
@@ -2011,6 +2386,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     };
   }, [festivalId, mapQuery.data?.mapId, pamphlet?.assetId, pamphlet?.imageUrlExpiresAt]);
 
+  /** 이 부스가 어느 구역에 속하는지. 폴리곤 구역이 먼저고, 없으면 묶어 둔 구역을 본다. */
+  function parentZoneNameOf(booth: LocalBoothPin) {
+    const shapeId = shapeIdByBoothId.get(booth.id);
+    if (shapeId) return polygonShapes.find((shape) => shape.id === shapeId)?.name ?? null;
+    const zoneId = zoneIdByBoothId.get(booth.id);
+    return zones.find((zone) => zone.id === zoneId)?.name ?? null;
+  }
+
   function renderBoothRow(booth: LocalBoothPin, { indent }: { indent: boolean }) {
     return (
       <div
@@ -2033,11 +2416,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           setDragBoothId(null);
           setDraggableRowId(null);
         }}
-        className={`flex items-center gap-2 rounded-md py-2 pl-1 transition-[background-color,opacity] duration-150 ${
-          indent ? "pl-7" : ""
+        /*
+          고른 행의 배경은 패널 좌우 여백(p-6)까지 넓힌다. 안쪽으로 물러나 있으면 어디까지가
+          골라진 것인지 눈으로 잘라 읽어야 한다. 음수 마진으로 여백을 되물리고 그만큼 다시
+          패딩을 준다 — 들여쓴 행은 24px(패널 여백) + 28px(들여쓰기)라 pl-13이 된다.
+        */
+        className={`-mx-6 flex items-center gap-2 rounded-md py-2 pr-6 transition-[background-color,opacity] duration-150 ${
+          indent ? "pl-13" : "pl-7"
         } ${dragBoothId === booth.id ? "opacity-40" : ""} ${
           dragBoothId && dragBoothId !== booth.id ? "hover:bg-zinc-100" : ""
-        }`}
+        } ${checkedIds.has(booth.id) ? "bg-primary/10" : ""}`}
       >
         {/* 구역 멤버는 서버가 부스만 받는다. 시설을 섞으면 저장 전체가 거부되므로 선택을 막는다. */}
         <span
@@ -2051,9 +2439,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             className="border-zinc-200"
           />
         </span>
+        {/* 체크박스를 정확히 짚지 않아도 이름을 누르면 골라진다. Shift면 선택에 더한다. */}
         <button
           type="button"
-          onClick={() => {
+          onClick={(event) => {
+            if (event.shiftKey) {
+              toggleChecked(booth.id);
+              return;
+            }
             setSelectedZoneId(zoneIdByBoothId.get(booth.id) ?? null);
             setCheckedIds(new Set([booth.id]));
             setEditingBoothId(booth.id);
@@ -2073,6 +2466,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           {booth.uncertain ? (
             <span className="body-caption shrink-0 rounded-full bg-secondary-600/10 px-1.5 text-secondary-600">
               검수
+            </span>
+          ) : null}
+          {/* 구역 아래에 접어 놓은 행은 이미 소속이 보인다. 평면으로 놓인 행에만 붙인다. */}
+          {!indent && parentZoneNameOf(booth) ? (
+            <span className="body-caption ml-auto max-w-24 shrink-0 truncate rounded-full bg-primary/10 px-1.5 text-primary">
+              {parentZoneNameOf(booth)}
             </span>
           ) : null}
         </button>
@@ -2157,13 +2556,25 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       ) : (
         <div
           ref={mapWrapperRef}
-          className={cn("absolute inset-0 isolate", drawTool !== "select" && "cursor-crosshair")}
+          onPointerDown={handleMapPointerDown}
+          className={cn(
+            "absolute inset-0 isolate",
+            drawTool !== "select" && "cursor-crosshair",
+            // Shift를 누르면 빈 지도를 끌어 범위로 고를 수 있다는 것을 커서로 알린다.
+            drawTool === "select" && shiftHeld && !panOverride && "cursor-crosshair",
+            drawTool === "marquee" && "cursor-crosshair",
+          )}
         >
           <KakaoMap
             center={mapCenter}
             isPanto={false}
-            level={2 + zoomStep}
-            scrollwheel={false}
+            level={mapLevel}
+            /*
+              휠로 바로 확대·축소한다. 예전에는 이 값을 false로 두고 Ctrl+휠만 직접 받았는데,
+              그냥 휠을 굴리면 아무 일도 일어나지 않아 지도가 멈춘 것처럼 보였다.
+              끄는 동안에는 setZoomable(false)로 따로 잠근다 — 좌표 기준이 바뀌면 끌던 것이 튄다.
+            */
+            scrollwheel
             /*
               도형 그리기를 더블클릭으로 끝내는데, 카카오 기본 더블클릭 확대가 같이
               걸려 그릴 때마다 지도가 한 단계씩 확대됐다. 확대는 오른쪽 아래 버튼으로
@@ -2174,9 +2585,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             onCreate={(map) => {
               kakaoMapRef.current = map;
               setKakaoMap(map);
-              map.setMinLevel(1);
-              map.setMaxLevel(8);
+              map.setMinLevel(MIN_MAP_LEVEL);
+              map.setMaxLevel(MAX_MAP_LEVEL);
             }}
+            /*
+              휠로 확대하면 카카오가 제 확대 단계를 직접 바꾼다. 그 값을 되받아 두지
+              않으면 확대/축소 버튼이 화면과 어긋난 단계에서 다시 시작해 지도가 튄다.
+            */
+            onZoomChanged={(map) => setMapLevel(map.getLevel())}
             onClick={(_target, mouseEvent) => {
               if (editingLocked || panOverride || queuePlanBusy || queueSaveMutation.isPending)
                 return;
@@ -2304,6 +2720,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   ) : null,
                 )
               : null}
+            {marquee ? (
+              <Rectangle
+                bounds={{
+                  sw: { lat: marquee.south, lng: marquee.west },
+                  ne: { lat: marquee.north, lng: marquee.east },
+                }}
+                fillColor="#236cf6"
+                fillOpacity={0.08}
+                strokeColor="#236cf6"
+                strokeWeight={2}
+                strokeStyle="shortdash"
+                zIndex={40}
+              />
+            ) : null}
             {siteBoundary && siteBoundary.length >= 3 ? (
               <Polygon
                 path={siteBoundary}
@@ -2365,14 +2795,25 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 );
               })}
             {shapes.map((shape) => {
-              const selected = shape.id === selectedShapeId;
+              const checked = checkedIds.has(shape.id);
+              const selected = shape.id === selectedShapeId || checked;
               const select = () => {
+                // 끌어서 옮긴 직후의 click은 선택이 아니다.
+                if (movedRef.current) {
+                  movedRef.current = false;
+                  return;
+                }
+                if (shiftHeld) {
+                  toggleChecked(shape.id);
+                  return;
+                }
+                setCheckedIds(new Set([shape.id]));
                 setSelectedShapeId(shape.id);
                 setEditingBoothId(null);
               };
               const path = shapePointsOf(shape);
               // 다른 도형을 고른 동안에는 흐리게 두어 지금 편집 중인 도형이 눈에 띄게 한다.
-              const dimmed = selectedShapeId !== null && !selected;
+              const dimmed = (selectedShapeId !== null || checkedIds.size > 0) && !selected;
               // 고른 도형은 흰 테두리를 한 겹 깔아 지도 색과 겹쳐도 윤곽이 보이게 한다.
               const halo = selected ? (
                 <Polyline
@@ -2516,6 +2957,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             ))}
             {visibleBooths.map((booth) => {
               const isSelected = booth.id === selectedId;
+              // 여럿을 골랐을 때의 표시. 편집 중인 하나(isSelected)와 구분해 파란 테를 두른다.
+              const isChecked = checkedIds.has(booth.id);
               return (
                 <CustomOverlayMap
                   key={booth.id}
@@ -2540,14 +2983,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     }}
                     onPointerLeave={() => {
                       pinHoveredRef.current = false;
-                      if (!pinDraggingRef.current) kakaoMapRef.current?.setDraggable(true);
+                      if (!movingRef.current) kakaoMapRef.current?.setDraggable(true);
                     }}
-                    onPointerDown={(event) => startPinDrag(booth, event)}
+                    onPointerDown={(event) => {
+                      // Shift는 «선택에 더하기»라 끌기로 보지 않는다.
+                      if (event.shiftKey) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      startObjectDrag(moveTargetsOf(booth.id), event);
+                    }}
                     onClick={(event) => {
                       event.stopPropagation();
                       // 끌어서 옮긴 직후의 click은 선택이 아니다.
-                      if (pinDraggedRef.current) {
-                        pinDraggedRef.current = false;
+                      if (movedRef.current) {
+                        movedRef.current = false;
                         return;
                       }
                       if (isPanModifier(event)) {
@@ -2573,7 +3022,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       "relative flex size-7 touch-none items-center justify-center",
                       editingLocked || drawTool === "pin"
                         ? "cursor-default"
-                        : draggingPin?.id === booth.id
+                        : moveDraft?.ids.has(booth.id)
                           ? "cursor-grabbing"
                           : "cursor-grab",
                     )}
@@ -2584,6 +3033,13 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       무엇인지 알 수 없던 것이 문제였지 부스 자체는 아니었다.
                       AI가 찾아 검수가 필요한 핀은 유형과 상관없이 색으로 구분한다.
                     */}
+                    {/*
+                      고른 것을 한눈에 알아야 여러 개를 함께 옮길 수 있다. 점 뒤에 파란 테를
+                      한 겹 깔아, 편집 중인 하나(주황 후광)와 겹쳐 있어도 둘 다 보이게 한다.
+                    */}
+                    {isChecked ? (
+                      <span className="absolute size-6 rounded-full border-2 border-primary bg-primary/15" />
+                    ) : null}
                     {booth.nodeType === "BOOTH" ? (
                       <>
                         {isSelected ? (
@@ -2616,7 +3072,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               그리기 도구를 켜면 말풍선은 접는다. 대기줄처럼 부스를 고른 뒤 쓰는 도구는
               선택을 그대로 둬야 하는데, 말풍선까지 떠 있으면 그릴 자리를 가린다.
             */}
-            {selectedBooth && !editingLocked && drawTool === "select" ? (
+            {selectedBooth && !editingLocked && drawTool === "select" && checkedIds.size <= 1 ? (
               <CustomOverlayMap
                 position={pinPositionOf(selectedBooth)}
                 {...POPOVER_ANCHORS}
@@ -2832,6 +3288,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         ref={boothListRef}
         className={cn(
           "absolute top-44 bottom-4 left-4 w-[calc(100%-80px)] lg:top-10 lg:bottom-10 lg:left-8 lg:block lg:w-72",
+          // 하단 선택 바(72px)가 떠 있으면 목록이 그 아래로 깔려 마지막 행이 가려진다.
+          selectionBarOpen && "bottom-[88px] lg:bottom-[88px]",
           !boothListOpen && "hidden",
         )}
       >
@@ -2871,7 +3329,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </div>
 
           <div className="flex flex-col gap-1">
-            {standaloneZones.map((zone) => {
+            {standaloneZones.map((zone, index) => {
               const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
               const expanded = expandedZoneIds.has(zone.id);
               return (
@@ -2882,6 +3340,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   expanded={expanded}
                   checked={selectedZoneId === zone.id}
                   selected={selectedZoneId === zone.id}
+                  onMoveUp={() => moveZoneOrder(zone.id, -1)}
+                  onMoveDown={() => moveZoneOrder(zone.id, 1)}
+                  moveUpDisabled={editingLocked || index === 0}
+                  moveDownDisabled={editingLocked || index === standaloneZones.length - 1}
                   onToggleExpanded={() => toggleZoneExpanded(zone.id)}
                   onCheckedChange={(checked) =>
                     checked ? selectZone(zone.id) : setSelectedZoneId(null)
@@ -2898,7 +3360,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
           {polygonShapes.length > 0 ? (
             <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
-              {polygonShapes.map((shape) => {
+              {polygonShapes.map((shape, index) => {
                 const members = booths.filter(
                   (booth) => shapeIdByBoothId.get(booth.id) === shape.id,
                 );
@@ -2908,8 +3370,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     name={shape.name}
                     count={members.length}
                     expanded={expandedZoneIds.has(shape.id)}
-                    checked={selectedShapeId === shape.id}
-                    selected={selectedShapeId === shape.id}
+                    checked={selectedShapeId === shape.id || checkedIds.has(shape.id)}
+                    selected={selectedShapeId === shape.id || checkedIds.has(shape.id)}
+                    onMoveUp={() => moveZoneOrder(shape.id, -1)}
+                    onMoveDown={() => moveZoneOrder(shape.id, 1)}
+                    moveUpDisabled={editingLocked || index === 0}
+                    moveDownDisabled={editingLocked || index === polygonShapes.length - 1}
                     onToggleExpanded={() => toggleZoneExpanded(shape.id)}
                     onCheckedChange={(checked) => {
                       setEditingBoothId(null);
@@ -2960,17 +3426,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 </button>
               ))}
             </div>
-          ) : null}
-
-          {checkedIds.size >= 2 ? (
-            <Button
-              type="button"
-              variant="primary"
-              className="mt-auto w-full"
-              onClick={() => setGroupPopoverOpen(true)}
-            >
-              그룹화
-            </Button>
           ) : null}
         </MapSidePanel>
       </div>
@@ -3112,9 +3567,31 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       <div
         ref={mapToolsRef}
         data-map-tools
-        className="absolute right-4 bottom-4 flex flex-col items-center gap-5 lg:right-8 lg:bottom-10"
+        className={cn(
+          "absolute right-4 bottom-4 flex flex-col items-center gap-5 lg:right-8 lg:bottom-10",
+          selectionBarOpen && "bottom-[88px] lg:bottom-[88px]",
+        )}
       >
         <div className="flex flex-col gap-1">
+          <span
+            className="flex"
+            title={editLockReason ?? "범위 선택 — 지도를 끌어 안에 든 부스·도형을 모두 고릅니다"}
+          >
+            <IconButton
+              icon={<GroupIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
+              aria-label="범위 선택"
+              aria-pressed={drawTool === "marquee"}
+              disabled={editingLocked}
+              className={cn("text-zinc-950", drawTool === "marquee" && "ring-2 ring-primary")}
+              onClick={() => {
+                setPinTypeMenuOpen(false);
+                setDraftPoints([]);
+                setDrawTool((tool) => (tool === "marquee" ? "select" : "marquee"));
+              }}
+            />
+          </span>
           <IconButton
             icon={<RadiobuttonIcon />}
             size="lg"
@@ -3230,8 +3707,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           </span>
         </div>
         <MapZoomControls
-          onZoomIn={() => setZoomStep((step) => Math.max(step - 1, -2))}
-          onZoomOut={() => setZoomStep((step) => Math.min(step + 1, 4))}
+          onZoomIn={() => setMapLevel((level) => Math.max(level - 1, MIN_MAP_LEVEL))}
+          onZoomOut={() => setMapLevel((level) => Math.min(level + 1, MAX_MAP_LEVEL))}
+          zoomInDisabled={mapLevel <= MIN_MAP_LEVEL}
+          zoomOutDisabled={mapLevel >= MAX_MAP_LEVEL}
         />
       </div>
 
@@ -3548,6 +4027,32 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         </div>
       ) : null}
 
+      {/*
+        고른 것이 있으면 화면 맨 아래에 액션 바를 띄운다. 예전에는 「그룹화」가 왼쪽 부스
+        목록 안에 있어, 목록을 접어 둔 좁은 화면에서는 지도에서 골라 놓고도 묶을 방법이
+        보이지 않았다.
+      */}
+      {selectionBarOpen ? (
+        <div data-map-tools>
+          <BoothSelectionBar
+            boothCount={checkedBooths.length}
+            shapeCount={checkedShapes.length}
+            groupableCount={groupableBooths.length}
+            zones={zoneOptions}
+            canUngroup={checkedInAnyZone}
+            onGroup={() => setGroupPopoverOpen(true)}
+            onAssignZone={assignCheckedToZone}
+            onUngroup={ungroupChecked}
+            onLineUp={lineUpChecked}
+            onClear={() => {
+              setCheckedIds(new Set());
+              setEditingBoothId(null);
+              setSelectedShapeId(null);
+            }}
+          />
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={clearQueuePathOpen}
         onOpenChange={setClearQueuePathOpen}
@@ -3620,7 +4125,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         open={unpublishDialogOpen}
         onOpenChange={setUnpublishDialogOpen}
         title="공개를 해제할까요?"
-        description="방문객 앱 «부스지도»에서 이 부스맵이 더 이상 보이지 않습니다. 그려 둔 부스와 구역, 부지 경계와 팜플렛은 지워지지 않고 그대로 남습니다."
+        description="방문객 앱에서 숨겨집니다. 그려 둔 내용은 그대로 남습니다."
         confirmLabel="공개 해제"
         confirmVariant="destructive"
         confirmPending={unpublishMutation.isPending}

@@ -7,6 +7,7 @@ import { CongestionText } from "@/components/ui/CongestionBadge";
 import { IconButton } from "@/components/ui/IconButton";
 import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
+import { fitBoothBounds } from "@/features/boothmap/fitBoothBounds";
 import { PamphletOverlay } from "@/features/boothmap/PamphletOverlay";
 import { QueuePathLayer, type QueuePathItem } from "@/features/boothmap/QueuePathLayer";
 import { nodeTypeIcon, nodeTypeLabel } from "@/features/boothmap/nodeTypeIcons";
@@ -88,6 +89,9 @@ export function BoothMapView({
   pamphlet = null,
   boundary = null,
   minLevel = 2,
+  fitPoints,
+  fitKey = null,
+  onFitted,
   onZoomByWheel,
 }: {
   booths: Booth[];
@@ -108,6 +112,19 @@ export function BoothMapView({
    * 화면이 좁아 부스가 더 크게 보여야 하는 스태프 지도만 1까지 열어 준다.
    */
   minLevel?: number;
+  /** 이 좌표들이 모두 화면에 들어오도록 지도 범위를 맞춘다. */
+  fitPoints?: { lat: number; lng: number }[];
+  /**
+   * 범위를 다시 맞출 시점을 알리는 키(예: 고른 구역 id). 이 값이 바뀔 때만 맞춘다.
+   * 좌표 배열은 폴링 때마다 새로 만들어지므로 배열 자체를 신호로 쓸 수 없다.
+   */
+  fitKey?: string | null;
+  /**
+   * 범위를 맞춘 뒤의 지도 레벨. 확대·축소 버튼은 `level = 2 + zoomStep`으로 레벨을
+   * 계산하므로, 범위를 맞춰 레벨이 달라졌으면 부르는 쪽이 zoomStep을 다시 맞춰야
+   * 다음 버튼 한 번이 엉뚱한 배율로 튀지 않는다.
+   */
+  onFitted?: (level: number) => void;
   onZoomByWheel?: (direction: 1 | -1) => void;
 }) {
   const [loading, error] = useKakaoMapLoader();
@@ -125,6 +142,18 @@ export function BoothMapView({
     if (!kakaoMap || selectedLat === undefined || selectedLng === undefined) return;
     kakaoMap.panTo(new kakao.maps.LatLng(selectedLat, selectedLng));
   }, [kakaoMap, selectedLat, selectedLng]);
+
+  useEffect(() => {
+    if (!kakaoMap || !fitKey) return;
+    const points = fitPoints ?? [];
+    if (!fitBoothBounds(kakaoMap, points) && points.length === 1) {
+      // 부스가 하나뿐인 구역은 범위(두 점)를 만들 수 없어 배율은 두고 그 자리로만 옮긴다.
+      kakaoMap.panTo(new kakao.maps.LatLng(points[0].lat, points[0].lng));
+    }
+    onFitted?.(kakaoMap.getLevel());
+    // fitPoints는 다시 읽을 때마다 새 배열이라, 다시 맞출 시점은 fitKey로만 정한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kakaoMap, fitKey]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;

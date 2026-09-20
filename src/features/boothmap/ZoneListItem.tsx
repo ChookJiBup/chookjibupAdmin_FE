@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   CornersIcon,
@@ -18,6 +20,11 @@ export interface ZoneListItemProps {
   onToggleExpanded: () => void;
   onCheckedChange: (checked: boolean) => void;
   onSelect: () => void;
+  /** 구역 순서를 한 칸 올린다. 이 순서가 저장 때 sortOrder가 되고 스태프 앱 목록 순서가 된다. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  moveUpDisabled?: boolean;
+  moveDownDisabled?: boolean;
   children?: ReactNode;
 }
 
@@ -31,6 +38,10 @@ export function ZoneListItem({
   onToggleExpanded,
   onCheckedChange,
   onSelect,
+  onMoveUp,
+  onMoveDown,
+  moveUpDisabled = false,
+  moveDownDisabled = false,
   children,
 }: ZoneListItemProps) {
   return (
@@ -65,13 +76,41 @@ export function ZoneListItem({
           <span className="body-regular-bold truncate text-zinc-950">{name}</span>
           <span className="body-regular-bold text-primary">{count}</span>
         </button>
-        <IconButton
-          variant="ghost"
-          size="sm"
-          icon={<HamburgerMenuIcon />}
-          aria-label={`${name} 메뉴`}
-          onClick={onSelect}
-        />
+        {onMoveUp ? (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={<ArrowUpIcon />}
+            aria-label={`${name} 순서 올리기`}
+            title="순서 올리기"
+            disabled={moveUpDisabled}
+            onClick={onMoveUp}
+          />
+        ) : null}
+        {onMoveDown ? (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={<ArrowDownIcon />}
+            aria-label={`${name} 순서 내리기`}
+            title="순서 내리기"
+            disabled={moveDownDisabled}
+            onClick={onMoveDown}
+          />
+        ) : null}
+        {/*
+          순서 버튼이 붙으면 한 줄에 버튼이 네 개가 되어 구역 이름이 «로스...»로 잘린다.
+          햄버거는 이름을 누르는 것과 같은 동작이라 그때는 뺀다.
+        */}
+        {onMoveUp || onMoveDown ? null : (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={<HamburgerMenuIcon />}
+            aria-label={`${name} 메뉴`}
+            onClick={onSelect}
+          />
+        )}
       </div>
       {expanded ? children : null}
     </div>
