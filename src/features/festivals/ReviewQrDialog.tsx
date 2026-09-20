@@ -45,7 +45,7 @@ export function ReviewQrDialog({ festivalPublicId, festivalName }: ReviewQrDialo
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 flex max-h-[calc(100dvh-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[calc(100dvh-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="heading-small text-zinc-950">리뷰 QR코드</Dialog.Title>
