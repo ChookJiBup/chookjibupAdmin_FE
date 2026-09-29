@@ -37,7 +37,7 @@ export function PasswordConfirmDialog({
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-5 sm:p-8">
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-5 sm:p-8">
           <div className="flex h-14 items-center justify-end">
             <Dialog.Close asChild>
               <button type="button" aria-label="닫기" className="text-zinc-950" disabled={pending}>

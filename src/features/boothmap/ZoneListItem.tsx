@@ -59,7 +59,7 @@ export function ZoneListItem({
         onDragEnd={reorder?.onDragEnd}
         className={cn(
           // 고른 행의 배경은 부스 행과 같이 패널 좌우 여백까지 넓힌다.
-          "-mx-6 flex items-center gap-2 border-b border-zinc-200 px-6 pt-4 pb-3 transition-[background-color,opacity] duration-150",
+          "relative -mx-6 flex items-center gap-2 px-6 pt-4 pb-3 transition-[background-color,opacity] duration-150 after:pointer-events-none after:absolute after:right-6 after:bottom-0 after:left-6 after:border-b after:border-zinc-200",
           selected && "bg-primary/10",
           reorder?.dragging && "opacity-40",
         )}

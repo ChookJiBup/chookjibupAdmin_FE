@@ -223,22 +223,27 @@ test("한 날도 입력되지 않았으면 입력을 권하는 말풍선이 뜬�
   await expect(dialog.getByLabel("3일차")).toBeVisible();
 });
 
-test("다 채우기 전에는 닫을 수 없고, 채우면 바뀐 날만 저장하고 사라진다", async ({ page }) => {
+test("바깥 클릭으로 닫고 다시 열어 채우면 바뀐 날만 저장한다", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const saved = await mockConsole(page, { [completedId]: { counts: [null, null, 3000] } }, [
     completedFestival,
   ]);
   await page.goto("/console");
 
-  const dialog = page.getByRole("dialog");
-  const submit = dialog.getByRole("button", { name: "입력하기", exact: true });
+  let dialog = page.getByRole("dialog");
+  let submit = dialog.getByRole("button", { name: "입력하기", exact: true });
   await expect(submit).toBeDisabled();
 
-  // 닫기(X)는 없고, 딤 클릭과 Esc로도 빠져나갈 수 없다.
+  // 닫기(X)는 없지만 바깥 클릭으로 닫을 수 있다. 저장은 일어나지 않는다.
   await expect(dialog.getByRole("button", { name: "닫기" })).toHaveCount(0);
   await page.mouse.click(10, 500);
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  expect(saved).toHaveLength(0);
+
+  // 저장하지 않은 값은 다음 진입 때 다시 입력한다.
+  await page.reload();
+  dialog = page.getByRole("dialog");
+  submit = dialog.getByRole("button", { name: "입력하기", exact: true });
   await expect(dialog).toBeVisible();
 
   // 한 칸만 채워도 아직 못 넘어간다.

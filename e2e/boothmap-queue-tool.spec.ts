@@ -262,315 +262,89 @@ async function mockBoothMap(
   };
 }
 
-async function openPlan(page: Page) {
+test("직접 설정은 지도에서 경로를 찍는 화면을 열고 좌표 입력은 표시하지 않는다", async ({
+  page,
+}) => {
+  const calls = await mockBoothMap(page, { existingPlan: true });
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
+  await expect(actions.getByRole("button", { name: "AI 추천" })).toBeVisible();
+  await actions.getByRole("button", { name: "줄 직접 설정" }).click();
+  await expect(page.getByText("지도에서 줄이 꺾이는 지점을 순서대로 찍어 주세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "마지막 점 지우기" })).toBeDisabled();
+  await expect(page.getByText("찍은 지점 0개")).toBeVisible();
+  await expect(page.getByRole("button", { name: "대기줄 저장" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "좌표 직접 입력" })).toHaveCount(0);
+  expect(calls.recommendations).toBe(0);
+});
+
+test("AI 추천 버튼은 추천 요청을 바로 시작한다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { boundary: true });
   await page.goto(boothmapPath);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
   await page
     .getByRole("region", { name: "김밥천국 줄 관리" })
-    .getByRole("button", { name: /줄 직접 설정|사전 줄 수정/ })
+    .getByRole("button", { name: "AI 추천" })
     .click();
-}
-
-test("사전 경로 삭제는 확인 후 서버 DELETE를 호출하고 현재 줄 기록을 막는다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { existingPlan: true });
-  await openPlan(page);
-  await page.getByRole("button", { name: "사전 경로 삭제", exact: true }).click();
-  expect(calls.planDeletes).toHaveLength(0);
-  await page.getByRole("dialog").getByRole("button", { name: "경로 삭제", exact: true }).click();
-  await expect(page.getByText("사전 줄 경로를 삭제했습니다.")).toBeVisible();
-  expect(calls.planDeletes[0]).toMatchObject({ expectedRevision: 4, expectedNodeVersion: 3 });
-  await expect(
-    page
-      .getByRole("region", { name: "김밥천국 줄 관리" })
-      .getByRole("button", { name: "현재 줄 기록" }),
-  ).toBeDisabled();
-  await page.getByRole("button", { name: "줄 직접 설정", exact: true }).click();
-  await page.getByRole("button", { name: "좌표 직접 입력" }).click();
-  await expect(page.getByRole("spinbutton", { name: "지점 1 위도", exact: true })).toHaveValue(
-    "35.1495",
-  );
+  await expect.poll(() => calls.recommendations).toBe(1);
 });
 
-test("현재 줄 수정은 저장된 경로의 지점을 변경해 관측 리비전과 함께 저장한다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { existingCurrent: true, existingPlan: true });
-  await page.goto(boothmapPath);
-  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  await page.getByRole("button", { name: "현재 줄 수정", exact: true }).click();
-  await page.getByRole("button", { name: "좌표 직접 입력" }).click();
-  await page.getByRole("spinbutton", { name: "지점 1 위도", exact: true }).fill("35.1498");
-  await page.getByRole("spinbutton", { name: "지점 1 경도", exact: true }).fill("126.925");
-  await expect(page.getByRole("spinbutton", { name: "지점 1 경도", exact: true })).toHaveValue(
-    "126.9195",
-  );
-  await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
-  await expect(page.getByRole("button", { name: "대기줄 저장", exact: true })).toHaveCount(0);
-  expect(calls.queueWrites[0]).toMatchObject({
-    expectedRevision: 0,
-    tailLatitude: 35.1498,
-    tailLongitude: 126.9195,
-    planRevision: 4,
-  });
-});
-
-test("저장된 사전 줄을 자동으로 불러와 지점을 이동·추가·삭제하고 최신 리비전으로 저장한다", async ({
-  page,
-}) => {
-  const calls = await mockBoothMap(page, { existingPlan: true });
-  await page.goto(boothmapPath);
-  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  await page.getByRole("button", { name: "사전 줄 수정", exact: true }).click();
-  await page.getByRole("button", { name: "좌표 직접 입력" }).click();
-  await expect(page.getByRole("spinbutton", { name: "지점 2 위도", exact: true })).toHaveValue(
-    "35.1499",
-  );
-  await expect(page.getByRole("spinbutton", { name: "지점 1 위도", exact: true })).toBeDisabled();
-  await page.getByRole("spinbutton", { name: "지점 2 위도", exact: true }).fill("");
-  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeDisabled();
-  await page.getByRole("spinbutton", { name: "지점 2 위도", exact: true }).fill("35.1498");
-  await page.getByRole("button", { name: "지점 1 뒤에 추가", exact: true }).click();
-  await expect(page.getByRole("spinbutton", { name: "지점 3 위도", exact: true })).toHaveValue(
-    "35.1498",
-  );
-  await page.getByRole("button", { name: "지점 2 삭제", exact: true }).click();
-  await page.getByRole("button", { name: "사전 줄 확정" }).click();
-  await expect(page.getByText("사전 줄을 설정했습니다.", { exact: false })).toBeVisible();
-  expect(calls.planWrites[0]).toMatchObject({
-    expectedRevision: 4,
-    expectedNodeVersion: 3,
-    path: [
-      { lat: 35.1495, lng: 126.9195 },
-      { lat: 35.1498, lng: 126.9195 },
-    ],
-  });
-});
-
-test("AI 서버 차단 이유를 안내하고 수동 줄 편집은 유지한다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { aiUnavailable: true, boundary: true });
-  await openPlan(page);
-  await expect(page.getByRole("status")).toContainText("APP_OPENAI_API_KEY");
-  await expect(page.getByRole("button", { name: "AI 추천", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
-  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeEnabled();
-  expect(calls.recommendations).toBe(0);
-});
-
-test("부스 선택에 사전 줄·현재 줄 버튼을 표시하고 사전 줄 설정에서 AI 추천을 받는다", async ({
-  page,
-}) => {
+test("AI 추천 결과는 저장 전 미리보기로 표시한다", async ({ page }) => {
   const calls = await mockBoothMap(page, { boundary: true });
   await page.goto(boothmapPath);
-  await expect(page.getByRole("region", { name: "김밥천국 줄 관리" })).toHaveCount(0);
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
-  await expect(actions.getByRole("button", { name: "줄 직접 설정" })).toBeEnabled();
-  await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeDisabled();
-  await actions.getByRole("button", { name: "줄 직접 설정" }).click();
-  expect(calls.recommendations).toBe(0);
-  await page.getByRole("button", { name: "AI 추천", exact: true }).click();
-  await expect(page.getByText("추천 이유: 출입구를 피해 배치했습니다.")).toBeVisible();
-  expect(calls.planWrites).toHaveLength(0);
-});
-
-test("현재 대기열이 없어도 승인된 부스의 사전 줄은 확정할 수 있다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { noQueue: true });
-  await page.goto(boothmapPath);
-  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
-  await expect(actions.getByRole("button", { name: "현재 줄 기록" })).toBeDisabled();
-  await actions.getByRole("button", { name: "줄 직접 설정" }).click();
-  await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
-  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeEnabled();
-  await page.getByRole("button", { name: "사전 줄 확정" }).click();
-  await expect(page.getByText("사전 줄을 설정했습니다.", { exact: false })).toBeVisible();
-  expect(calls.planWrites).toHaveLength(1);
-  expect(calls.queueWrites).toHaveLength(0);
-});
-
-test("미승인 부스는 줄 설정이 불가능한 이유를 선택 화면에서 안내한다", async ({ page }) => {
-  await mockBoothMap(page, { noQueue: true, unapproved: true });
-  await page.goto(boothmapPath);
-  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
-  await expect(actions.getByRole("button", { name: "줄 직접 설정" })).toBeDisabled();
-  await expect(
-    actions.getByText("부스를 지도에 저장하고 운영 부스로 승인해 주세요."),
-  ).toBeVisible();
-});
-
-test("도면 후보는 사전 줄 확정으로만 저장하고 Enter는 실제 관측을 쓰지 않는다", async ({
-  page,
-}) => {
-  const calls = await mockBoothMap(page);
-  await openPlan(page);
-  await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
-  await page.keyboard.press("Enter");
-  expect(calls.queueWrites).toHaveLength(0);
-  expect(calls.planWrites).toHaveLength(0);
-  await page.getByRole("button", { name: "사전 줄 확정" }).click();
-  await expect(page.getByText("사전 줄을 설정했습니다.", { exact: false })).toBeVisible();
-  expect(calls.planWrites[0]).toMatchObject({
-    expectedRevision: 0,
-    expectedNodeVersion: 3,
-    metersPerPerson: 1,
-    servedPersonsPerMinute: 2,
-    sourceNodeId: lineNodeId,
-  });
-  expect(calls.queueWrites).toHaveLength(0);
-});
-
-test("AI 추천은 미리보기와 이유를 보여주고 별도 확정한다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { boundary: true });
-  await openPlan(page);
-  await page.getByRole("button", { name: "AI 추천", exact: true }).click();
-  await expect(page.getByText("추천 이유: 출입구를 피해 배치했습니다.")).toBeVisible();
-  await expect(page.getByText("현장 통행 여유를 확인하세요.")).toBeVisible();
-  expect(calls.planWrites).toHaveLength(0);
-  await page.screenshot({ path: "test-results/queue-plan-preview.png", fullPage: true });
-  await page.getByRole("button", { name: "사전 줄 확정" }).click();
-  await expect(page.getByText("사전 줄을 설정했습니다.", { exact: false })).toBeVisible();
-  expect(calls.recommendations).toBe(1);
-  expect(calls.planWrites[0].sourceNodeId).toBeNull();
-});
-
-test("경계 없는 AI와 운영자 사전 수정을 차단한다", async ({ page }) => {
-  await mockBoothMap(page);
-  await openPlan(page);
-  await expect(page.getByRole("button", { name: "AI 추천", exact: true })).toBeDisabled();
   await page
-    .getByRole("region", { name: "사전 줄 설정" })
-    .getByRole("button", { name: "그만두기", exact: true })
+    .getByRole("region", { name: "김밥천국 줄 관리" })
+    .getByRole("button", { name: "AI 추천" })
     .click();
-  await page.unrouteAll();
-  await mockBoothMap(page, { role: "SUB_ADMIN" });
-  await page.reload();
-  await expect(page).toHaveURL(new RegExp(`/festivals/${festivalId}/dashboard$`));
-  await expect(page.getByRole("region", { name: "사전 줄 설정" })).toHaveCount(0);
-});
-
-test("사전 저장 충돌은 재확정을 막고 AI 실패는 실제 관측에 영향이 없다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { conflict: true });
-  await openPlan(page);
-  await page.getByRole("button", { name: "도면 대기선 (AI 인식)" }).click();
-  await page.getByRole("button", { name: "사전 줄 확정" }).click();
-  await expect(page.getByRole("region", { name: "사전 줄 설정" }).getByRole("alert")).toContainText(
-    "다른 수정",
-  );
-  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeDisabled();
-  expect(calls.queueWrites).toHaveLength(0);
-});
-
-test("AI 오류를 표시하며 미확정 경로를 저장하지 않는다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { boundary: true, aiFailure: true });
-  await openPlan(page);
-  await page.getByRole("button", { name: "AI 추천", exact: true }).click();
-  await expect(page.getByRole("region", { name: "사전 줄 설정" }).getByRole("alert")).toBeVisible();
-  expect(calls.planWrites).toHaveLength(0);
-  expect(calls.queueWrites).toHaveLength(0);
-});
-
-test("지도 버전이 없으면 사전 줄을 확정하지 않는다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { missingVersion: true });
-  await openPlan(page);
-  await expect(
-    page.getByText("지도 버전이 없습니다. BE 업데이트 후 지도를 다시 불러와 주세요."),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "사전 줄 확정" })).toBeDisabled();
+  const panel = page.getByRole("region", { name: "사전 줄 설정" });
+  await expect(panel.getByText("총 길이")).toBeVisible();
+  await expect(panel.getByText("44m")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "대기줄 저장" })).toBeEnabled();
   expect(calls.planWrites).toHaveLength(0);
 });
 
-test("현재 경로는 관리자 PATCH와 관측 리비전으로 저장하며 시간 입력이 필요 없다", async ({
-  page,
-}) => {
-  const calls = await mockBoothMap(page, { existingPlan: true });
-  await page.goto(boothmapPath);
-  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  await page.getByRole("button", { name: "대기줄 추가" }).click();
-  await page.getByRole("button", { name: "참고선 가져오기" }).click();
-  await page.getByRole("button", { name: "도면 대기선 점 2개" }).click();
-  await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
-  await expect(page.getByText("현재 대기줄과 자동 대기시간이 갱신되었습니다.")).toBeVisible();
-  expect(calls.queueWrites).toHaveLength(1);
-  expect(calls.queueWrites[0]).toMatchObject({
-    expectedRevision: 0,
-    tailLatitude: 35.1499,
-    tailLongitude: 126.9195,
-  });
-  expect(calls.queueWrites[0]).not.toHaveProperty("path");
-  expect(calls.queueWrites[0]).not.toHaveProperty("queueTailMeters");
-  expect(calls.planWrites).toHaveLength(0);
-});
-
-test("줄끝 모드에서 참고선을 가져와도 경로를 생략하고 마지막 지점만 전송한다", async ({ page }) => {
-  const calls = await mockBoothMap(page, { existingPlan: true });
-  await page.goto(boothmapPath);
-  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-  await page.getByRole("button", { name: "대기줄 추가" }).click();
-
-  await page.getByRole("button", { name: "참고선 가져오기" }).click();
-  await page.getByRole("button", { name: "도면 대기선 점 2개" }).click();
-  await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
-  await expect(page.getByText("현재 대기줄과 자동 대기시간이 갱신되었습니다.")).toBeVisible();
-  expect(calls.queueWrites[0]).toMatchObject({
-    tailLatitude: 35.1499,
-    tailLongitude: 126.9195,
-    expectedRevision: 0,
-  });
-  expect(calls.queueWrites[0]).not.toHaveProperty("path");
-});
-
-test("설정 조회 중 입력을 잠가 늦은 응답이 사용자 입력을 덮어쓰지 않는다", async ({ page }) => {
-  let release!: () => void;
-  const planDelay = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await mockBoothMap(page, { planDelay });
-  try {
-    await openPlan(page);
-    await expect(page.getByLabel("대기자 간격(m)")).toBeDisabled();
-    await expect(page.getByLabel("분당 처리 인원")).toBeDisabled();
-    release();
-    await expect(page.getByLabel("대기자 간격(m)")).toBeEnabled();
-  } finally {
-    release();
-  }
-});
-
-test("늦게 도착한 현재 줄 저장 응답은 새 사전 설정 패널을 닫지 않는다", async ({ page }) => {
-  let release!: () => void;
-  const queueDelay = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const calls = await mockBoothMap(page, { queueDelay, existingPlan: true });
-  try {
-    await page.goto(boothmapPath);
-    await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
-    await page.getByRole("button", { name: "대기줄 추가" }).click();
-    await page.getByRole("button", { name: "참고선 가져오기" }).click();
-    await page.getByRole("button", { name: "도면 대기선 점 2개" }).click();
-    await page.getByRole("button", { name: "대기줄 저장", exact: true }).click();
-    await expect.poll(() => calls.queueWrites.length).toBe(1);
-    await page.getByRole("button", { name: "그만두기", exact: true }).click();
-    await page.getByRole("button", { name: "사전 줄 수정", exact: true }).click();
-    release();
-    await expect(page.getByText("현재 대기줄과 자동 대기시간이 갱신되었습니다.")).toBeVisible();
-    await expect(page.getByRole("region", { name: "사전 줄 설정" })).toBeVisible();
-  } finally {
-    release();
-  }
-});
-
-test("부스를 고른 뒤 대기줄 버튼을 누르면 대기줄 도구가 열린다", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test("줄 직접 설정의 X는 편집과 부스 선택을 함께 닫는다", async ({ page }) => {
   await mockBoothMap(page, { existingPlan: true });
   await page.goto(boothmapPath);
-
   await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.getByRole("button", { name: "줄 직접 설정" }).click();
+  await page
+    .getByRole("region", { name: "사전 줄 설정" })
+    .getByRole("button", { name: "그만두기" })
+    .click();
+  await expect(page.getByRole("region", { name: "사전 줄 설정" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "김밥천국 줄 관리" })).toHaveCount(0);
+});
 
-  const queueButton = page.getByRole("button", { name: "대기줄 추가" });
-  await expect(queueButton).toBeEnabled();
-  await queueButton.click();
+test("관리자 줄끝 갱신은 사전 동선의 존을 선택해 저장한다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { existingPlan: true });
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.getByRole("button", { name: "줄끝 갱신", exact: true }).last().click();
+  const panel = page.getByRole("region", { name: "줄끝 갱신" });
+  await panel.getByRole("combobox", { name: "줄끝 존 선택" }).click();
+  await page.getByRole("option", { name: "존 2 · 20m" }).click();
+  await panel.getByRole("button", { name: "줄끝 갱신", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  expect(calls.queueWrites[0]).toMatchObject({ expectedRevision: 0, planRevision: 4 });
+  expect(calls.queueWrites[0]).not.toHaveProperty("queueTailMeters");
+});
 
-  await expect(queueButton).toHaveAttribute("aria-pressed", "true");
-  // 도구를 켜도 부스 선택은 살아 있어야 대기줄을 그 부스에 붙일 수 있다.
-  await expect(queueButton).toBeEnabled();
+test("사전 동선이 없어도 관리자 줄끝 갱신은 거리 존을 저장한다", async ({ page }) => {
+  const calls = await mockBoothMap(page);
+  await page.goto(boothmapPath);
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.getByRole("button", { name: "줄끝 갱신", exact: true }).last().click();
+  const panel = page.getByRole("region", { name: "줄끝 갱신" });
+  await panel.getByRole("combobox", { name: "줄끝 존 선택" }).click();
+  await page.getByRole("option", { name: "존 2 · 20m" }).click();
+  await panel.getByRole("button", { name: "줄끝 갱신", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  expect(calls.queueWrites[0]).toMatchObject({
+    expectedRevision: 0,
+    queueTailMeters: 20,
+    path: [],
+  });
 });

@@ -9,4 +9,4 @@
  * 상단바가 없는 화면에서는 기본값 0으로 화면 전체를 덮는다.
  */
 export const DIALOG_OVERLAY_CLASSES =
-  "fixed inset-x-0 top-[var(--console-topbar-height,0px)] bottom-0 z-30 bg-dimmed";
+  "fixed inset-x-0 top-[var(--console-topbar-height,0px)] bottom-0 z-[1000] bg-dimmed";

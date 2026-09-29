@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /**
  * `Button`의 primary + size="lg" 스타일을 그대로 옮긴 값 — 실제 네비게이션이
@@ -19,7 +19,7 @@ export interface CompleteDialogProps {
 }
 
 /**
- * 닫을 수 없는(항상 열려있는) 완료 안내 모달. 회원가입 완료, 비밀번호 재설정
+ * 완료 안내 모달. 회원가입 완료, 비밀번호 재설정
  * 완료처럼 "결과를 보여주고 다음 화면으로 유도"하는 흐름에서 공통으로 쓴다.
  */
 export function CompleteDialog({
@@ -28,11 +28,12 @@ export function CompleteDialog({
   actionLabel,
   actionHref,
 }: CompleteDialogProps) {
+  const [open, setOpen] = useState(true);
   return (
-    <Dialog.Root open modal={false}>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-x-0 top-[72px] bottom-0 z-30 bg-dimmed" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 flex max-h-[calc(100dvh-32px)] w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-y-auto rounded-2xl bg-white p-5 sm:p-8">
+        <Dialog.Overlay className="fixed inset-x-0 top-[72px] bottom-0 z-[1000] bg-dimmed" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[calc(100dvh-32px)] w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-y-auto rounded-2xl bg-white p-5 sm:p-8">
           <div className="size-[75px] rounded-full bg-zinc-200" />
 
           <Dialog.Title className="heading-regular mt-2 text-center text-zinc-950">

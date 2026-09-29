@@ -26,8 +26,8 @@ export function AllReviewsDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-30 bg-dimmed" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-30 flex max-h-[80vh] w-[720px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-white p-8">
+        <Dialog.Overlay className="fixed inset-0 z-[1000] bg-dimmed" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[80vh] w-[720px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-white p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <Dialog.Title className="heading-small text-zinc-950">전체 리뷰</Dialog.Title>
