@@ -306,9 +306,7 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                     aria-label={`${operator.name} 선택`}
                   />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <p className="body-regular-bold wrap-anywhere text-zinc-950">
-                      {operator.name}
-                    </p>
+                    <p className="body-regular-bold wrap-anywhere text-zinc-950">{operator.name}</p>
                     <p className="body-caption wrap-anywhere text-zinc-500">{operator.email}</p>
                     {describeAffiliation(operator) ? (
                       <p className="body-small wrap-anywhere mt-1 w-fit rounded-full bg-zinc-100 px-3 py-1 text-zinc-700">

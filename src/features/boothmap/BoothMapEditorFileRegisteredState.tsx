@@ -3402,7 +3402,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               }
               onClick={() => setAnalyzeDialogOpen(true)}
             >
-              {replaceMutation.isPending ? "올리는 중..." : hasBlueprintImage ? "재분석" : "AI 분석"}
+              {replaceMutation.isPending
+                ? "올리는 중..."
+                : hasBlueprintImage
+                  ? "재분석"
+                  : "AI 분석"}
             </Button>
             <Button
               type="button"
