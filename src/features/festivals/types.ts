@@ -1,5 +1,3 @@
-import type { FestivalMapSummary } from "@/features/boothmap/types";
-
 export type FestivalLocationType =
   | "MAIN_VENUE"
   | "SUB_VENUE"
@@ -90,11 +88,6 @@ export interface CreateFestivalResponse {
   operationStartTime: string;
   operationEndTime: string;
   locations: FestivalLocationResponse[];
-}
-
-export interface CreateFestivalWithMapResponse {
-  festival: CreateFestivalResponse;
-  map: FestivalMapSummary;
 }
 
 export interface ManagedFestivalDetail {

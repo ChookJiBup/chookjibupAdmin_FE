@@ -79,7 +79,6 @@ export default function MyPage() {
           : current,
       );
       toast.success("프로필이 수정되었습니다.");
-      setPasswordConfirmOpen(false);
       setIsEditing(false);
     },
   });
@@ -88,12 +87,10 @@ export default function MyPage() {
     mutationFn: (password: string) => verifyAdminPassword({ email: admin?.email ?? "", password }),
     onSuccess: (loginResponse) => {
       setSession(loginResponse.expiresIn, loginResponse.admin);
-      const accountKind = profile?.accountKind ?? admin?.accountKind;
-      profileUpdateMutation.mutate({
-        name: profile?.name ?? admin?.name ?? "",
-        organization: organization.trim(),
-        rank: accountKind === "CONTRACTOR" ? null : rank.trim(),
-      });
+      setOrganization(profile?.organization ?? admin?.organization ?? "");
+      setRank(profile?.rank ?? admin?.rank ?? "");
+      setPasswordConfirmOpen(false);
+      setIsEditing(true);
     },
   });
 
@@ -109,14 +106,17 @@ export default function MyPage() {
   }
 
   function handleProfileUpdate() {
-    passwordConfirmMutation.reset();
-    setPasswordConfirmOpen(true);
+    const accountKind = profile?.accountKind ?? admin?.accountKind;
+    profileUpdateMutation.mutate({
+      name: profile?.name ?? admin?.name ?? "",
+      organization: organization.trim(),
+      rank: accountKind === "CONTRACTOR" ? null : rank.trim(),
+    });
   }
 
   function handleEditStart() {
-    setOrganization(profile?.organization ?? admin?.organization ?? "");
-    setRank(profile?.rank ?? admin?.rank ?? "");
-    setIsEditing(true);
+    passwordConfirmMutation.reset();
+    setPasswordConfirmOpen(true);
   }
 
   if (!admin) return null;
@@ -245,13 +245,11 @@ export default function MyPage() {
             setPasswordConfirmOpen(open);
             if (!open) passwordConfirmMutation.reset();
           }}
-          pending={passwordConfirmMutation.isPending || profileUpdateMutation.isPending}
+          pending={passwordConfirmMutation.isPending}
           errorMessage={
             passwordConfirmMutation.isError
               ? getApiErrorMessage(passwordConfirmMutation.error)
-              : profileUpdateMutation.isError
-                ? getApiErrorMessage(profileUpdateMutation.error)
-                : undefined
+              : undefined
           }
           onConfirm={(password) => passwordConfirmMutation.mutate(password)}
         />

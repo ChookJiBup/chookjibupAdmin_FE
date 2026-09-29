@@ -55,7 +55,7 @@ const TOP_BUTTONS: HelpItem[] = [
   { name: "AI 분석", description: "배치도 이미지를 올리면 부스 자리를 자동으로 찍습니다." },
   { name: "팜플렛", description: "팜플렛 이미지를 지도에 깔고 따라 그립니다." },
   { name: "저장", description: "고친 내용을 저장합니다. 바뀐 것이 없으면 꺼져 있습니다." },
-  { name: "공개하기", description: "방문객 앱 부스지도에 보여 줍니다. 다시 눌러 내립니다." },
+  { name: "공개 설정", description: "버튼을 눌러 방문객 앱의 공개·비공개 상태를 바꿉니다." },
 ];
 
 const SELECTION_ACTIONS: HelpItem[] = [
@@ -111,7 +111,7 @@ export function BoothMapHelpDialog() {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[calc(100dvh-40px)] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[72dvh] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="heading-small text-zinc-950">부스 편집 도움말</Dialog.Title>

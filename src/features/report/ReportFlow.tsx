@@ -108,7 +108,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
         `items-center`는 내용이 화면보다 길어지는 순간 위쪽이 스크롤로 닿지 않는
         영역으로 밀려나 제목과 닫기 버튼을 잘라먹는다.
       */
-      <div className="fixed inset-x-0 top-[var(--console-topbar-height,72px)] bottom-0 z-10 flex items-start justify-center overflow-y-auto bg-dimmed p-4 sm:p-8">
+      <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-dimmed p-4 sm:p-8">
         <VisitorCountForm
           days={visitorsQuery.data.days}
           mode={visitorsQuery.data.visitorCountInputMode}

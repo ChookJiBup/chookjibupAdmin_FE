@@ -16,8 +16,6 @@ import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
 import type { NodeType } from "@/features/boothmap/types";
 import { getManagedFestival } from "@/features/festivals/api";
 import { formatDday } from "@/features/festivals/dateFormat";
-import { getFestivalVisitorCounts } from "@/features/report/api";
-import { elapsedVisitorDays, missingPastVisitorDays } from "@/features/report/visitorDays";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
 import {
@@ -31,7 +29,6 @@ import { AiSuggestionPanel } from "./AiSuggestionPanel";
 import { BoothMapView } from "./BoothMapView";
 import { BoothTreeSidebar } from "./BoothTreeSidebar";
 import { DashboardStatsBar } from "./DashboardStatsBar";
-import { MissingVisitorCountDialog } from "./MissingVisitorCountDialog";
 import type { Booth, BoothZone } from "./types";
 
 /** 지도 위 흰 카드 안에서 쓰는 primary 링크 버튼. `Button`과 달리 실제 이동이 필요해 `Link`에 직접 스타일을 준다. */
@@ -118,22 +115,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     계정 대표 역할로 판단하면 다른 축제에서만 총괄인 사람에게도 게이트가 걸린다.
   */
   const isFestivalOwner = festivalQuery.data?.role === "FESTIVAL_OWNER";
-  const visitorCountsQuery = useQuery({
-    queryKey: ["festival-visitor-counts", festivalId],
-    enabled: isFestivalOwner,
-    queryFn: () => getFestivalVisitorCounts(festivalId),
-  });
-  /*
-    모달을 띄울지는 «비어 있는 날»로 정하고, 모달에 넘기는 목록은 «하루가 끝난 일차
-    전부»다. 이미 채운 날도 값이 보여야 그날 것을 고치거나 총합을 확인할 수 있다.
-  */
-  const visitorGate = useMemo(
-    () => ({
-      days: elapsedVisitorDays(visitorCountsQuery.data),
-      missingCount: missingPastVisitorDays(visitorCountsQuery.data).length,
-    }),
-    [visitorCountsQuery.data],
-  );
   const mapBooths = useMemo((): Booth[] => {
     const dashboardBooths = dashboardQuery.data?.booths ?? [];
     const zoneIdByNodeId = new Map<string, string>();
@@ -303,9 +284,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         목록을 못 받았을 때는 게이트를 걸지 않는다 — 입력해야 할 날을 모르는 채로
         막으면 빠져나갈 방법이 없다.
       */}
-      {visitorGate.missingCount > 0 ? (
-        <MissingVisitorCountDialog festivalId={festivalId} days={visitorGate.days} />
-      ) : null}
       {dashboardMapCenter ? (
         <BoothMapView
           booths={mapBooths}

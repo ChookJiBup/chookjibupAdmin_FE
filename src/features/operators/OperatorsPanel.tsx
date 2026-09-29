@@ -1,8 +1,6 @@
 "use client";
 
-import { PersonIcon } from "@radix-ui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Bottombar } from "@/components/ui/Bottombar";
@@ -21,9 +19,9 @@ import {
 } from "./api";
 import type { RegisterOperatorResult, SubAdminCandidate } from "./types";
 
-/** 검색 결과 아이템의 두 번째 줄 — 화면설계서상 "부서/직급". 둘 다 비면 줄을 그리지 않는다. */
-function describeCandidate(candidate: SubAdminCandidate) {
-  return [candidate.organization, candidate.rank].filter(Boolean).join(" · ");
+/** 계정의 소속·직급을 라벨 나열 대신 짧은 한 줄로 보여 준다. */
+function describeAffiliation(account: Pick<SubAdminCandidate, "organization" | "rank">) {
+  return [account.organization, account.rank].filter(Boolean).join(" · ");
 }
 
 export function OperatorsPanel({ festivalId }: { festivalId: string }) {
@@ -188,8 +186,8 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
                     <p className="body-small text-zinc-950">
                       {candidate.name}({candidate.email})
                     </p>
-                    {describeCandidate(candidate) ? (
-                      <p className="body-small text-zinc-500">{describeCandidate(candidate)}</p>
+                    {describeAffiliation(candidate) ? (
+                      <p className="body-small text-zinc-500">{describeAffiliation(candidate)}</p>
                     ) : null}
                   </div>
                   <Button
@@ -299,26 +297,23 @@ export function OperatorsPanel({ festivalId }: { festivalId: string }) {
 
           {operators.length > 0 ? (
             <div className="flex flex-col divide-y divide-zinc-200">
-              {/*
-                항목 전체를 <label>로 감싸면 이름을 눌러도 체크박스만 토글돼 상세로 갈
-                길이 없다. 스태프 목록과 같은 구조로, 체크박스와 상세 링크를 나란히 둔다.
-              */}
               {operators.map((operator) => (
-                <div key={operator.adminId} className="flex items-center gap-2 py-4">
+                <div key={operator.adminId} className="flex items-start gap-2 py-4">
                   <Checkbox
+                    className="mt-1"
                     checked={selectedIds.has(operator.adminId)}
                     onCheckedChange={() => toggleOne(operator.adminId)}
                     aria-label={`${operator.name} 선택`}
                   />
-                  <Link
-                    href={`/console/festivals/${festivalId}/operators/${operator.adminId}`}
-                    className="flex min-w-0 items-center gap-2"
-                  >
-                    <PersonIcon className="size-4 shrink-0 text-secondary-600" />
-                    <p className="body-regular wrap-anywhere text-zinc-950 hover:underline">
-                      {operator.name}({operator.email})
-                    </p>
-                  </Link>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <p className="body-regular-bold wrap-anywhere text-zinc-950">{operator.name}</p>
+                    <p className="body-caption wrap-anywhere text-zinc-500">{operator.email}</p>
+                    {describeAffiliation(operator) ? (
+                      <p className="body-small wrap-anywhere mt-1 w-fit rounded-full bg-zinc-100 px-3 py-1 text-zinc-700">
+                        {describeAffiliation(operator)}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

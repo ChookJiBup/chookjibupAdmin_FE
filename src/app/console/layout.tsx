@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, usePathname } from "next/navigation";
 import { AdminAuthGuard } from "@/components/auth/AdminAuthGuard";
 import { HeaderNav } from "@/components/layout/HeaderNav";
+import { Footer } from "@/components/layout/Footer";
 import { Toaster } from "@/components/ui/sonner";
 import { getManagedFestival } from "@/features/festivals/api";
 import { canCreateFestival } from "@/features/auth/admin/types";
@@ -69,8 +70,11 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
             {fullBleed ? (
               children
             ) : (
-              <div className="grid min-w-0 grid-cols-3 gap-6 [&>*]:min-w-0 max-lg:[&>*]:col-span-3">
-                {children}
+              <div className="flex min-h-full flex-col gap-10">
+                <div className="grid min-w-0 flex-1 grid-cols-3 gap-6 [&>*]:min-w-0 max-lg:[&>*]:col-span-3">
+                  {children}
+                </div>
+                <Footer className="-mx-4 -mb-5 sm:-mx-6 lg:-mx-10 lg:-mb-[30px]" />
               </div>
             )}
           </div>
@@ -85,13 +89,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
         말할 수 있게 두고, 기본값은 지금까지와 같은 여백을 유지한다.
       */}
       <Toaster
-        position="top-right"
+        position={pathname.endsWith("/dashboard") ? "top-center" : "top-right"}
         offset={{
-          top: `calc(var(--console-topbar-height, 72px) + ${toastBelowActionBar ? "96px" : "16px"})`,
+          top: `calc(var(--console-topbar-height, 72px) + ${toastBelowActionBar ? "112px" : "16px"})`,
           right: "32px",
         }}
         mobileOffset={{
-          top: `calc(var(--console-topbar-height, 72px) + ${toastBelowActionBar ? "120px" : "12px"})`,
+          top: `calc(var(--console-topbar-height, 72px) + ${toastBelowActionBar ? "136px" : "12px"})`,
           right: "16px",
         }}
       />

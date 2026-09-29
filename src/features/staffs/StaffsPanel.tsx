@@ -119,6 +119,31 @@ export function StaffsPanel({ festivalId }: { festivalId: string }) {
         <section className="col-span-1 flex min-w-0 flex-col gap-4 rounded-lg border border-zinc-300 bg-white px-5 py-6 sm:px-8">
           <p className="body-large-bold text-zinc-950">스태프 추가</p>
 
+          <div className="flex flex-col gap-2 rounded-lg bg-zinc-50 px-4 py-3">
+            <p className="body-small-bold text-zinc-950">스태프 접속 주소</p>
+            <p className="body-caption text-zinc-500">
+              이 축제에 배정된 모든 스태프가 같은 주소로 접속합니다.
+            </p>
+            <Input
+              readOnly
+              aria-label="스태프 접속 주소"
+              value={staffLoginUrl}
+              layout="with-button"
+              button={
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(staffLoginUrl);
+                    toast.success("스태프 접속 주소를 복사했습니다.");
+                  }}
+                >
+                  복사
+                </Button>
+              }
+            />
+          </div>
+
           {isCompleted ? (
             <div className="flex flex-col gap-1 rounded-md bg-zinc-100 px-4 py-3">
               <p className="body-small-bold text-zinc-950">종료된 축제입니다.</p>

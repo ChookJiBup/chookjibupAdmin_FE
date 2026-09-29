@@ -14,8 +14,7 @@ import type { AdminRole } from "@/features/auth/admin/types";
  *
  * 세 variant 모두 우측 CTA/유저 버튼은 이 프로젝트의 `Button` 컴포넌트와
  * 동일한 스타일을 사용한다(default/signup은 outline, login은 ghost).
- * 로고는 87x48 고정 크기의 zinc-200 placeholder box이며(아직 실제 로고
- * 에셋이 없음), 그 박스 안에 워드마크 텍스트로 렌더링한다.
+ * 로고는 실제 심볼 비율을 유지하며 헤더 안에서 40px 높이로 렌더링한다.
  */
 export type HeaderVariant = "default" | "signup" | "login";
 
@@ -52,7 +51,7 @@ function HeaderBrand({ href, festivalName }: { href: string; festivalName?: stri
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
       {/* 로고가 워드마크를 겸한다. 자리를 비워 두던 회색 상자와 「축지법」 글자를 대신한다. */}
-      <Link href={href} className="flex h-12 shrink-0 items-center">
+      <Link href={href} className="flex h-10 shrink-0 items-center" aria-label="축지법 홈">
         <Logo className="h-full w-auto text-point-500" />
       </Link>
       {festivalName ? (
