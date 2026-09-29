@@ -276,10 +276,10 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2">
             <DateField
               label="시작날짜"
-              wrapperClassName="flex-1"
+              wrapperClassName="min-w-0"
               disabled={isCompleted}
               value={displayStartDate}
               errorText={visiblePeriodErrors.startDate ?? undefined}
@@ -288,7 +288,7 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
             />
             <DateField
               label="종료날짜"
-              wrapperClassName="flex-1"
+              wrapperClassName="min-w-0"
               disabled={isCompleted}
               value={displayEndDate}
               errorText={visiblePeriodErrors.endDate ?? undefined}

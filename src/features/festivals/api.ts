@@ -3,7 +3,6 @@ import type { ApiResponse } from "@/lib/api/types";
 import type {
   CreateFestivalRequest,
   CreateFestivalResponse,
-  CreateFestivalWithMapResponse,
   FestivalSeriesSearchResult,
   FestivalVisitorCountInputMode,
   FestivalVisitorCountInputModeResponse,
@@ -68,18 +67,16 @@ export async function createFestival(
 }
 
 /**
- * 축제 기본 정보와 AI 분석용 배치도 원본 이미지를 함께 등록한다.
- * 배치도(map)는 이 API에서만 생성할 수 있다 — 이미 만들어진 축제에 나중에
- * 배치도를 붙이는 API는 아직 없다(demoAdmin_BE `FestivalMapCommandController` 참고).
+ * 축제 기본 정보와 사용자 화면에 표시할 대표 이미지를 함께 등록한다.
  */
-export async function createFestivalWithMap(
+export async function createFestivalWithImage(
   request: CreateFestivalRequest,
   image: File,
-): Promise<CreateFestivalWithMapResponse> {
+): Promise<CreateFestivalResponse> {
   const form = new FormData();
   form.append("festival", new Blob([JSON.stringify(request)], { type: "application/json" }));
   form.append("image", image);
-  const { data } = await adminApiClient.post<ApiResponse<CreateFestivalWithMapResponse>>(
+  const { data } = await adminApiClient.post<ApiResponse<CreateFestivalResponse>>(
     "/festivals",
     form,
   );

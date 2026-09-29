@@ -39,6 +39,7 @@ export function DateField({
   return (
     <Input
       label={label}
+      required
       layout="with-button"
       wrapperClassName={wrapperClassName}
       placeholder={DATE_FORMAT_LABEL}

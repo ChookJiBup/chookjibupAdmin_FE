@@ -18,7 +18,7 @@ import { DateField } from "./DateField";
 import { hasFestivalPeriodError, toIsoDate, validateFestivalPeriod } from "./dateFormat";
 import {
   createFestival,
-  createFestivalWithMap,
+  createFestivalWithImage,
   searchFestivalSeries,
 } from "@/features/festivals/api";
 import type {
@@ -46,11 +46,11 @@ import {
 import { canCreateFestival } from "@/features/auth/admin/types";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 
-/** 서버(MapImagePreparationService)가 받는 배치도 형식. webp는 거부된다. */
-const MAP_IMAGE_ACCEPT = "image/png,image/jpeg";
-const MAP_IMAGE_MIME_TYPES = ["image/png", "image/jpeg"];
+/** 서버가 대표 이미지로 받는 형식. webp는 거부된다. */
+const FESTIVAL_IMAGE_ACCEPT = "image/png,image/jpeg";
+const FESTIVAL_IMAGE_MIME_TYPES = ["image/png", "image/jpeg"];
 /** application.yml의 app.map.image.max-file-size 기본값과 맞춘다. */
-const MAP_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
+const FESTIVAL_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
 
 /** 주소를 좌표로 바꾸지 못했을 때 공통으로 쓰는 안내. */
 const ADDRESS_GEOCODE_FAILED_MESSAGE = "주소를 찾지 못했습니다. 주소 검색으로 다시 선택해 주세요.";
@@ -71,8 +71,8 @@ export function FestivalRegisterForm() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [mapImage, setMapImage] = useState<File | null>(null);
-  const [mapImageError, setMapImageError] = useState<string | null>(null);
+  const [festivalImage, setFestivalImage] = useState<File | null>(null);
+  const [festivalImageError, setFestivalImageError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
   const [festivalSearchState, setFestivalSearchState] = useState<SearchDialogState>("default");
@@ -217,39 +217,34 @@ export function FestivalRegisterForm() {
         visitorCountInputMode: "DAILY" as FestivalVisitorCountInputMode,
       };
 
-      // 배치도를 첨부했으면 multipart로 함께 올린다. 서버는 이 경로에서만 AI 분석을
-      // 대기열에 넣으므로(enqueueInitial), 첨부 여부가 곧 분석 여부다.
-      if (mapImage) {
-        const created = await createFestivalWithMap(request, mapImage);
-        return { festival: created.festival, analyzing: true };
+      // 대표 이미지를 첨부했으면 multipart로 함께 올려 사용자 화면 썸네일과 연결한다.
+      if (festivalImage) {
+        return createFestivalWithImage(request, festivalImage);
       }
-      const festival = await createFestival(request);
-      return { festival, analyzing: false };
+      return createFestival(request);
     },
-    onSuccess: ({ festival, analyzing }) => {
+    onSuccess: (festival) => {
       // 등록 직후 부스맵으로 넘어가므로, 이동한 화면에서 결과를 알 수 있게 토스트를 남긴다.
       toast.success("축제를 등록했습니다.", {
-        description: analyzing
-          ? "AI가 첨부한 배치도에서 부스를 찾고 있습니다."
-          : "이어서 부스 위치를 찍어 주세요.",
+        description: "이어서 부스 위치를 찍어 주세요.",
       });
       router.push(`/console/festivals/${festival.festivalId}/boothmap`);
     },
   });
 
-  function selectMapImage(file: File) {
-    if (!MAP_IMAGE_MIME_TYPES.includes(file.type)) {
-      setMapImage(null);
-      setMapImageError("PNG 또는 JPG 이미지만 첨부할 수 있습니다.");
+  function selectFestivalImage(file: File) {
+    if (!FESTIVAL_IMAGE_MIME_TYPES.includes(file.type)) {
+      setFestivalImage(null);
+      setFestivalImageError("PNG 또는 JPG 이미지만 첨부할 수 있습니다.");
       return;
     }
-    if (file.size > MAP_IMAGE_MAX_BYTES) {
-      setMapImage(null);
-      setMapImageError("축제 이미지는 50MB까지 첨부할 수 있습니다.");
+    if (file.size > FESTIVAL_IMAGE_MAX_BYTES) {
+      setFestivalImage(null);
+      setFestivalImageError("축제 이미지는 50MB까지 첨부할 수 있습니다.");
       return;
     }
-    setMapImage(file);
-    setMapImageError(null);
+    setFestivalImage(file);
+    setFestivalImageError(null);
   }
 
   async function handleSubmitClick() {
@@ -310,149 +305,153 @@ export function FestivalRegisterForm() {
   const addressSearchTarget = locations.find((loc) => loc.key === addressSearchTargetKey) ?? null;
 
   return (
-    <div className="col-span-2 flex min-w-0 flex-col gap-6 pb-24">
-      <FormSection label="축제 기본정보 입력">
-        <Input
-          layout="with-button"
-          placeholder="축제명을 입력해 주세요"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          button={
-            <Button type="button" onClick={() => setFestivalSearchOpen(true)}>
-              축제 검색하기
-            </Button>
-          }
-        />
-        <Textarea
-          placeholder="축제 설명을 작성해 주세요"
-          rows={3}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </FormSection>
+    <div className="col-span-3 flex min-w-0 flex-col gap-6 pb-24">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 xl:col-span-2">
+          <FormSection label="축제 기본정보 입력">
+            <Input
+              layout="with-button"
+              placeholder="축제명을 입력해 주세요"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              button={
+                <Button type="button" onClick={() => setFestivalSearchOpen(true)}>
+                  축제 검색하기
+                </Button>
+              }
+            />
+            <Textarea
+              placeholder="축제 설명을 작성해 주세요"
+              rows={3}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </FormSection>
 
-      <FormSection label="축제 상세정보 입력">
-        <div className="flex flex-col gap-4">
-          {locations.map((location, index) => (
-            <div key={location.key} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                {index > 0 ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="body-small-bold text-zinc-950">장소 {index + 1}</p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      icon={<TrashIcon />}
-                      className="py-0"
-                      onClick={() => removeLocation(location.key)}
-                    >
-                      삭제
-                    </Button>
-                  </div>
-                ) : null}
+          <FormSection label="축제 상세정보 입력">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <DateField
+                label="시작날짜"
+                wrapperClassName="min-w-0"
+                value={startDate}
+                errorText={visiblePeriodErrors.startDate ?? undefined}
+                onChange={setStartDate}
+                onBlur={() => setPeriodTouched((prev) => ({ ...prev, startDate: true }))}
+              />
+              <DateField
+                label="종료날짜"
+                wrapperClassName="min-w-0"
+                value={endDate}
+                errorText={visiblePeriodErrors.endDate ?? undefined}
+                onChange={setEndDate}
+                onBlur={() => setPeriodTouched((prev) => ({ ...prev, endDate: true }))}
+              />
+            </div>
 
-                {location.roadAddress ? (
-                  /*
+            <div className="flex flex-col gap-4 border-t border-zinc-200 pt-4">
+              {locations.map((location, index) => (
+                <div key={location.key} className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    {index > 0 ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="body-small-bold text-zinc-950">장소 {index + 1}</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          icon={<TrashIcon />}
+                          className="py-0"
+                          onClick={() => removeLocation(location.key)}
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {location.roadAddress ? (
+                      /*
                     주소를 한 번 채우면 입력칸이 잠기므로, 좌표를 못 구했을 때
                     다시 검색할 길을 열어 둔다. 이 버튼이 없으면 등록이 막힌 채로
                     주소를 고칠 방법이 없다.
                   */
-                  <Input
-                    layout="with-button"
-                    disabled
-                    value={location.roadAddress}
-                    className="disabled:border-zinc-400!"
-                    errorText={
-                      addressErrorKeys.includes(location.key)
-                        ? ADDRESS_GEOCODE_FAILED_MESSAGE
-                        : undefined
-                    }
-                    button={
-                      <Button
+                      <Input
+                        layout="with-button"
+                        disabled
+                        value={location.roadAddress}
+                        className="disabled:border-zinc-400!"
+                        errorText={
+                          addressErrorKeys.includes(location.key)
+                            ? ADDRESS_GEOCODE_FAILED_MESSAGE
+                            : undefined
+                        }
+                        button={
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setAddressSearchTargetKey(location.key);
+                              setAddressSearchState("default");
+                              setAddressManualError(null);
+                            }}
+                          >
+                            주소 변경
+                          </Button>
+                        }
+                      />
+                    ) : (
+                      <button
                         type="button"
-                        variant="outline"
                         onClick={() => {
                           setAddressSearchTargetKey(location.key);
                           setAddressSearchState("default");
                           setAddressManualError(null);
                         }}
+                        className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 body-regular text-zinc-950 transition-colors hover:bg-zinc-50"
                       >
-                        주소 변경
-                      </Button>
+                        <MagnifyingGlassIcon className="size-4" />
+                        주소 찾기
+                      </button>
+                    )}
+                  </div>
+                  <Input
+                    placeholder="상세주소"
+                    value={location.detailAddress}
+                    onChange={(event) =>
+                      updateLocation(location.key, { detailAddress: event.target.value })
                     }
                   />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddressSearchTargetKey(location.key);
-                      setAddressSearchState("default");
-                      setAddressManualError(null);
-                    }}
-                    className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 body-regular text-zinc-950 transition-colors hover:bg-zinc-50"
-                  >
-                    <MagnifyingGlassIcon className="size-4" />
-                    주소 찾기
-                  </button>
-                )}
-              </div>
-              <Input
-                placeholder="상세주소"
-                value={location.detailAddress}
-                onChange={(event) =>
-                  updateLocation(location.key, { detailAddress: event.target.value })
-                }
-              />
-              {index === 0 ? (
-                <div className="flex gap-3">
-                  <DateField
-                    label="시작날짜"
-                    wrapperClassName="flex-1"
-                    value={startDate}
-                    errorText={visiblePeriodErrors.startDate ?? undefined}
-                    onChange={setStartDate}
-                    onBlur={() => setPeriodTouched((prev) => ({ ...prev, startDate: true }))}
-                  />
-                  <DateField
-                    label="종료날짜"
-                    wrapperClassName="flex-1"
-                    value={endDate}
-                    errorText={visiblePeriodErrors.endDate ?? undefined}
-                    onChange={setEndDate}
-                    onBlur={() => setPeriodTouched((prev) => ({ ...prev, endDate: true }))}
-                  />
                 </div>
-              ) : null}
+              ))}
             </div>
-          ))}
+
+            <Button
+              type="button"
+              variant="outline"
+              icon={<PlusIcon />}
+              className="mt-3"
+              onClick={addLocation}
+            >
+              장소 추가
+            </Button>
+          </FormSection>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          icon={<PlusIcon />}
-          className="mt-3"
-          onClick={addLocation}
-        >
-          장소 추가
-        </Button>
-      </FormSection>
-
-      <FormSection label="축제 이미지 첨부">
-        <AttachmentField
-          file={mapImage}
-          onSelect={selectMapImage}
-          onRemove={() => {
-            setMapImage(null);
-            setMapImageError(null);
-          }}
-          accept={MAP_IMAGE_ACCEPT}
-          description="축제를 소개하는 이미지를 첨부해 주세요. 사용자 화면의 축제 이미지로 표시됩니다. (PNG·JPG, 50MB 이하)"
-          error={mapImageError}
-          disabled={createMutation.isPending}
-        />
-      </FormSection>
+        <section className="flex min-w-0 flex-col gap-4 rounded-lg border border-zinc-300 bg-white px-5 py-6 sm:px-8">
+          <p className="body-large-bold text-zinc-950">축제 이미지 첨부</p>
+          <AttachmentField
+            file={festivalImage}
+            onSelect={selectFestivalImage}
+            onRemove={() => {
+              setFestivalImage(null);
+              setFestivalImageError(null);
+            }}
+            accept={FESTIVAL_IMAGE_ACCEPT}
+            description="축제를 소개하는 이미지를 첨부해 주세요. 사용자 화면의 축제 이미지로 표시됩니다. (PNG·JPG, 50MB 이하)"
+            error={festivalImageError}
+            disabled={createMutation.isPending}
+          />
+        </section>
+      </div>
 
       {/*
         「축제명을 입력해 주세요」가 상세정보 카드 맨 아래(장소 추가 밑)에 떠서, 정작
