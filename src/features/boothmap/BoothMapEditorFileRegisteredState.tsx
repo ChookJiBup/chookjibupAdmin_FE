@@ -12,6 +12,7 @@ import {
 } from "react-kakao-maps-sdk";
 import {
   CheckCircledIcon,
+  ChevronDownIcon,
   ClockIcon,
   CornersIcon,
   Cross2Icon,
@@ -333,6 +334,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [drawTool, setDrawTool] = useState<DrawTool>("select");
   const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
   const [pinTypeMenuOpen, setPinTypeMenuOpen] = useState(false);
+  const [imageToolsOpen, setImageToolsOpen] = useState(false);
   const [mapLoading, mapError] = useKakaoMapLoader();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const boothListRef = useRef<HTMLDivElement>(null);
@@ -3351,16 +3353,19 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         )}
       >
         <MapSidePanel className="h-full w-full">
-          <p className="body-large-bold text-zinc-950">
-            {/* 공개 안내와 숫자가 어긋나지 않게 부스만 센다(입구·화장실 같은 시설은 뺀다). */}
-            축제부스 <span className="text-primary">{boothOnlyCount}</span>
-            {reviewRequiredCount > 0 ? (
-              <span className="body-small ml-2 text-secondary-600">
-                검수 필요 {reviewRequiredCount}
-              </span>
-            ) : null}
-          </p>
-          <div className="flex flex-col gap-2 rounded-md bg-zinc-100 px-4 py-3 text-left">
+          <div className="flex items-center justify-between gap-3">
+            <p className="body-large-bold min-w-0 text-zinc-950">
+              {/* 공개 안내와 숫자가 어긋나지 않게 부스만 센다(입구·화장실 같은 시설은 뺀다). */}
+              축제부스 <span className="text-primary">{boothOnlyCount}</span>
+              {reviewRequiredCount > 0 ? (
+                <span className="body-small ml-2 text-secondary-600">
+                  검수 필요 {reviewRequiredCount}
+                </span>
+              ) : null}
+            </p>
+            <BoothMapHelpDialog />
+          </div>
+          <div className="hidden">
             <p className="body-small-bold text-zinc-950">
               {isCompleted
                 ? "종료된 축제입니다."
@@ -3385,35 +3390,99 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             </p>
           </div>
 
-          <div className="flex flex-col gap-1">
-            {standaloneZones.map((zone) => {
-              const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
-              const expanded = expandedZoneIds.has(zone.id);
-              return (
-                <ZoneListItem
-                  key={zone.id}
-                  name={zone.name}
-                  count={members.length}
-                  expanded={expanded}
-                  checked={selectedZoneId === zone.id}
-                  selected={selectedZoneId === zone.id}
-                  reorder={zoneReorderProps(zone.id)}
-                  onToggleExpanded={() => toggleZoneExpanded(zone.id)}
-                  onCheckedChange={(checked) =>
-                    checked ? selectZone(zone.id) : setSelectedZoneId(null)
-                  }
-                  onSelect={() => selectZone(zone.id)}
-                >
-                  {members.map((booth) => renderBoothRow(booth, { indent: true }))}
-                </ZoneListItem>
-              );
-            })}
-            {ungroupedBooths.map((booth) => renderBoothRow(booth, { indent: false }))}
+          <div className="hidden">
+            <Button
+              type="button"
+              variant="outline"
+              icon={<FileIcon />}
+              disabled={replaceMutation.isPending || editingLocked}
+              title={
+                editLockReason ??
+                (hasBlueprintImage ? "다른 배치도 이미지로 다시 분석" : "배치도 이미지로 AI 분석")
+              }
+              onClick={() => setAnalyzeDialogOpen(true)}
+            >
+              {replaceMutation.isPending ? "올리는 중..." : hasBlueprintImage ? "재분석" : "AI 분석"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              icon={<ImageIcon />}
+              disabled={editingLocked}
+              title={editLockReason ?? "팜플렛 이미지 올리기"}
+              onClick={() => overlayFileInputRef.current?.click()}
+            >
+              팜플렛
+            </Button>
           </div>
 
-          {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
-          {polygonShapes.length > 0 ? (
-            <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
+          <div className="hidden">
+            <span className="body-small-bold text-zinc-950">사용자 화면 노출</span>
+            <Button
+              type="button"
+              variant={isPublished ? "primary" : "outline"}
+              title={
+                isPublished
+                  ? "방문객 앱에 공개 중입니다. 눌러 비공개로 전환합니다."
+                  : (publishLockReason ?? "방문객 앱에 비공개 상태입니다. 눌러 공개합니다.")
+              }
+              disabled={
+                isPublished
+                  ? unpublishMutation.isPending
+                  : publishMutation.isPending || publishLockReason !== null
+              }
+              onClick={() =>
+                isPublished ? setUnpublishDialogOpen(true) : setPublishDialogOpen(true)
+              }
+            >
+              {publishMutation.isPending || unpublishMutation.isPending
+                ? "변경 중..."
+                : isPublished
+                  ? "공개"
+                  : "비공개"}
+            </Button>
+          </div>
+
+          {ungroupedBooths.length > 0 ? (
+            <section className="flex flex-col gap-1">
+              <p className="body-caption-bold text-zinc-500">
+                구역 미지정 <span className="text-primary">{ungroupedBooths.length}</span>
+              </p>
+              {ungroupedBooths.map((booth) => renderBoothRow(booth, { indent: false }))}
+            </section>
+          ) : null}
+
+          {standaloneZones.length + polygonShapes.length > 0 ? (
+            <section className="flex flex-col gap-2 pt-2">
+              <p className="body-caption-bold text-zinc-500">
+                구역{" "}
+                <span className="text-primary">
+                  {standaloneZones.length + polygonShapes.length}
+                </span>
+              </p>
+              {standaloneZones.map((zone) => {
+                const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
+                const expanded = expandedZoneIds.has(zone.id);
+                return (
+                  <ZoneListItem
+                    key={zone.id}
+                    name={zone.name}
+                    count={members.length}
+                    expanded={expanded}
+                    checked={selectedZoneId === zone.id}
+                    selected={selectedZoneId === zone.id}
+                    reorder={zoneReorderProps(zone.id)}
+                    onToggleExpanded={() => toggleZoneExpanded(zone.id)}
+                    onCheckedChange={(checked) =>
+                      checked ? selectZone(zone.id) : setSelectedZoneId(null)
+                    }
+                    onSelect={() => selectZone(zone.id)}
+                  >
+                    {members.map((booth) => renderBoothRow(booth, { indent: true }))}
+                  </ZoneListItem>
+                );
+              })}
+              {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
               {polygonShapes.map((shape) => {
                 const members = booths.filter(
                   (booth) => shapeIdByBoothId.get(booth.id) === shape.id,
@@ -3441,13 +3510,13 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   </ZoneListItem>
                 );
               })}
-            </div>
+            </section>
           ) : null}
 
           {/* 라인은 부스를 품지 않으므로 따로 나열한다. */}
           {lineShapes.length > 0 ? (
-            <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
-              <p className="body-small-bold text-zinc-950">
+            <section className="flex flex-col gap-1 pt-2">
+              <p className="body-caption-bold text-zinc-500">
                 도형 <span className="text-primary">{lineShapes.length}</span>
               </p>
               {lineShapes.map((shape) => (
@@ -3476,7 +3545,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   </span>
                 </button>
               ))}
-            </div>
+            </section>
           ) : null}
         </MapSidePanel>
       </div>
@@ -3484,7 +3553,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       <div
         ref={topActionBarRef}
         data-map-tools
-        className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-end gap-2 lg:top-10 lg:right-8 lg:left-auto lg:gap-4"
+        className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-end gap-2 lg:top-10 lg:right-8 lg:left-auto"
       >
         <div className="flex items-center gap-2">
           <span
@@ -3501,7 +3570,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               aria-label="실행취소"
               disabled={undoDisabled}
               onClick={undo}
-              className={undoDisabled ? "text-zinc-500" : "text-zinc-950"}
+              className={`${undoDisabled ? "text-zinc-500" : "text-zinc-950"} shadow-md`}
             />
           </span>
           <span
@@ -3518,13 +3587,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               aria-label="다시실행"
               disabled={redoDisabled}
               onClick={redo}
-              className={redoDisabled ? "text-zinc-500" : "text-zinc-950"}
+              className={`${redoDisabled ? "text-zinc-500" : "text-zinc-950"} shadow-md`}
             />
           </span>
-          {/* 저장·공개 옆에 두면 급할 때 잘못 눌리므로 되돌리기 쪽에 붙인다. */}
-          <BoothMapHelpDialog />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="contents">
           <input
             ref={replaceFileInputRef}
             type="file"
@@ -3547,28 +3614,84 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               event.currentTarget.value = "";
             }}
           />
+          <div className="relative">
+            <Button
+              type="button"
+              variant="outline"
+              icon={<ImageIcon />}
+              aria-expanded={imageToolsOpen}
+              onClick={() => setImageToolsOpen((open) => !open)}
+            >
+              <span className="flex items-center gap-1">
+                도구
+                <ChevronDownIcon
+                  className={cn("transition-transform", imageToolsOpen && "rotate-180")}
+                />
+              </span>
+            </Button>
+            {imageToolsOpen ? (
+              <div className="absolute top-full left-0 z-30 mt-1 w-full overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-md">
+                <button
+                  type="button"
+                  disabled={replaceMutation.isPending || editingLocked}
+                  title={
+                    editLockReason ??
+                    (hasBlueprintImage
+                      ? "다른 배치도 이미지로 다시 분석"
+                      : "배치도 이미지로 AI 분석")
+                  }
+                  onClick={() => {
+                    setImageToolsOpen(false);
+                    setAnalyzeDialogOpen(true);
+                  }}
+                  className="body-small flex w-full items-center gap-2 px-3 py-2.5 text-left text-zinc-950 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FileIcon className="size-4 shrink-0" />
+                  {replaceMutation.isPending
+                    ? "올리는 중..."
+                    : hasBlueprintImage
+                      ? "AI 재분석"
+                      : "AI 분석"}
+                </button>
+                <div className="mx-3 border-t border-zinc-200" />
+                <button
+                  type="button"
+                  disabled={editingLocked}
+                  title={editLockReason ?? "팜플렛 이미지 올리기"}
+                  onClick={() => {
+                    setImageToolsOpen(false);
+                    overlayFileInputRef.current?.click();
+                  }}
+                  className="body-small flex w-full items-center gap-2 px-3 py-2.5 text-left text-zinc-950 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ImageIcon className="size-4 shrink-0" />
+                  팜플렛
+                </button>
+              </div>
+            ) : null}
+          </div>
           <Button
             type="button"
-            variant="outline"
-            icon={<FileIcon />}
-            disabled={replaceMutation.isPending || editingLocked}
+            variant={isPublished ? "primary" : "outline"}
             title={
-              editLockReason ??
-              (hasBlueprintImage ? "다른 배치도 이미지로 다시 분석" : "배치도 이미지로 AI 분석")
+              isPublished
+                ? "방문객 앱에 공개 중입니다. 눌러 비공개로 전환합니다."
+                : (publishLockReason ?? "방문객 앱에 비공개 상태입니다. 눌러 공개합니다.")
             }
-            onClick={() => setAnalyzeDialogOpen(true)}
+            disabled={
+              isPublished
+                ? unpublishMutation.isPending
+                : publishMutation.isPending || publishLockReason !== null
+            }
+            onClick={() =>
+              isPublished ? setUnpublishDialogOpen(true) : setPublishDialogOpen(true)
+            }
           >
-            {replaceMutation.isPending ? "올리는 중..." : hasBlueprintImage ? "재분석" : "AI 분석"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            icon={<ImageIcon />}
-            disabled={editingLocked}
-            title={editLockReason ?? "팜플렛 이미지 올리기"}
-            onClick={() => overlayFileInputRef.current?.click()}
-          >
-            팜플렛
+            {publishMutation.isPending || unpublishMutation.isPending
+              ? "변경 중..."
+              : isPublished
+                ? "공개"
+                : "비공개"}
           </Button>
           <Button
             type="button"
@@ -3577,44 +3700,19 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             title={saveLockReason}
             onClick={() => setSaveDialogOpen(true)}
           >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
+            {saveMutation.isPending ? "저장 중..." : "저장하기"}
           </Button>
-          {/*
-            공개 여부는 방문객에게 보이는지를 가르는 유일한 신호라 항상 자리를 지킨다.
-            공개된 지도도 눌러서 내릴 수 있어야 한다. 상태 표시로만 두면 잘못 그린 채
-            공개했을 때 부스를 전부 지우는 것 말고는 감출 방법이 없다.
-          */}
-          {isPublished ? (
-            <button
-              type="button"
-              className="body-regular-bold flex items-center gap-2 rounded-md border border-primary-300 bg-white px-4 py-2 text-primary hover:bg-zinc-100 disabled:opacity-50"
-              title="방문객 앱 부스지도에 보이는 중입니다. 눌러서 공개를 해제합니다."
-              disabled={unpublishMutation.isPending}
-              onClick={() => setUnpublishDialogOpen(true)}
-            >
-              <CheckCircledIcon className="size-4 shrink-0" />
-              {unpublishMutation.isPending ? "해제 중..." : "공개됨"}
-            </button>
-          ) : (
-            <Button
-              type="button"
-              variant="primary"
-              disabled={publishMutation.isPending || publishLockReason !== null}
-              title={publishLockReason ?? "방문객 앱 부스지도에 공개"}
-              onClick={() => setPublishDialogOpen(true)}
-            >
-              {publishMutation.isPending ? "공개 중..." : "공개하기"}
-            </Button>
-          )}
         </div>
-        <IconButton
-          icon={<Cross2Icon />}
-          size="lg"
-          iconClassName="size-5 [&_svg]:size-5"
-          aria-label="닫기"
-          className="text-zinc-950"
-          onClick={() => setCloseDialogOpen(true)}
-        />
+        <div className="contents">
+          <IconButton
+            icon={<Cross2Icon />}
+            size="lg"
+            iconClassName="size-5 [&_svg]:size-5"
+            aria-label="닫기"
+            className="text-zinc-950 ring-1 ring-zinc-200 shadow-md"
+            onClick={() => setCloseDialogOpen(true)}
+          />
+        </div>
       </div>
 
       <div
@@ -4165,7 +4263,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         title="배치도 이미지로 AI 분석을 시작할까요?"
         description={
           booths.length > 0
-            ? `지도를 새로 만들기 때문에 지금 찍혀 있는 핀 ${booths.length}개가 사라집니다. 저장하지 않은 편집도 함께 사라집니다.`
+            ? `지도를 새로 만들면 부스 ${boothOnlyCount}개와 시설 ${booths.length - boothOnlyCount}개가 모두 사라집니다. 저장하지 않은 편집도 함께 사라집니다.`
             : "AI가 배치도에서 부스를 찾아 핀으로 뿌려 줍니다. 분석이 끝날 때까지 편집과 저장은 막힙니다."
         }
         confirmLabel="이미지 선택"
