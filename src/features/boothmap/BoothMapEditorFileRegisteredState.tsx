@@ -3590,6 +3590,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               className={`${redoDisabled ? "text-zinc-500" : "text-zinc-950"} shadow-md`}
             />
           </span>
+          {/* 저장·공개 옆에 두면 급할 때 잘못 눌리므로 되돌리기 쪽에 붙인다. */}
+          <BoothMapHelpDialog />
         </div>
         <div className="contents">
           <input
