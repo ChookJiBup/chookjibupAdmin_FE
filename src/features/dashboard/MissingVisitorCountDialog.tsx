@@ -43,7 +43,7 @@ export interface MissingVisitorCountDialogProps {
  * 물으면 열흘 전 인원을 기억으로 적게 된다.
  *
  * 바깥 클릭으로 닫을 수 있지만, 입력이 끝나기 전에는 다음 방문 때 다시 나타난다.
- * 딤은 상단바 아래에서 시작한다(`DIALOG_OVERLAY_CLASSES`).
+ * 딤은 헤더를 포함한 화면 전체를 덮는다(`DIALOG_OVERLAY_CLASSES`).
  */
 export function MissingVisitorCountDialog({
   festivalId,

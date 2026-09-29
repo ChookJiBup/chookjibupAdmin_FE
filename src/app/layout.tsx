@@ -3,6 +3,7 @@ import { Roboto } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
+import { GlobalFooter } from "@/components/layout/GlobalFooter";
 
 const pretendard = localFont({
   src: "../../node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2",
@@ -40,6 +41,7 @@ export default function RootLayout({
     <html lang="ko" className={`${pretendard.variable} ${roboto.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
+        <GlobalFooter />
       </body>
     </html>
   );
