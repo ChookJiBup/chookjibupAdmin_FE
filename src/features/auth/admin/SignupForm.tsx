@@ -17,6 +17,7 @@ import {
 } from "./api";
 import type { PolicySlug } from "./policyContent";
 import type { AccountKind } from "./types";
+import { getEmailError, getPasswordError } from "./validation";
 
 type Step = "agree" | "email" | "code" | "profile";
 
@@ -65,6 +66,8 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
   const [rank, setRank] = useState("");
   const [password, setPassword] = useState("");
   const [remaining, setRemaining] = useState(CODE_TIMER_SECONDS);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
 
   useEffect(() => {
     if (step !== "code" || remaining <= 0) return;
@@ -97,6 +100,8 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
   });
 
   const allAgreed = AGREEMENT_ITEMS.every((item) => agreements[item.key]);
+  const emailError = getEmailError(email);
+  const passwordError = getPasswordError(password);
 
   const toggleAll = (checked: boolean) => {
     setAgreements(
@@ -125,7 +130,7 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
     onSuccess: () => onComplete(accountKind),
   });
 
-  const profileReady = Boolean(name && organization && password && (!isGovernment || rank));
+  const profileReady = Boolean(name && organization && !passwordError && (!isGovernment || rank));
 
   return (
     <AuthCard title="회원가입">
@@ -184,6 +189,8 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
           className="mt-8 flex flex-col gap-5"
           onSubmit={(event) => {
             event.preventDefault();
+            setEmailTouched(true);
+            if (emailError) return;
             requestCodeMutation.mutate();
           }}
         >
@@ -194,6 +201,8 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
             placeholder={isGovernment ? "공무원 이메일" : "일반 이메일 주소"}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            onBlur={() => setEmailTouched(true)}
+            errorText={emailTouched ? (emailError ?? undefined) : undefined}
           />
 
           {requestCodeMutation.isError && (
@@ -203,7 +212,7 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
           <Button
             type="submit"
             size="lg"
-            disabled={!email || requestCodeMutation.isPending}
+            disabled={Boolean(emailError) || requestCodeMutation.isPending}
             className="w-full"
           >
             {requestCodeMutation.isPending ? "발송 중..." : "인증요청"}
@@ -273,6 +282,8 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
           className="mt-8 flex flex-col gap-6"
           onSubmit={(event) => {
             event.preventDefault();
+            setPasswordTouched(true);
+            if (passwordError) return;
             signupMutation.mutate();
           }}
         >
@@ -289,6 +300,9 @@ export function SignupForm({ initialAccountKind = "GOVERNMENT", onComplete }: Si
               placeholder="비밀번호"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => setPasswordTouched(true)}
+              errorText={passwordTouched ? (passwordError ?? undefined) : undefined}
+              helperText="8~100자로 입력해 주세요."
             />
           </div>
 

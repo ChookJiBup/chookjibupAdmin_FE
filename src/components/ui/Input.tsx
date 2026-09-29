@@ -50,6 +50,11 @@ export function Input({
   const labelEl = label ? (
     <label htmlFor={inputId} className="body-small-bold shrink-0 text-zinc-950">
       {label}
+      {required ? (
+        <span aria-hidden className="ml-0.5 text-error">
+          *
+        </span>
+      ) : null}
     </label>
   ) : null;
 

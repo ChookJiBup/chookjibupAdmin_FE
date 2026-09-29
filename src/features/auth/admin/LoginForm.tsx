@@ -12,6 +12,7 @@ import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { AccountKindTabs } from "./AccountKindTabs";
 import { loginAdmin } from "./api";
 import type { AccountKind } from "./types";
+import { getEmailError, getLoginPasswordError } from "./validation";
 
 /**
  * `Button`의 ghost + size="sm" 스타일을 그대로 옮긴 값 — 설계서상 "비밀번호
@@ -27,6 +28,9 @@ export function LoginForm({ sessionExpired = false }: { sessionExpired?: boolean
   const [accountKind, setAccountKind] = useState<AccountKind>("GOVERNMENT");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const emailError = getEmailError(email);
+  const passwordError = getLoginPasswordError(password);
 
   const loginMutation = useMutation({
     mutationFn: loginAdmin,
@@ -42,6 +46,7 @@ export function LoginForm({ sessionExpired = false }: { sessionExpired?: boolean
     setAccountKind(kind);
     setEmail("");
     setPassword("");
+    setSubmitted(false);
     loginMutation.reset();
   };
 
@@ -58,6 +63,8 @@ export function LoginForm({ sessionExpired = false }: { sessionExpired?: boolean
         className="mt-8 flex flex-col gap-6"
         onSubmit={(event) => {
           event.preventDefault();
+          setSubmitted(true);
+          if (emailError || passwordError) return;
           loginMutation.mutate({ email, password });
         }}
       >
@@ -71,6 +78,7 @@ export function LoginForm({ sessionExpired = false }: { sessionExpired?: boolean
             placeholder={accountKind === "GOVERNMENT" ? "공무원 이메일" : "이메일"}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            errorText={submitted ? (emailError ?? undefined) : undefined}
           />
           <Input
             type="password"
@@ -79,6 +87,7 @@ export function LoginForm({ sessionExpired = false }: { sessionExpired?: boolean
             placeholder="비밀번호"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            errorText={submitted ? (passwordError ?? undefined) : undefined}
           />
         </div>
 
