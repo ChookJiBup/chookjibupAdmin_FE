@@ -125,7 +125,8 @@ test("종료된 축제의 부스맵 편집기는 주소로 직접 들어와도 �
   await expect(panel.getByRole("button", { name: "김밥천국", exact: true })).toBeVisible();
   await expect(panel.getByText("종료된 축제입니다.", { exact: true })).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장하기", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "도구", exact: true }).click();
   await expect(page.getByRole("button", { name: /AI 분석|재분석/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: "핀 추가", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "실행취소", exact: true })).toBeDisabled();
@@ -145,9 +146,9 @@ test("종료된 축제의 스태프 화면은 추가를 막고 삭제는 남긴�
 
   await expect(page.getByText("종료된 축제입니다.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "추가하기", exact: true })).toBeDisabled();
-  await expect(page.getByLabel("이름", { exact: true })).toBeDisabled();
-  await expect(page.getByLabel("근무구역", { exact: true })).toBeDisabled();
-  await expect(page.getByLabel("전화번호", { exact: true })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: /^이름/ })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: /^근무구역/ })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: /^전화번호/ })).toBeDisabled();
 
   // 잘못 만든 계정을 정리하는 길은 남겨 둔다.
   await page.getByRole("checkbox", { name: "김스태프 선택" }).click();

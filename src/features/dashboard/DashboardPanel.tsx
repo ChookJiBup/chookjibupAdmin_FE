@@ -396,7 +396,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
           ) : null}
         </div>
 
-        <div className="col-start-1 row-start-3 flex min-w-0 items-end gap-3 lg:col-start-2 lg:row-start-2 lg:gap-5">
+        <div className="relative col-start-1 row-start-3 flex min-w-0 items-end gap-3 lg:col-start-2 lg:row-start-2 lg:gap-5">
           <div className="pointer-events-auto max-h-40 min-w-0 flex-1 overflow-y-auto lg:max-h-none">
             {activeBooth ? (
               <DashboardStatsBar
@@ -479,7 +479,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
             )}
           </div>
           <MapZoomControls
-            className="pointer-events-auto shrink-0 [&_button]:shadow-md"
+            className="pointer-events-auto absolute right-0 bottom-full mb-6 shrink-0 [&_button]:shadow-md"
             onZoomIn={() => setZoomStep((step) => step - 1)}
             onZoomOut={() => setZoomStep((step) => step + 1)}
           />

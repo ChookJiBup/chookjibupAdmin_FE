@@ -1,37 +1,46 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { MissingVisitorCountDialog } from "@/features/dashboard/MissingVisitorCountDialog";
-import { getManagedFestival } from "@/features/festivals/api";
+import type { FestivalSummary } from "@/features/home/types";
 import { getFestivalVisitorCounts } from "./api";
 import { elapsedVisitorDays, missingPastVisitorDays } from "./visitorDays";
 
-/**
- * 메인홈이 아니라 사용자가 선택한 축제 범위에 진입했을 때만 방문 인원을 확인한다.
- * 아직 시작하지 않은 축제와 입력 권한이 없는 운영자는 조회하지 않는다.
- */
-export function CompletedFestivalVisitorGate({ festivalId }: { festivalId: string }) {
-  const festivalQuery = useQuery({
-    queryKey: ["managed-festival", festivalId],
-    queryFn: () => getManagedFestival(festivalId),
+const MAX_LOOKBACK = 10;
+
+/** 지나간 축제 일차의 방문 인원이 비어 있으면 홈에서 입력을 안내한다. */
+export function CompletedFestivalVisitorGate({ festivals }: { festivals: FestivalSummary[] }) {
+  const targets = festivals
+    .filter(
+      (festival) => festival.progressStatus !== "UPCOMING" && festival.role === "FESTIVAL_OWNER",
+    )
+    .sort((a, b) => b.endDate.localeCompare(a.endDate))
+    .slice(0, MAX_LOOKBACK);
+
+  const results = useQueries({
+    queries: targets.map((festival) => ({
+      queryKey: ["festival-visitor-counts", festival.festivalId],
+      queryFn: () => getFestivalVisitorCounts(festival.festivalId),
+      staleTime: 60_000,
+      retry: false,
+    })),
   });
-  const festival = festivalQuery.data;
-  const shouldCheck =
-    festival?.progressStatus !== "UPCOMING" && festival?.role === "FESTIVAL_OWNER";
-  const countsQuery = useQuery({
-    queryKey: ["festival-visitor-counts", festivalId],
-    queryFn: () => getFestivalVisitorCounts(festivalId),
-    enabled: shouldCheck,
-    staleTime: 60_000,
-    retry: false,
-  });
-  const missingDays = missingPastVisitorDays(countsQuery.data);
-  if (!shouldCheck || missingDays.length === 0) return null;
+
+  const pending = targets
+    .map((festival, index) => ({
+      festival,
+      days: elapsedVisitorDays(results[index]?.data),
+      missingDays: missingPastVisitorDays(results[index]?.data),
+    }))
+    .find(({ missingDays }) => missingDays.length > 0);
+
+  if (!pending) return null;
   return (
     <MissingVisitorCountDialog
-      festivalId={festivalId}
-      festivalName={festival?.festivalName ?? undefined}
-      days={elapsedVisitorDays(countsQuery.data)}
+      key={pending.festival.festivalId}
+      festivalId={pending.festival.festivalId}
+      festivalName={pending.festival.festivalName}
+      days={pending.days}
     />
   );
 }

@@ -11,7 +11,6 @@ import { canCreateFestival } from "@/features/auth/admin/types";
 import { cn } from "@/lib/utils";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
-import { CompletedFestivalVisitorGate } from "@/features/report/CompletedFestivalVisitorGate";
 
 /** 특정 축제 범위가 없는 화면(메인홈, 축제등록)은 5개 탭 대신 "축제등록" 버튼만 노출한다. */
 const HOME_NAV_ITEMS = [{ label: "축제등록", href: "/console/festivals/new" }];
@@ -100,7 +99,6 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           right: "16px",
         }}
       />
-      {festivalId ? <CompletedFestivalVisitorGate festivalId={festivalId} /> : null}
     </AdminAuthGuard>
   );
 }

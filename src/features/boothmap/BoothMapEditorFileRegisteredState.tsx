@@ -3363,20 +3363,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 </span>
               ) : null}
             </p>
-            <BoothMapHelpDialog />
           </div>
+          {isCompleted ? <p className="body-small-bold text-zinc-950">종료된 축제입니다.</p> : null}
           <div className="hidden">
-            <p className="body-small-bold text-zinc-950">
-              {isCompleted
-                ? "종료된 축제입니다."
-                : analyzing
+            {!isCompleted ? (
+              <p className="body-small-bold text-zinc-950">
+                {analyzing
                   ? "AI가 배치도를 읽고 있습니다."
                   : booths.length === 0
                     ? "아직 찍은 부스가 없습니다."
                     : reviewRequiredCount > 0
                       ? "AI가 찾은 부스를 확인해 주세요."
                       : "지도에서 부스를 편집하세요."}
-            </p>
+              </p>
+            ) : null}
             <p className="body-caption text-zinc-950">
               {isCompleted
                 ? "결과리포트가 이 배치를 근거로 삼기 때문에 부스맵은 더 이상 수정할 수 없습니다. 지난 축제의 배치는 그대로 확인할 수 있습니다."
@@ -3679,6 +3679,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           <Button
             type="button"
             variant={isPublished ? "primary" : "outline"}
+            aria-label={isPublished ? "공개됨" : "공개하기"}
             title={
               isPublished
                 ? "방문객 앱에 공개 중입니다. 눌러 비공개로 전환합니다."
