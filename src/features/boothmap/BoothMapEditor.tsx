@@ -9,6 +9,7 @@ import { deleteFestivalMap, getMapEditor, replaceFestivalMap, saveMapEditor } fr
 import { BoothMapEditorReady, type LocalZone } from "./BoothMapEditorReady";
 import { boothMapObjectsToNodeChanges, nodeToBoothMapObject } from "./geometry";
 import { useBoothMapStore } from "./store";
+import { festivalMapKeys, invalidateFestivalMapQueries } from "./festivalMapQueries";
 
 const MAX_DISPLAY_WIDTH = 900;
 
@@ -32,7 +33,7 @@ export function BoothMapEditor({
   const queryClient = useQueryClient();
 
   const editorQuery = useQuery({
-    queryKey: ["boothmap-editor", festivalId, mapId],
+    queryKey: festivalMapKeys.editor(festivalId, mapId),
     queryFn: () => getMapEditor(festivalId, mapId),
   });
 
@@ -109,11 +110,11 @@ export function BoothMapEditor({
         })),
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setSavedSnapshot(currentSnapshot);
       setSavedAt(new Date().toLocaleTimeString("ko-KR"));
       setConflict(false);
-      queryClient.invalidateQueries({ queryKey: ["boothmap-editor", festivalId, mapId] });
+      await invalidateFestivalMapQueries(queryClient, festivalId);
     },
     onError: (error) => {
       if (isAxiosError(error) && error.response?.status === 409) {
@@ -124,12 +125,18 @@ export function BoothMapEditor({
 
   const replaceMutation = useMutation({
     mutationFn: (file: File) => replaceFestivalMap(festivalId, mapId, file),
-    onSuccess: onImageReplaced,
+    onSuccess: async () => {
+      await invalidateFestivalMapQueries(queryClient, festivalId);
+      onImageReplaced();
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteFestivalMap(festivalId, mapId),
-    onSuccess: onMapDeleted,
+    onSuccess: async () => {
+      await invalidateFestivalMapQueries(queryClient, festivalId);
+      onMapDeleted();
+    },
   });
 
   if (editorQuery.isLoading) {

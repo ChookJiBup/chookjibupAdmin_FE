@@ -486,21 +486,26 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
 export function ReportPanel({
   festivalId,
   previousFestivalId = null,
+  live = false,
 }: {
   festivalId: string;
   /** 같은 시리즈의 직전 회차 축제 id. 있으면 "지난 리포트 보기" 링크를 노출한다. */
   previousFestivalId?: string | null;
+  /** 진행 중 축제는 일별 집계가 반영되도록 주기적으로 최신 리포트를 다시 읽는다. */
+  live?: boolean;
 }) {
   const [activeSection, setActiveSection] = useState<ReportSection>("축제성과");
   const performanceQuery = useQuery({
     queryKey: ["festival-report-performance", festivalId],
     queryFn: () => getFestivalReportPerformance(festivalId),
     enabled: activeSection === "축제성과",
+    refetchInterval: live ? 60_000 : false,
   });
   const evaluationQuery = useQuery({
     queryKey: ["festival-report-evaluation", festivalId],
     queryFn: () => getFestivalReportEvaluation(festivalId),
     enabled: activeSection === "방문객평가",
+    refetchInterval: live ? 60_000 : false,
   });
   const activeQuery = activeSection === "축제성과" ? performanceQuery : evaluationQuery;
 

@@ -2,14 +2,7 @@
 
 import type { ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import {
-  CornersIcon,
-  Cross2Icon,
-  GroupIcon,
-  QuestionMarkCircledIcon,
-  RadiobuttonIcon,
-} from "@radix-ui/react-icons";
-import { IconButton } from "@/components/ui/IconButton";
+import { CornersIcon, Cross2Icon, GroupIcon, RadiobuttonIcon } from "@radix-ui/react-icons";
 import { DIALOG_OVERLAY_CLASSES } from "@/components/ui/dialogOverlay";
 
 interface HelpItem {
@@ -18,11 +11,6 @@ interface HelpItem {
   description: string;
 }
 
-/*
-  도구 설명은 툴바 버튼의 title과 같은 내용이다. title은 마우스를 얹고 기다려야 뜨고
-  터치 기기에서는 아예 보이지 않아, 처음 여는 사람이 아이콘만 보고는 무엇을 하는
-  버튼인지 알 수 없었다. 같은 설명을 한자리에 모아 눌러서 읽게 한다.
-*/
 const DRAW_TOOLS: HelpItem[] = [
   {
     icon: <CornersIcon />,
@@ -42,10 +30,9 @@ const DRAW_TOOLS: HelpItem[] = [
 ];
 
 const TOP_BUTTONS: HelpItem[] = [
-  { name: "AI 분석", description: "배치도 이미지를 올리면 부스 자리를 자동으로 찍습니다." },
-  { name: "팜플렛", description: "팜플렛 이미지를 지도에 깔고 따라 그립니다." },
+  { name: "AI 분석", description: "팜플렛 이미지를 올리면 부스 자리를 자동으로 찍습니다." },
   { name: "저장", description: "고친 내용을 저장합니다. 바뀐 것이 없으면 꺼져 있습니다." },
-  { name: "공개 설정", description: "버튼을 눌러 방문객 앱의 공개·비공개 상태를 바꿉니다." },
+  { name: "공개/비공개", description: "방문객 앱 부스지도에 보일지 설정합니다." },
 ];
 
 const SELECTION_ACTIONS: HelpItem[] = [
@@ -74,7 +61,6 @@ function HelpSection({ title, items }: { title: string; items: HelpItem[] }) {
                 {item.icon}
               </span>
             ) : null}
-            {/* 480px 안에서 이름과 설명을 한 줄에 놓으면 설명이 두세 글자씩 끊긴다. */}
             <div className="min-w-0">
               <dt className="body-small-bold text-zinc-950">{item.name}</dt>
               <dd className="body-small text-zinc-500">{item.description}</dd>
@@ -86,41 +72,39 @@ function HelpSection({ title, items }: { title: string; items: HelpItem[] }) {
   );
 }
 
-/** 부스 편집 화면의 버튼이 각각 무엇을 하는지 모아 보여 주는 도움말. */
-export function BoothMapHelpDialog() {
+export function BoothMapHelpDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   return (
-    <Dialog.Root>
-      <Dialog.Trigger asChild>
-        <IconButton
-          icon={<QuestionMarkCircledIcon />}
-          size="lg"
-          iconClassName="size-5 [&_svg]:size-5"
-          aria-label="도움말"
-          className="text-zinc-950"
-        />
-      </Dialog.Trigger>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[72dvh] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-3">
-            <div>
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[70dvh] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
+          <div className="relative text-center">
+            <div className="px-8">
               <Dialog.Title className="heading-small text-zinc-950">부스 편집 도움말</Dialog.Title>
               <Dialog.Description className="body-small mt-2 text-zinc-500">
                 버튼이 각각 무엇을 하는지 모았습니다.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <button type="button" aria-label="닫기" className="shrink-0 text-zinc-950">
+              <button
+                type="button"
+                aria-label="닫기"
+                className="absolute top-0 right-0 text-zinc-950"
+              >
                 <Cross2Icon className="size-5" />
               </button>
             </Dialog.Close>
           </div>
-
           <HelpSection title="그리는 도구 (오른쪽 아래)" items={DRAW_TOOLS} />
           <HelpSection title="위쪽 버튼" items={TOP_BUTTONS} />
           <HelpSection title="부스를 여러 개 고르면" items={SELECTION_ACTIONS} />
           <HelpSection title="부스를 하나 고르면" items={BOOTH_QUEUE_ACTIONS} />
-
           <p className="body-caption mt-6 text-zinc-500">
             부지 경계를 그릴 때는 아래 안내 바에서 완료하거나 취소할 수 있습니다.
           </p>

@@ -34,7 +34,7 @@ export interface FestivalVisitorCounts {
 }
 export interface FestivalReportStatus {
   festivalId: string;
-  progressStatus: string;
+  progressStatus: "UPCOMING" | "ONGOING" | "COMPLETED";
   visitorInput: "MISSING" | "PARTIAL" | "COMPLETE";
   generationStatus: "NONE" | "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
   progressDayIndex: number | null;

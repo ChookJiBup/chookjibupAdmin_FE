@@ -111,10 +111,32 @@ export function containsPoint(polygon: LatLng[], point: LatLng): boolean {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const a = ring[i];
     const b = ring[j];
+    // ray casting만으로는 오른쪽/수평 경계선 위의 점이 밖으로 판정될 수 있다.
+    // 작은 부동소수점 오차를 포함해 먼저 선분 위인지 확인해 경계를 안쪽으로 본다.
+    const cross = (point.lng - a.lng) * (b.lat - a.lat) - (point.lat - a.lat) * (b.lng - a.lng);
+    const edgeScale = Math.max(1, Math.abs(b.lat - a.lat), Math.abs(b.lng - a.lng));
+    if (
+      Math.abs(cross) <= 1e-12 * edgeScale &&
+      point.lng >= Math.min(a.lng, b.lng) - 1e-12 &&
+      point.lng <= Math.max(a.lng, b.lng) + 1e-12 &&
+      point.lat >= Math.min(a.lat, b.lat) - 1e-12 &&
+      point.lat <= Math.max(a.lat, b.lat) + 1e-12
+    ) {
+      return true;
+    }
     const straddles = a.lat > point.lat !== b.lat > point.lat;
     if (!straddles) continue;
     const crossLng = ((b.lng - a.lng) * (point.lat - a.lat)) / (b.lat - a.lat) + a.lng;
     if (point.lng < crossLng) inside = !inside;
   }
   return inside;
+}
+
+/** 신규 핀은 서버에 저장된 부지 경계가 있고, 그 안에 찍을 때만 만들 수 있다. */
+export function newPinPlacementError(savedBoundary: LatLng[] | null, point: LatLng): string | null {
+  if (!savedBoundary || uniqueVertices(savedBoundary).length < 3) {
+    return "부지 경계를 먼저 그리고 저장해 주세요.";
+  }
+  if (!containsPoint(savedBoundary, point)) return "부지 경계 밖에는 핀을 추가할 수 없습니다.";
+  return null;
 }

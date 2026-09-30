@@ -116,9 +116,9 @@ export function VisitorDayFields({ days, values, onChange }: VisitorDayFieldsPro
         <Input
           key={day.visitDate}
           label={`${day.dayIndex}일차`}
-          // 아직 마감되지 않은 날은 백엔드가 입력을 거절한다. 보내기 전에 막는다.
+          // 미래 일차는 백엔드가 입력을 거절한다. 보내기 전에 막는다.
           disabled={!day.inputAllowed}
-          helperText={day.inputAllowed ? undefined : "마감 후 입력할 수 있어요"}
+          helperText={day.inputAllowed ? undefined : "해당 날짜부터 입력할 수 있어요"}
           inputMode="numeric"
           placeholder="방문인원을 입력해 주세요"
           value={formatVisitorCount(values[index] ?? "")}

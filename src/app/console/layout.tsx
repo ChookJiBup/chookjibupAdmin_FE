@@ -8,6 +8,9 @@ import { Footer } from "@/components/layout/Footer";
 import { Toaster } from "@/components/ui/sonner";
 import { getManagedFestival } from "@/features/festivals/api";
 import { canCreateFestival } from "@/features/auth/admin/types";
+import { MissingVisitorCountDialog } from "@/features/dashboard/MissingVisitorCountDialog";
+import { getFestivalVisitorCounts } from "@/features/report/api";
+import { elapsedVisitorDays, missingPastVisitorDays } from "@/features/report/visitorDays";
 import { cn } from "@/lib/utils";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { useConsoleUiStore } from "@/store/consoleUiStore";
@@ -40,6 +43,24 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
   // 축제 범위 화면에서는 이 축제의 조회 응답에 담긴 role을 우선 쓰고,
   // 축제 범위 밖(메인홈 등)에서만 계정 세션의 role로 대체한다.
   const role = festivalId ? festivalQuery.data?.role : accountRole;
+  /*
+    방문 인원 입력은 콘솔 메인에 거는 전역 게이트가 아니다. 사용자가 특정 진행 중
+    축제를 선택해 festival-scoped 화면에 들어왔을 때만, 그 festivalId의 오늘까지
+    미입력 일차를 두 역할에게 동일하게 묻는다. 예정/완료 축제는 조회 자체를 하지 않는다.
+  */
+  const visitorCountsQuery = useQuery({
+    queryKey: ["festival-visitor-counts", festivalId],
+    queryFn: () => getFestivalVisitorCounts(festivalId as string),
+    enabled:
+      Boolean(festivalId) &&
+      festivalQuery.data?.progressStatus === "ONGOING" &&
+      Boolean(festivalQuery.data?.role),
+  });
+  const visitorDays = elapsedVisitorDays(visitorCountsQuery.data);
+  const showVisitorDialog =
+    !pathname?.endsWith("/report") &&
+    festivalQuery.data?.progressStatus === "ONGOING" &&
+    missingPastVisitorDays(visitorCountsQuery.data).length > 0;
 
   return (
     <AdminAuthGuard>
@@ -99,6 +120,9 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           right: "16px",
         }}
       />
+      {festivalId && showVisitorDialog ? (
+        <MissingVisitorCountDialog festivalId={festivalId} days={visitorDays} />
+      ) : null}
     </AdminAuthGuard>
   );
 }

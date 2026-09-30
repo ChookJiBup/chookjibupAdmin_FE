@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { Cross2Icon } from "@radix-ui/react-icons";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { DIALOG_OVERLAY_CLASSES } from "./dialogOverlay";
 import { Button, type ButtonVariant } from "./Button";
@@ -32,6 +33,8 @@ export interface ConfirmDialogProps {
   className?: string;
   /** 딤 오버레이에 덧붙일 클래스. 기본값은 콘솔 상단바 아래만 덮는 위치다. */
   overlayClassName?: string;
+  /** 설명과 하단 버튼 사이에 넣을 선택지나 보조 입력 영역. */
+  children?: ReactNode;
 }
 
 export function ConfirmDialog({
@@ -47,6 +50,7 @@ export function ConfirmDialog({
   dismissible = true,
   className,
   overlayClassName,
+  children,
 }: ConfirmDialogProps) {
   /*
     저장/삭제 요청이 날아가는 중에 딤을 잘못 누르면 요청은 그대로 진행되는데
@@ -101,6 +105,8 @@ export function ConfirmDialog({
                 {description}
               </Dialog.Description>
             ) : null}
+
+            {children}
 
             <div className="mt-8 flex gap-3">
               <Dialog.Close asChild>

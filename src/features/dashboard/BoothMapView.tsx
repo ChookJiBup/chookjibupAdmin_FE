@@ -93,6 +93,7 @@ export function BoothMapView({
   fitKey = null,
   onFitted,
   onZoomByWheel,
+  onMapClick,
 }: {
   booths: Booth[];
   /** 화장실·입구·출구 등 부스가 아닌 지도 시설. 아이콘으로만 표시하고 선택하지 않는다. */
@@ -126,6 +127,8 @@ export function BoothMapView({
    */
   onFitted?: (level: number) => void;
   onZoomByWheel?: (direction: 1 | -1) => void;
+  /** 지도 빈 영역을 눌렀을 때 실행할 동작. */
+  onMapClick?: () => void;
 }) {
   const [loading, error] = useKakaoMapLoader();
   const [kakaoMap, setKakaoMap] = useState<kakao.maps.Map | null>(null);
@@ -169,7 +172,11 @@ export function BoothMapView({
 
   if (!process.env.NEXT_PUBLIC_KAKAO_MAP_KEY) {
     return (
-      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center">
+      <div
+        data-testid="booth-map"
+        onClick={onMapClick}
+        className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center"
+      >
         <p className="body-small text-zinc-500">NEXT_PUBLIC_KAKAO_MAP_KEY가 설정되지 않았습니다.</p>
       </div>
     );
@@ -177,7 +184,11 @@ export function BoothMapView({
 
   if (error) {
     return (
-      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center">
+      <div
+        data-testid="booth-map"
+        onClick={onMapClick}
+        className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center"
+      >
         <p className="body-small text-error">카카오맵을 불러오지 못했습니다.</p>
       </div>
     );
@@ -185,7 +196,11 @@ export function BoothMapView({
 
   if (loading) {
     return (
-      <div className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center">
+      <div
+        data-testid="booth-map"
+        onClick={onMapClick}
+        className="absolute inset-0 isolate flex items-center justify-center border border-zinc-200 bg-zinc-50 px-4 text-center"
+      >
         <p className="body-small text-zinc-500">지도를 불러오는 중...</p>
       </div>
     );
@@ -202,7 +217,7 @@ export function BoothMapView({
       : null;
 
   return (
-    <div ref={wrapperRef} className="absolute inset-0 isolate">
+    <div ref={wrapperRef} data-testid="booth-map" className="absolute inset-0 isolate">
       <Map
         center={center}
         isPanto={false}
@@ -217,6 +232,7 @@ export function BoothMapView({
           map.setMinLevel(minLevel);
           map.setMaxLevel(8);
         }}
+        onClick={onMapClick}
       >
         <PamphletOverlay
           map={kakaoMap}

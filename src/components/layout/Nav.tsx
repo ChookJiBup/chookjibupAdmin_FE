@@ -56,6 +56,7 @@ function buildDefaultItems(
     return [
       { label: "대시보드", href: `${festivalBase}/dashboard` },
       { label: "스태프관리", href: `${festivalBase}/staffs` },
+      { label: "운영리포트", href: `${festivalBase}/report` },
     ];
   }
 
@@ -66,8 +67,7 @@ function buildDefaultItems(
     { label: "대시보드", href: `${festivalBase}/dashboard` },
     { label: "운영자관리", href: `${festivalBase}/operators` },
     { label: "스태프관리", href: `${festivalBase}/staffs` },
-    // 결과리포트는 상시 메뉴가 아니다. 화면설계서상 일일마감 후 방문 인원 입력과
-    // 축제 종료 후 첫 진입에서 열리는 흐름이라 Nav 탭으로 두지 않는다.
+    { label: "운영리포트", href: `${festivalBase}/report` },
   ];
 }
 

@@ -47,19 +47,43 @@ export async function getCurrentMap(festivalId: string): Promise<CreateCoordinat
   return data.data;
 }
 
+interface CoordinateMapDependencies {
+  getCurrent: typeof getCurrentMap;
+  create: typeof createCoordinateMap;
+}
+
+const coordinateMapInitialization = new Map<string, Promise<CreateCoordinateMapResponse>>();
+
 /** 현재 map이 있으면 조회하고, 없으면 좌표 전용 map을 준비한다. */
-export async function ensureCoordinateMap(
+export function ensureCoordinateMap(
   festivalId: string,
   mapName = "본행사 배치",
+  dependencies: CoordinateMapDependencies = {
+    getCurrent: getCurrentMap,
+    create: createCoordinateMap,
+  },
 ): Promise<CreateCoordinateMapResponse> {
-  try {
-    return await getCurrentMap(festivalId);
-  } catch (error) {
-    if (isAxiosError(error) && error.response?.status === 404) {
-      return createCoordinateMap(festivalId, { mapName });
+  const pending = coordinateMapInitialization.get(festivalId);
+  if (pending) return pending;
+
+  const initialization = (async () => {
+    try {
+      return await dependencies.getCurrent(festivalId);
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return dependencies.create(festivalId, { mapName });
+      }
+      throw error;
     }
-    throw error;
-  }
+  })();
+  coordinateMapInitialization.set(festivalId, initialization);
+  const clearInitialization = () => {
+    if (coordinateMapInitialization.get(festivalId) === initialization) {
+      coordinateMapInitialization.delete(festivalId);
+    }
+  };
+  void initialization.then(clearInitialization, clearInitialization);
+  return initialization;
 }
 
 export async function getMapAnalysisStatus(

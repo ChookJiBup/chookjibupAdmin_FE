@@ -36,7 +36,7 @@ export function ReportBreadcrumb({
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbPage className="text-zinc-500">결과리포트</BreadcrumbPage>
+          <BreadcrumbPage className="text-zinc-500">운영리포트</BreadcrumbPage>
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         <BreadcrumbItem>

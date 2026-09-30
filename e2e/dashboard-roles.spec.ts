@@ -99,9 +99,9 @@ async function mockDashboard(
 }
 
 for (const scenario of [
-  { name: "총괄관리자", role: "FESTIVAL_OWNER", kind: "GOVERNMENT", menuCount: 4 },
-  { name: "제2관리자", role: "SUB_ADMIN", kind: "GOVERNMENT", menuCount: 2 },
-  { name: "외부업자", role: "SUB_ADMIN", kind: "CONTRACTOR", menuCount: 2 },
+  { name: "총괄관리자", role: "FESTIVAL_OWNER", kind: "GOVERNMENT", menuCount: 5 },
+  { name: "제2관리자", role: "SUB_ADMIN", kind: "GOVERNMENT", menuCount: 3 },
+  { name: "외부업자", role: "SUB_ADMIN", kind: "CONTRACTOR", menuCount: 3 },
 ] as const) {
   test(`${scenario.name}는 공통 대시보드에서 역할별 메뉴와 부스를 본다`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -113,6 +113,10 @@ for (const scenario of [
     await expect(navigation.getByRole("link", { name: "대시보드", exact: true })).toHaveAttribute(
       "aria-current",
       "page",
+    );
+    await expect(navigation.getByRole("link", { name: "운영리포트", exact: true })).toHaveAttribute(
+      "href",
+      `/console/festivals/${festivalId}/report`,
     );
     // 부스맵 편집 권한이 없는 운영자에게는 버튼 자체를 노출하지 않는다.
     const isOwner = scenario.role === "FESTIVAL_OWNER";
@@ -176,11 +180,11 @@ test("진행예정 축제의 대시보드는 실시간 지표 대신 준비 현�
   ).toEqual([]);
 });
 
-test("종료된 축제의 대시보드는 부스맵 수정을 막고 결과리포트로 안내한다", async ({ page }) => {
+test("종료된 축제의 대시보드는 부스맵 수정을 막고 운영리포트로 안내한다", async ({ page }) => {
   await mockDashboard(page, "FESTIVAL_OWNER", "GOVERNMENT", false, "COMPLETED");
   await page.goto(dashboardPath);
   await expect(page.getByText("종료된 축제입니다.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "결과리포트 보기", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "운영리포트 보기", exact: true })).toHaveAttribute(
     "href",
     `/console/festivals/${festivalId}/report`,
   );
@@ -271,10 +275,10 @@ test("메인 축제 카드는 각 축제에서 본인이 맡은 역할의 화면
   await expect(operatorCard).toHaveAttribute("href", dashboardPath);
   await operatorCard.click();
   await expect(page).toHaveURL(dashboardPath);
-  await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(2);
+  await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(3);
 });
 
-for (const suffix of ["", "/operators", "/operators/test-admin", "/report"]) {
+for (const suffix of ["", "/operators", "/operators/test-admin"]) {
   test(`제2관리자가 총괄 전용 ${suffix || "축제관리"} 주소에 접근하면 대시보드로 이동한다`, async ({
     page,
   }) => {
@@ -291,11 +295,12 @@ test("작은 화면에서 부스 목록을 열고 닫아 지도를 조작한다"
   await page.goto(dashboardPath);
   const toggle = page.getByRole("button", { name: "부스 목록", exact: true });
   await expect(toggle).toBeVisible();
-  await expect(page.getByRole("complementary")).toBeHidden();
+  const sidebar = page.getByRole("complementary");
+  await expect(sidebar).toBeHidden();
   await toggle.click();
   await page.getByRole("button", { name: /먹거리 구역/ }).click();
-  await page.getByRole("button", { name: "테스트 먹거리 부스", exact: true }).click();
-  await expect(page.getByRole("complementary")).toBeHidden();
+  await sidebar.getByRole("button", { name: "테스트 먹거리 부스", exact: true }).click();
+  await expect(sidebar).toBeHidden();
   await expect(
     page.getByText("테스트 먹거리 부스", { exact: true }).filter({ visible: true }).first(),
   ).toBeVisible();
