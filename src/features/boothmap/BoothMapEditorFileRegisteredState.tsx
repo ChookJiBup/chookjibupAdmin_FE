@@ -13,7 +13,6 @@ import {
 import {
   CheckCircledIcon,
   ChevronDownIcon,
-  ClockIcon,
   CornersIcon,
   Cross2Icon,
   DimensionsIcon,
@@ -949,6 +948,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       ? "AI 분석이 끝난 뒤에 저장할 수 있습니다."
       : undefined;
   const hasBlueprintImage = !!editorQuery.data?.displayImageUrl;
+  const hasSiteBoundary = Boolean(siteBoundary && siteBoundary.length >= 3);
+  const boundaryRequiredReason =
+    editLockReason ?? (!hasSiteBoundary ? "부지 경계를 먼저 설정해 주세요." : undefined);
   const reviewRequiredCount = booths.filter((booth) => booth.uncertain).length;
 
   // 편집기 데이터가 도착하면 로컬 상태를 채운다(렌더 중 조정 — effect가 아니다).
@@ -1168,15 +1170,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     setEditingBoothId(id);
     setDrawTool("select");
     setPinTypeMenuOpen(false);
-  }
-
-  /** 폴리곤·라인 그리기를 시작한다. 같은 버튼을 다시 누르면 그리기를 접는다. */
-  function startShapeTool(kind: "polygon" | "line") {
-    setPinTypeMenuOpen(false);
-    setSelectedShapeId(null);
-    setEditingBoothId(null);
-    setDraftPoints([]);
-    setDrawTool((current) => (current === kind ? "select" : kind));
   }
 
   /** 그리는 중인 도형에 꼭짓점을 하나 더한다. */
@@ -1911,6 +1904,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
    * 범위 선택으로 본다 — Shift+클릭이 이미 «선택에 더하기»라 같은 결을 잇는다.
    */
   function startMarquee(event: React.PointerEvent<HTMLDivElement>) {
+    if (!hasSiteBoundary) return;
     const map = kakaoMapRef.current;
     const start = coordsAtClient(event.clientX, event.clientY);
     if (!map || !start) return;
@@ -1979,6 +1973,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     if (target?.closest("button") || target?.closest("[data-map-tools]")) return;
     // 범위 선택 도구에서는 수정키 없이 바로 끌어 고른다. 고른 것을 옮기는 건 선택 도구에서.
     if (drawTool === "marquee" || event.shiftKey) {
+      if (!hasSiteBoundary) return;
       event.preventDefault();
       startMarquee(event);
       return;
@@ -3378,11 +3373,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                         }}
                         onCancel={() => setGroupPopoverOpen(false)}
                         onDelete={() => setGroupPopoverOpen(false)}
-                        onChangeType={(type) =>
-                          toast.info(
-                            `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
-                          )
-                        }
                       />
                     </MapPopoverPortal>
                   );
@@ -3401,12 +3391,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   initialName={selectedZone.name}
                   confirmLabel="수정"
                   hideCancel
-                  onChangeType={(type) =>
-                    toast.info(
-                      `"${type === "pin" ? "핀" : type === "polygon" ? "폴리곤" : "라인"}"으로 유형 변경은 아직 연결되지 않았습니다`,
-                      { description: "화면 레이아웃만 우선 구현된 상태입니다." },
-                    )
-                  }
                   onConfirm={(name) => {
                     setZones((prev) =>
                       prev.map((zone) => (zone.id === selectedZone.id ? { ...zone, name } : zone)),
@@ -3848,36 +3832,39 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         <div className="flex flex-col gap-1">
           <span
             className="flex"
-            title={editLockReason ?? "범위 선택 — 지도를 끌어 안에 든 부스·도형을 모두 고릅니다"}
+            title={editLockReason ?? "부지 경계 — 지도를 눌러 꼭짓점을 찍습니다"}
           >
             <IconButton
-              icon={<GroupIcon />}
+              icon={<CornersIcon />}
               size="lg"
               iconClassName="size-5 [&_svg]:size-5"
-              aria-label="범위 선택"
-              aria-pressed={drawTool === "marquee"}
+              aria-label="부지 경계"
+              aria-pressed={drawTool === "boundary"}
               disabled={editingLocked}
-              className={cn("text-zinc-950", drawTool === "marquee" && "ring-2 ring-primary")}
+              className={cn("text-zinc-950", drawTool === "boundary" && "ring-2 ring-primary")}
               onClick={() => {
+                setDrawTool((tool) => (tool === "boundary" ? "select" : "boundary"));
                 setPinTypeMenuOpen(false);
                 setDraftPoints([]);
-                setDrawTool((tool) => (tool === "marquee" ? "select" : "marquee"));
+                setQueueDraft([]);
               }}
             />
           </span>
-          <IconButton
-            icon={<RadiobuttonIcon />}
-            size="lg"
-            iconClassName="size-5 [&_svg]:size-5"
-            aria-label="핀 추가"
-            aria-pressed={drawTool === "pin"}
-            disabled={editingLocked}
-            className={cn("text-zinc-950", drawTool === "pin" && "ring-2 ring-primary")}
-            onClick={() => {
-              setDraftPoints([]);
-              setPinTypeMenuOpen((open) => !open);
-            }}
-          />
+          <span className="flex" title={boundaryRequiredReason}>
+            <IconButton
+              icon={<RadiobuttonIcon />}
+              size="lg"
+              iconClassName="size-5 [&_svg]:size-5"
+              aria-label="핀 추가"
+              aria-pressed={drawTool === "pin"}
+              disabled={editingLocked || !hasSiteBoundary}
+              className={cn("text-zinc-950", drawTool === "pin" && "ring-2 ring-primary")}
+              onClick={() => {
+                setDraftPoints([]);
+                setPinTypeMenuOpen((open) => !open);
+              }}
+            />
+          </span>
           {pinTypeMenuOpen ? (
             <div className="absolute right-full bottom-20 mr-2 w-25 rounded-lg border border-zinc-200 bg-white p-2 shadow-md">
               {PIN_TYPE_OPTIONS.map((option) => (
@@ -3899,64 +3886,21 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           ) : null}
           <span
             className="flex"
-            title={editLockReason ?? "폴리곤 그리기 — 지도를 눌러 꼭짓점을 찍습니다"}
+            title={boundaryRequiredReason ?? "범위 선택 — 지도를 끌어 안에 든 부스를 모두 고릅니다"}
           >
             <IconButton
-              icon={<DimensionsIcon />}
+              icon={<GroupIcon />}
               size="lg"
               iconClassName="size-5 [&_svg]:size-5"
-              aria-label="폴리곤 추가"
-              aria-pressed={drawTool === "polygon"}
-              disabled={editingLocked}
-              className={cn("text-zinc-950", drawTool === "polygon" && "ring-2 ring-primary")}
-              onClick={() => startShapeTool("polygon")}
-            />
-          </span>
-          <span
-            className="flex"
-            title={editLockReason ?? "라인 그리기 — 지도를 눌러 꺾은점을 찍습니다"}
-          >
-            <IconButton
-              icon={<RulerHorizontalIcon />}
-              size="lg"
-              iconClassName="size-5 [&_svg]:size-5"
-              aria-label="라인 추가"
-              aria-pressed={drawTool === "line"}
-              disabled={editingLocked}
-              className={cn("text-zinc-950", drawTool === "line" && "ring-2 ring-primary")}
-              onClick={() => startShapeTool("line")}
-            />
-          </span>
-          <span
-            className="flex"
-            title={editLockReason ?? "부지 경계 — 지도를 눌러 꼭짓점을 찍습니다"}
-          >
-            <IconButton
-              icon={<CornersIcon />}
-              size="lg"
-              iconClassName="size-5 [&_svg]:size-5"
-              aria-label="부지 경계"
-              aria-pressed={drawTool === "boundary"}
-              disabled={editingLocked}
-              className={cn("text-zinc-950", drawTool === "boundary" && "ring-2 ring-primary")}
+              aria-label="범위 선택"
+              aria-pressed={drawTool === "marquee"}
+              disabled={editingLocked || !hasSiteBoundary}
+              className={cn("text-zinc-950", drawTool === "marquee" && "ring-2 ring-primary")}
               onClick={() => {
-                setDrawTool((tool) => (tool === "boundary" ? "select" : "boundary"));
                 setPinTypeMenuOpen(false);
                 setDraftPoints([]);
-                setQueueDraft([]);
+                setDrawTool((tool) => (tool === "marquee" ? "select" : "marquee"));
               }}
-            />
-          </span>
-          <span className="flex" title={canEditQueue ? undefined : queueToolDisabledReason}>
-            <IconButton
-              icon={<ClockIcon />}
-              size="lg"
-              iconClassName="size-5 [&_svg]:size-5"
-              aria-label="줄끝 갱신"
-              aria-pressed={Boolean(queueZoneTarget)}
-              disabled={Boolean(currentDisabledReason)}
-              className={cn("text-zinc-950", queueZoneTarget && "ring-2 ring-primary")}
-              onClick={openCurrentQueue}
             />
           </span>
         </div>
@@ -4432,6 +4376,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         onConfirm={() => {
           setSiteBoundary(null);
           setBoundaryDraft([]);
+          setDrawTool("select");
+          setPinTypeMenuOpen(false);
+          setMarquee(null);
+          setCheckedIds(new Set());
           setDeleteBoundaryOpen(false);
           setPamphlet((prev) => (prev ? { ...prev, clipToBoundary: false } : prev));
         }}

@@ -3,14 +3,11 @@
 import type { ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ClockIcon,
   CornersIcon,
   Cross2Icon,
-  DimensionsIcon,
   GroupIcon,
   QuestionMarkCircledIcon,
   RadiobuttonIcon,
-  RulerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { IconButton } from "@/components/ui/IconButton";
 import { DIALOG_OVERLAY_CLASSES } from "@/components/ui/dialogOverlay";
@@ -28,26 +25,19 @@ interface HelpItem {
 */
 const DRAW_TOOLS: HelpItem[] = [
   {
-    icon: <GroupIcon />,
-    name: "범위 선택",
-    description: "지도를 끌어 안에 든 것을 한 번에 고릅니다.",
+    icon: <CornersIcon />,
+    name: "부지 경계",
+    description: "축제장 테두리입니다. 핀과 범위를 사용하기 전에 먼저 설정합니다.",
   },
   {
     icon: <RadiobuttonIcon />,
     name: "핀 추가",
     description: "시설·부스·입구·출구·화장실을 찍습니다.",
   },
-  { icon: <DimensionsIcon />, name: "폴리곤 추가", description: "구역·주차장처럼 면을 그립니다." },
-  { icon: <RulerHorizontalIcon />, name: "라인 추가", description: "통로를 선으로 그립니다." },
   {
-    icon: <CornersIcon />,
-    name: "부지 경계",
-    description: "축제장 테두리입니다. 있어야 AI가 줄을 추천합니다.",
-  },
-  {
-    icon: <ClockIcon />,
-    name: "대기줄",
-    description: "방문객이 선 줄을 기록합니다. 부스를 먼저 고르세요.",
+    icon: <GroupIcon />,
+    name: "범위 선택",
+    description: "지도를 끌어 안에 든 것을 한 번에 고릅니다.",
   },
 ];
 
@@ -126,19 +116,13 @@ export function BoothMapHelpDialog() {
             </Dialog.Close>
           </div>
 
-          {/* 이름이 닮아 가장 많이 헷갈리는 둘을 맨 위에서 갈라 준다. */}
-          <p className="body-small mt-6 rounded-lg bg-zinc-100 px-4 py-3 text-zinc-950">
-            <span className="body-small-bold">줄 세우기</span>는 부스를 나란히 정렬하는 것이고,
-            방문객이 서는 줄은 <span className="body-small-bold">대기줄</span>입니다.
-          </p>
-
           <HelpSection title="그리는 도구 (오른쪽 아래)" items={DRAW_TOOLS} />
           <HelpSection title="위쪽 버튼" items={TOP_BUTTONS} />
           <HelpSection title="부스를 여러 개 고르면" items={SELECTION_ACTIONS} />
           <HelpSection title="부스를 하나 고르면" items={BOOTH_QUEUE_ACTIONS} />
 
           <p className="body-caption mt-6 text-zinc-500">
-            폴리곤·라인·경계를 그릴 때는 아래 안내 바에서 한 점씩 되돌리거나 그만둘 수 있습니다.
+            부지 경계를 그릴 때는 아래 안내 바에서 완료하거나 취소할 수 있습니다.
           </p>
         </Dialog.Content>
       </Dialog.Portal>

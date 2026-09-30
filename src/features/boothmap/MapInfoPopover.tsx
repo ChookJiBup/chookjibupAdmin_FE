@@ -1,35 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  Cross1Icon,
-  DimensionsIcon,
-  Pencil2Icon,
-  RadiobuttonIcon,
-  RulerHorizontalIcon,
-  UpdateIcon,
-} from "@radix-ui/react-icons";
+import { Cross1Icon, Pencil2Icon, UpdateIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { MapOverlayCard } from "@/components/map/MapOverlayCard";
 import type { NodeType } from "./types";
-import { LINE_TYPE_OPTIONS, PIN_TYPE_OPTIONS, POLYGON_TYPE_OPTIONS } from "./nodeTypeIcons";
+import { PIN_TYPE_OPTIONS } from "./nodeTypeIcons";
 
 export type MapInfoPopoverMode = "group-create" | "zone-edit" | "booth-edit";
-export type MapObjectTypeCategory = "pin" | "polygon" | "line";
 
 const TYPE_LABEL: Record<MapInfoPopoverMode, string> = {
   "group-create": "구역",
   "zone-edit": "구역",
   "booth-edit": "부스",
 };
-
-const TYPE_CATEGORY_OPTIONS: { value: MapObjectTypeCategory; label: string; icon: ReactNode }[] = [
-  { value: "pin", label: "핀", icon: <RadiobuttonIcon /> },
-  { value: "polygon", label: "폴리곤", icon: <DimensionsIcon /> },
-  { value: "line", label: "라인", icon: <RulerHorizontalIcon /> },
-];
 
 /**
  * 말풍선을 열어 둔 채로 봐야 하는 대상인지.
@@ -56,7 +42,6 @@ export function MapInfoPopover({
   onConfirm,
   onCancel,
   onDelete,
-  onChangeType,
   onChangeNodeType,
   confirmLabel = "확인",
   hideCancel = false,
@@ -70,8 +55,6 @@ export function MapInfoPopover({
   onConfirm: (name: string) => void;
   onCancel: () => void;
   onDelete?: () => void;
-  /** 전달하면 유형 행 아래에 "유형 변경하기" 버튼을 노출한다(핀/폴리곤/라인 대분류 변경용). */
-  onChangeType?: (type: MapObjectTypeCategory) => void;
   onChangeNodeType?: (type: NodeType) => void;
   /** 확인 버튼 라벨. 그룹(구역) 생성 직후 재편집 흐름에서는 "등록"으로 쓴다. */
   confirmLabel?: string;
@@ -89,7 +72,6 @@ export function MapInfoPopover({
 }) {
   const [name, setName] = useState(initialName);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
-  const [typeCategory, setTypeCategory] = useState<MapObjectTypeCategory | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -111,13 +93,11 @@ export function MapInfoPopover({
       */
       if (event.shiftKey) return;
       setTypeMenuOpen(false);
-      setTypeCategory(null);
       onCancel();
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape" || pendingDelete) return;
       setTypeMenuOpen(false);
-      setTypeCategory(null);
       onCancel();
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -164,7 +144,7 @@ export function MapInfoPopover({
             <span className="body-small text-zinc-500">유형</span>
             <span className="body-small text-zinc-950">{typeLabel ?? TYPE_LABEL[mode]}</span>
           </div>
-          {onChangeType || onChangeNodeType ? (
+          {onChangeNodeType ? (
             <div className="relative">
               <Button
                 type="button"
@@ -178,54 +158,22 @@ export function MapInfoPopover({
               </Button>
               {typeMenuOpen ? (
                 <div className="absolute top-full left-0 z-10 mt-1 w-21 rounded-md border border-zinc-200 bg-white p-2 shadow-md">
-                  {TYPE_CATEGORY_OPTIONS.map((option) => (
+                  {PIN_TYPE_OPTIONS.map((option) => (
                     <button
                       key={option.value}
                       type="button"
                       onClick={() => {
-                        if (onChangeNodeType) {
-                          setTypeCategory(option.value);
-                          return;
-                        }
-                        onChangeType?.(option.value);
+                        onChangeNodeType(option.value);
                         setTypeMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-sm py-2 text-left hover:bg-zinc-100"
+                      className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
                     >
-                      <span className="size-4 shrink-0 text-zinc-500">{option.icon}</span>
-                      <span className="body-small flex-1 text-zinc-950">{option.label}</span>
+                      <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
+                        {option.icon}
+                      </span>
+                      <span className="body-small text-zinc-950">{option.label}</span>
                     </button>
                   ))}
-                  {typeCategory ? (
-                    <div
-                      className={`absolute top-0 left-full ml-2 rounded-md border border-zinc-200 bg-white p-2 shadow-md ${
-                        typeCategory === "pin" ? "w-25" : "w-21"
-                      }`}
-                    >
-                      {(typeCategory === "pin"
-                        ? PIN_TYPE_OPTIONS
-                        : typeCategory === "polygon"
-                          ? POLYGON_TYPE_OPTIONS
-                          : LINE_TYPE_OPTIONS
-                      ).map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => {
-                            onChangeNodeType?.(option.value);
-                            setTypeCategory(null);
-                            setTypeMenuOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
-                        >
-                          <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
-                            {option.icon}
-                          </span>
-                          <span className="body-small text-zinc-950">{option.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
             </div>

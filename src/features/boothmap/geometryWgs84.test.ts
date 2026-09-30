@@ -33,7 +33,7 @@ describe("partitionEditorNodes", () => {
       assert.equal(result.preserved.length, 1);
     }
   });
-  it("폴리곤을 읽고 저장해도 POLYGON과 좌표가 유지된다", () => {
+  it("기존 폴리곤은 편집 대상으로 노출하지 않고 서버 원본을 보존한다", () => {
     const node = pointNode({
       geometryType: "POLYGON",
       geometry: {
@@ -45,9 +45,9 @@ describe("partitionEditorNodes", () => {
       },
     });
     const result = partitionEditorNodes([node]);
-    const [change] = boothMapPinsToNodeChanges([], [], result.shapes);
-    assert.equal(change.geometryType, "POLYGON");
-    assert.deepEqual(change.geometry, node.geometry);
+    assert.equal(result.shapes.length, 0);
+    assert.equal(result.preserved.length, 1);
+    assert.equal(result.preserved[0]?.node, node);
   });
   it("POINT schema 2.0을 핀으로 옮기고 relatedBoothId를 유지한다", () => {
     const { pins, preserved } = partitionEditorNodes([pointNode()]);
@@ -70,8 +70,8 @@ describe("partitionEditorNodes", () => {
     assert.equal(preserved.length, 2);
   });
 
-  it("POLYLINE은 편집 도형으로 분류한다", () => {
-    const { shapes } = partitionEditorNodes([
+  it("기존 POLYLINE 대기줄 노드도 편집 대상에서 제외한다", () => {
+    const { shapes, preserved } = partitionEditorNodes([
       pointNode({
         nodeType: "QUEUE",
         geometryType: "POLYLINE",
@@ -83,9 +83,8 @@ describe("partitionEditorNodes", () => {
         },
       }),
     ]);
-    assert.equal(shapes.length, 1);
-    assert.equal(shapes[0]?.kind, "line");
-    assert.equal(shapes[0]?.points.length, 2);
+    assert.equal(shapes.length, 0);
+    assert.equal(preserved.length, 1);
   });
 });
 

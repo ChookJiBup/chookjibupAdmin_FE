@@ -99,14 +99,11 @@ export function partitionEditorNodes(nodes: NodeResponse[]): PartitionedEditorNo
       pins.push(pin);
       return;
     }
-    const shape = nodeToLocalShape(node);
-    if (shape) {
-      shapes.push(shape);
-      return;
-    }
     const reason = isSchema10(node)
       ? "이미지 정규화(schema 1.0) 노드는 카카오 좌표 지도에서 변환하지 않습니다."
-      : `지원하지 않는 도형(${node.geometryType}, schema ${node.geometrySchemaVersion ?? "없음"})을 보존합니다.`;
+      : node.geometryType === "POLYGON" || node.geometryType === "POLYLINE"
+        ? `편집이 종료된 도형(${node.geometryType})은 서버 원본을 그대로 보존합니다.`
+        : `지원하지 않는 도형(${node.geometryType}, schema ${node.geometrySchemaVersion ?? "없음"})을 보존합니다.`;
     preserved.push({ node, reason });
   });
 

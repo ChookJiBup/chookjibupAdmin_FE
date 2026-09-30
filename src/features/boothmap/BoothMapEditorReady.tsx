@@ -4,12 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Cross2Icon,
-  DimensionsIcon,
   FileIcon,
   HamburgerMenuIcon,
   RadiobuttonIcon,
   ResetIcon,
-  RulerHorizontalIcon,
 } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
@@ -461,23 +459,6 @@ export function BoothMapEditorReady({
               setTool("select");
             }}
             className={pendingBooth ? "bg-primary/10 text-zinc-950" : "text-zinc-950"}
-          />
-          <span title="자유 폴리곤 그리기는 아직 지원하지 않아요 — 부스를 선택해 그룹화하면 구역이 자동으로 만들어져요.">
-            <IconButton
-              icon={<DimensionsIcon className="size-5" />}
-              aria-label="폴리곤 추가"
-              disabled
-              className="text-zinc-950"
-            />
-          </span>
-          <IconButton
-            icon={<RulerHorizontalIcon className="size-5" />}
-            aria-label="라인 추가"
-            onClick={() => {
-              setPendingBooth(false);
-              setTool(tool === "queue-line" ? "select" : "queue-line");
-            }}
-            className={tool === "queue-line" ? "bg-primary/10 text-zinc-950" : "text-zinc-950"}
           />
         </div>
         <MapZoomControls
