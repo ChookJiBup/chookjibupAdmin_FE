@@ -1,21 +1,18 @@
 "use client";
 
-import { MagnifyingGlassIcon, PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { AttachmentField } from "@/components/ui/AttachmentField";
 import { Bottombar } from "@/components/ui/Bottombar";
-import { toast } from "sonner";
-import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormSection } from "@/components/ui/FormSection";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import { DateField } from "./DateField";
-import { hasFestivalPeriodError, toIsoDate, validateFestivalPeriod } from "./dateFormat";
+import { canCreateFestival } from "@/features/auth/admin/types";
 import {
   createFestival,
   createFestivalWithImage,
@@ -27,6 +24,11 @@ import type {
 } from "@/features/festivals/types";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { geocodeAddress } from "@/lib/kakaoGeocoder";
+import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
+import { useAdminAuthStore } from "@/store/adminAuthStore";
+import { DateField } from "./DateField";
+import { FestivalLocationFields } from "./FestivalLocationFields";
+import { hasFestivalPeriodError, toIsoDate, validateFestivalPeriod } from "./dateFormat";
 import {
   createInitialLocationDrafts,
   createLocationDraft,
@@ -43,16 +45,10 @@ import {
   toDisplayDateOrEmpty,
   toFestivalSearchDialogResult,
 } from "./seriesSearch";
-import { canCreateFestival } from "@/features/auth/admin/types";
-import { useAdminAuthStore } from "@/store/adminAuthStore";
 
-/** 서버가 대표 이미지로 받는 형식. webp는 거부된다. */
 const FESTIVAL_IMAGE_ACCEPT = "image/png,image/jpeg";
 const FESTIVAL_IMAGE_MIME_TYPES = ["image/png", "image/jpeg"];
-/** application.yml의 app.map.image.max-file-size 기본값과 맞춘다. */
 const FESTIVAL_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
-
-/** 주소를 좌표로 바꾸지 못했을 때 공통으로 쓰는 안내. */
 const ADDRESS_GEOCODE_FAILED_MESSAGE = "주소를 찾지 못했습니다. 주소 검색으로 다시 선택해 주세요.";
 
 export function FestivalRegisterForm() {
@@ -88,19 +84,8 @@ export function FestivalRegisterForm() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [geocodePending, setGeocodePending] = useState(false);
-  /** 등록 직전 지오코딩까지 해봐도 좌표를 못 구한 장소 key — 해당 주소 칸에만 사유를 띄운다. */
   const [addressErrorKeys, setAddressErrorKeys] = useState<string[]>([]);
-  /*
-    등록 확인 다이얼로그를 띄우기 직전에 좌표까지 채운 장소 목록. 확인 버튼이
-    누르는 시점의 `locations` 상태를 다시 읽지 않고 이 값을 그대로 보내서,
-    검증을 통과한 목록과 실제로 전송되는 목록이 어긋나지 않게 한다.
-  */
   const [submitLocations, setSubmitLocations] = useState<LocationDraft[]>([]);
-  /*
-    축제 기간 오류를 이미 건드린 칸에만 보여 주기 위한 표시.
-    타이핑 도중에는 «2026-0»처럼 형식이 안 맞는 게 당연하므로, 칸에서 포커스가
-    빠졌을 때나 등록을 눌러 봤을 때만 빨간 문구를 띄운다.
-  */
   const [periodTouched, setPeriodTouched] = useState({ startDate: false, endDate: false });
 
   const periodErrors = validateFestivalPeriod(startDate, endDate);
@@ -108,9 +93,7 @@ export function FestivalRegisterForm() {
     startDate: periodTouched.startDate ? periodErrors.startDate : null,
     endDate: periodTouched.endDate ? periodErrors.endDate : null,
   };
-  /** 기간 오류가 화면에 보이는 동안에는 등록을 막는다. 막힌 이유는 등록 버튼 위에도 적는다. */
   const periodBlocksSubmit = hasFestivalPeriodError(visiblePeriodErrors);
-  /** 등록 버튼 위에 띄울 한 줄. 기간 오류는 입력칸마다 따로 적히므로 여기서는 잠긴 이유만 알린다. */
   const submitBlockedMessage =
     formError ?? (periodBlocksSubmit ? "축제 기간을 확인해 주세요." : null);
 
@@ -134,7 +117,6 @@ export function FestivalRegisterForm() {
     setEndDate(toDisplayDateOrEmpty(series.latestEndDate));
     setFestivalSearchOpen(false);
 
-    // 검색 결과에는 주소만 있고 좌표가 없다. 주소를 채우면서 좌표도 같이 만들어 둔다.
     const roadAddress = series.latestAddress ?? "";
     const firstKey = locations[0]?.key;
     setLocations((current) => {
@@ -153,7 +135,6 @@ export function FestivalRegisterForm() {
 
     if (!roadAddress) return;
     const coordinate = await geocodeAddress(roadAddress);
-    // 여기서 실패해도 막지 않는다. 등록 직전 검증이 다시 시도하고, 그때도 못 찾으면 안내한다.
     if (coordinate && firstKey) updateLocation(firstKey, coordinate);
   }
 
@@ -180,7 +161,6 @@ export function FestivalRegisterForm() {
 
   function updateLocation(key: string, patch: Partial<Omit<LocationDraft, "key">>) {
     setLocations((current) => current.map((loc) => (loc.key === key ? { ...loc, ...patch } : loc)));
-    // 좌표가 채워졌으면 이 장소에 걸린 "주소를 못 찾음" 표시를 걷는다.
     if (patch.latitude != null) setAddressErrorKeys((current) => current.filter((k) => k !== key));
   }
 
@@ -217,14 +197,12 @@ export function FestivalRegisterForm() {
         visitorCountInputMode: "DAILY" as FestivalVisitorCountInputMode,
       };
 
-      // 대표 이미지를 첨부했으면 multipart로 함께 올려 사용자 화면 썸네일과 연결한다.
       if (festivalImage) {
         return createFestivalWithImage(request, festivalImage);
       }
       return createFestival(request);
     },
     onSuccess: (festival) => {
-      // 등록 직후 부스맵으로 넘어가므로, 이동한 화면에서 결과를 알 수 있게 토스트를 남긴다.
       toast.success("축제를 등록했습니다.", {
         description: "이어서 부스 위치를 찍어 주세요.",
       });
@@ -257,7 +235,6 @@ export function FestivalRegisterForm() {
       return;
     }
     if (hasFestivalPeriodError(periodErrors)) {
-      // 어느 칸이 잘못됐는지는 해당 입력칸 아래에 적히므로, 두 칸을 모두 «건드린» 상태로 만든다.
       setPeriodTouched({ startDate: true, endDate: true });
       setFormError(null);
       return;
@@ -267,12 +244,6 @@ export function FestivalRegisterForm() {
       return;
     }
 
-    /*
-      좌표가 빈 장소를 주소로 지오코딩해서 채운다. 주소 검색으로 고른 주소는 이미
-      좌표가 있지만, 직접 입력하거나 이전 축제에서 불러온 주소는 비어 있을 수 있다.
-      좌표 없이 보내면 백엔드가 이유 없는 400으로 막고 부스맵도 못 만들기 때문에,
-      여기서 채우지 못한 장소가 있으면 저장을 진행하지 않고 이유를 알려 준다.
-    */
     setFormError(null);
     setAddressErrorKeys([]);
     setGeocodePending(true);
@@ -348,91 +319,19 @@ export function FestivalRegisterForm() {
               />
             </div>
 
-            <div className="flex flex-col gap-4 border-t border-zinc-200 pt-4">
-              {locations.map((location, index) => (
-                <div key={location.key} className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
-                    {index > 0 ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="body-small-bold text-zinc-950">장소 {index + 1}</p>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          icon={<TrashIcon />}
-                          className="py-0"
-                          onClick={() => removeLocation(location.key)}
-                        >
-                          삭제
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {location.roadAddress ? (
-                      /*
-                    주소를 한 번 채우면 입력칸이 잠기므로, 좌표를 못 구했을 때
-                    다시 검색할 길을 열어 둔다. 이 버튼이 없으면 등록이 막힌 채로
-                    주소를 고칠 방법이 없다.
-                  */
-                      <Input
-                        layout="with-button"
-                        disabled
-                        value={location.roadAddress}
-                        className="disabled:border-zinc-400!"
-                        errorText={
-                          addressErrorKeys.includes(location.key)
-                            ? ADDRESS_GEOCODE_FAILED_MESSAGE
-                            : undefined
-                        }
-                        button={
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                              setAddressSearchTargetKey(location.key);
-                              setAddressSearchState("default");
-                              setAddressManualError(null);
-                            }}
-                          >
-                            주소 변경
-                          </Button>
-                        }
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddressSearchTargetKey(location.key);
-                          setAddressSearchState("default");
-                          setAddressManualError(null);
-                        }}
-                        className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 body-regular text-zinc-950 transition-colors hover:bg-zinc-50"
-                      >
-                        <MagnifyingGlassIcon className="size-4" />
-                        주소 찾기
-                      </button>
-                    )}
-                  </div>
-                  <Input
-                    placeholder="상세주소"
-                    value={location.detailAddress}
-                    onChange={(event) =>
-                      updateLocation(location.key, { detailAddress: event.target.value })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              icon={<PlusIcon />}
-              className="mt-3"
-              onClick={addLocation}
-            >
-              장소 추가
-            </Button>
+            <FestivalLocationFields
+              locations={locations}
+              addressErrorKeys={addressErrorKeys}
+              addressErrorMessage={ADDRESS_GEOCODE_FAILED_MESSAGE}
+              onAdd={addLocation}
+              onRemove={removeLocation}
+              onChange={updateLocation}
+              onSearchAddress={(key) => {
+                setAddressSearchTargetKey(key);
+                setAddressSearchState("default");
+                setAddressManualError(null);
+              }}
+            />
           </FormSection>
         </div>
 
@@ -453,10 +352,6 @@ export function FestivalRegisterForm() {
         </section>
       </div>
 
-      {/*
-        「축제명을 입력해 주세요」가 상세정보 카드 맨 아래(장소 추가 밑)에 떠서, 정작
-        비어 있는 축제명 칸과 카드 하나만큼 떨어져 있었다. 등록 버튼 바로 위로 옮긴다.
-      */}
       {submitBlockedMessage ? (
         <p className="body-small text-error">{submitBlockedMessage}</p>
       ) : null}
@@ -536,12 +431,6 @@ export function FestivalRegisterForm() {
             setAddressManualError("주소를 입력해 주세요.");
             return;
           }
-          /*
-            직접 입력한 주소에는 좌표가 없다. 여기서 바로 지오코딩해서, 좌표를
-            구한 주소만 폼에 넣는다. 못 구하면 다이얼로그를 닫지 않고 사유를 띄워
-            검색으로 다시 고르게 한다 — 예전에는 그대로 통과시켜 등록 단계에서
-            이유 없는 400으로 끝났다.
-          */
           setAddressManualError(null);
           setAddressManualPending(true);
           try {
