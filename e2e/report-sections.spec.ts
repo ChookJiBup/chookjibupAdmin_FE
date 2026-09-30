@@ -44,8 +44,12 @@ const performance = {
       { rank: 5, zoneName: "안내 구역", averageWaitMinutes: 5 },
       { rank: 6, zoneName: "주차 구역", averageWaitMinutes: 3 },
     ],
-    boothCongestionShare: [],
-    visitPattern: { available: false, peakHours: [] },
+    boothCongestionShare: [
+      { congestionLevel: "HIGH", sharePercent: 20 },
+      { congestionLevel: "MEDIUM", sharePercent: 30 },
+      { congestionLevel: "LOW", sharePercent: 50 },
+    ],
+    visitPattern: { available: true, peakHours: ["14:00", "18:00"] },
   },
   ai: {
     performanceSummary: {
@@ -187,8 +191,9 @@ test("결과리포트는 브레드크럼으로 축제성과·방문객평가를 
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("23%");
   await expect(page.getByText("구역별 혼잡도 랭킹")).toBeVisible();
-  await expect(page.getByText("일차/시간대별 방문 패턴")).toBeVisible();
-  await expect(page.getByText("혼잡도 단계별 지속시간 비율")).toBeVisible();
+  await expect(page.getByText("주요 방문 시간대")).toBeVisible();
+  await expect(page.getByText("14:00")).toBeVisible();
+  await expect(page.getByText("혼잡도 등급별 부스 비율")).toBeVisible();
   // 상위 5개만 노출되는지 (주차 구역은 6위라 빠져야 함)
   await expect(page.getByText("주차 구역")).toHaveCount(0);
   // 지난 리포트 보기 링크가 직전 회차 리포트로 연결된다.
