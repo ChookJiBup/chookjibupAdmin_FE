@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { canCreateFestival } from "@/features/auth/admin/types";
 import {
   createFestival,
-  createFestivalWithImage,
+  createFestivalWithThumbnail,
   searchFestivalSeries,
 } from "@/features/festivals/api";
 import type {
@@ -46,9 +46,9 @@ import {
   toFestivalSearchDialogResult,
 } from "./seriesSearch";
 
-const FESTIVAL_IMAGE_ACCEPT = "image/png,image/jpeg";
-const FESTIVAL_IMAGE_MIME_TYPES = ["image/png", "image/jpeg"];
-const FESTIVAL_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
+const FESTIVAL_THUMBNAIL_ACCEPT = "image/png,image/jpeg";
+const FESTIVAL_THUMBNAIL_MIME_TYPES = ["image/png", "image/jpeg"];
+const FESTIVAL_THUMBNAIL_MAX_BYTES = 50 * 1024 * 1024;
 const ADDRESS_GEOCODE_FAILED_MESSAGE = "주소를 찾지 못했습니다. 주소 검색으로 다시 선택해 주세요.";
 
 export function FestivalRegisterForm() {
@@ -67,8 +67,8 @@ export function FestivalRegisterForm() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [festivalImage, setFestivalImage] = useState<File | null>(null);
-  const [festivalImageError, setFestivalImageError] = useState<string | null>(null);
+  const [festivalThumbnail, setFestivalThumbnail] = useState<File | null>(null);
+  const [festivalThumbnailError, setFestivalThumbnailError] = useState<string | null>(null);
 
   const [festivalSearchOpen, setFestivalSearchOpen] = useState(false);
   const [festivalSearchState, setFestivalSearchState] = useState<SearchDialogState>("default");
@@ -197,8 +197,8 @@ export function FestivalRegisterForm() {
         visitorCountInputMode: "DAILY" as FestivalVisitorCountInputMode,
       };
 
-      if (festivalImage) {
-        return createFestivalWithImage(request, festivalImage);
+      if (festivalThumbnail) {
+        return createFestivalWithThumbnail(request, festivalThumbnail);
       }
       return createFestival(request);
     },
@@ -210,19 +210,19 @@ export function FestivalRegisterForm() {
     },
   });
 
-  function selectFestivalImage(file: File) {
-    if (!FESTIVAL_IMAGE_MIME_TYPES.includes(file.type)) {
-      setFestivalImage(null);
-      setFestivalImageError("PNG 또는 JPG 이미지만 첨부할 수 있습니다.");
+  function selectFestivalThumbnail(file: File) {
+    if (!FESTIVAL_THUMBNAIL_MIME_TYPES.includes(file.type)) {
+      setFestivalThumbnail(null);
+      setFestivalThumbnailError("PNG 또는 JPG 이미지만 첨부할 수 있습니다.");
       return;
     }
-    if (file.size > FESTIVAL_IMAGE_MAX_BYTES) {
-      setFestivalImage(null);
-      setFestivalImageError("축제 이미지는 50MB까지 첨부할 수 있습니다.");
+    if (file.size > FESTIVAL_THUMBNAIL_MAX_BYTES) {
+      setFestivalThumbnail(null);
+      setFestivalThumbnailError("대표 썸네일은 50MB까지 첨부할 수 있습니다.");
       return;
     }
-    setFestivalImage(file);
-    setFestivalImageError(null);
+    setFestivalThumbnail(file);
+    setFestivalThumbnailError(null);
   }
 
   async function handleSubmitClick() {
@@ -336,17 +336,17 @@ export function FestivalRegisterForm() {
         </div>
 
         <section className="flex min-w-0 flex-col gap-4 rounded-lg border border-zinc-300 bg-white px-5 py-6 sm:px-8">
-          <p className="body-large-bold text-zinc-950">축제 이미지 첨부</p>
+          <p className="body-large-bold text-zinc-950">축제 대표 썸네일 첨부</p>
           <AttachmentField
-            file={festivalImage}
-            onSelect={selectFestivalImage}
+            file={festivalThumbnail}
+            onSelect={selectFestivalThumbnail}
             onRemove={() => {
-              setFestivalImage(null);
-              setFestivalImageError(null);
+              setFestivalThumbnail(null);
+              setFestivalThumbnailError(null);
             }}
-            accept={FESTIVAL_IMAGE_ACCEPT}
-            description="축제를 소개하는 이미지를 첨부해 주세요. 사용자 화면의 축제 이미지로 표시됩니다. (PNG·JPG, 50MB 이하)"
-            error={festivalImageError}
+            accept={FESTIVAL_THUMBNAIL_ACCEPT}
+            description="사용자 화면에 표시할 대표 썸네일입니다. 부스 지도·AI 분석에는 사용하지 않으며 최소 해상도 제한이 없습니다. (PNG·JPG, 50MB 이하)"
+            error={festivalThumbnailError}
             disabled={createMutation.isPending}
           />
         </section>

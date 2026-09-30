@@ -76,15 +76,16 @@ export async function createFestival(
 }
 
 /**
- * 축제 기본 정보와 사용자 화면에 표시할 대표 이미지를 함께 등록한다.
+ * 축제 기본 정보와 사용자 화면에 표시할 대표 썸네일을 함께 등록한다.
+ * 이 이미지는 부스 지도나 AI 도면 분석 입력으로 사용하지 않는다.
  */
-export async function createFestivalWithImage(
+export async function createFestivalWithThumbnail(
   request: CreateFestivalRequest,
-  image: File,
+  thumbnail: File,
 ): Promise<CreateFestivalResponse> {
   const form = new FormData();
   form.append("festival", new Blob([JSON.stringify(request)], { type: "application/json" }));
-  form.append("image", image);
+  form.append("image", thumbnail);
   const { data } = await adminApiClient.post<ApiResponse<CreateFestivalResponse>>(
     "/festivals",
     form,
