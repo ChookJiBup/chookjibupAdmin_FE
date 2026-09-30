@@ -28,9 +28,12 @@ async function mockBoothMap(
     existingPlan?: boolean;
     aiUnavailable?: boolean;
     existingCurrent?: boolean;
+    secondBooth?: boolean;
+    secondAiFailure?: boolean;
   } = {},
 ) {
   const planPath = `/api/festivals/${festivalId}/operations/booths/501/queue-plan`;
+  const secondPlanPath = `/api/festivals/${festivalId}/operations/booths/502/queue-plan`;
   const points = [
     { lat: 35.1495, lng: 126.9195 },
     { lat: 35.1499, lng: 126.9195 },
@@ -52,13 +55,47 @@ async function mockBoothMap(
   const planWrites: Record<string, unknown>[] = [];
   const planDeletes: Record<string, unknown>[] = [];
   const queueWrites: Record<string, unknown>[] = [];
+  const planBoothIds: number[] = [];
   let recommendations = 0;
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let data: unknown;
     let code = 0;
-    if (path === planPath) {
+    if (path === secondPlanPath) {
+      if (request.method() === "PUT") {
+        planWrites.push(request.postDataJSON());
+        planBoothIds.push(502);
+        data = {
+          ...request.postDataJSON(),
+          planId: "plan-2",
+          boothId: 502,
+          revision: Number(request.postDataJSON().expectedRevision) + 1,
+          nodeVersion: 4,
+          lengthMeters: 44,
+          estimatedCapacity: 44,
+        };
+      } else {
+        code = 40413;
+      }
+    } else if (path === `${secondPlanPath}/recommendations/status`) {
+      data = { available: true, reason: null };
+    } else if (path === `${secondPlanPath}/recommendations`) {
+      recommendations++;
+      if (options.secondAiFailure)
+        return route.fulfill({
+          status: 503,
+          json: { code: 50303, message: "두 번째 부스 추천 실패", data: null },
+        });
+      data = {
+        path: points,
+        reason: "출입구를 피해 배치했습니다.",
+        lengthMeters: 44,
+        expectedRevision: 0,
+        expectedNodeVersion: 4,
+        warnings: [],
+      };
+    } else if (path === planPath) {
       if (request.method() === "DELETE") {
         const payload = request.postDataJSON();
         planDeletes.push(payload);
@@ -73,6 +110,7 @@ async function mockBoothMap(
       if (request.method() === "GET") await options.planDelay;
       if (request.method() === "PUT") {
         planWrites.push(request.postDataJSON());
+        planBoothIds.push(501);
         if (options.conflict)
           return route.fulfill({
             status: 409,
@@ -186,6 +224,25 @@ async function mockBoothMap(
             // 승인된 운영 부스와 이어져 있어야 대기줄을 그릴 수 있다.
             relatedBoothId: options.unapproved ? null : 501,
           },
+          ...(options.secondBooth
+            ? [
+                {
+                  version: 4,
+                  nodeId: "00000000-0000-0000-0000-0000000000a3",
+                  nodeType: "BOOTH",
+                  name: "떡볶이집",
+                  geometryType: "POINT",
+                  geometry: { lat: 35.1497, lng: 126.9197 },
+                  confidence: null,
+                  recognizedText: null,
+                  source: "ADMIN",
+                  reviewStatus: "CONFIRMED",
+                  sortOrder: 1,
+                  geometrySchemaVersion: "2.0",
+                  relatedBoothId: 502,
+                },
+              ]
+            : []),
           {
             nodeId: lineNodeId,
             nodeType: "QUEUE",
@@ -195,7 +252,7 @@ async function mockBoothMap(
             confidence: 0.9,
             source: "AI",
             reviewStatus: "CONFIRMED",
-            sortOrder: 1,
+            sortOrder: options.secondBooth ? 2 : 1,
             geometrySchemaVersion: "2.0",
             version: 1,
           },
@@ -256,6 +313,7 @@ async function mockBoothMap(
     planWrites,
     planDeletes,
     queueWrites,
+    planBoothIds,
     get recommendations() {
       return recommendations;
     },
@@ -303,6 +361,58 @@ test("AI 추천 결과는 저장 전 미리보기로 표시한다", async ({ pag
   await expect(panel.getByText("44m")).toBeVisible();
   await expect(panel.getByRole("button", { name: "대기줄 저장" })).toBeEnabled();
   expect(calls.planWrites).toHaveLength(0);
+});
+
+test("다중 선택 AI 길찾기는 선택한 모든 축제 부스의 추천 경로를 저장한다", async ({ page }) => {
+  const calls = await mockBoothMap(page, { boundary: true, secondBooth: true });
+  await page.goto(boothmapPath);
+
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.keyboard.down("Shift");
+  await page.getByRole("button", { name: "떡볶이집", exact: true }).first().click();
+  await page.keyboard.up("Shift");
+  await expect(page.getByText("2개 선택됨")).toBeVisible();
+
+  await page.getByRole("button", { name: "AI 길찾기", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("2개 부스에 AI 길찾기를 적용하시겠습니까?")).toBeVisible();
+  await dialog.getByRole("button", { name: "AI 길찾기", exact: true }).click();
+
+  await expect.poll(() => calls.recommendations).toBe(2);
+  await expect.poll(() => calls.planWrites.length).toBe(2);
+  expect(calls.planBoothIds.sort()).toEqual([501, 502]);
+  expect(calls.planWrites).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ expectedNodeVersion: 3 }),
+      expect.objectContaining({ expectedNodeVersion: 4 }),
+    ]),
+  );
+  await expect(page.getByText("2개 부스의 AI 대기줄을 저장했습니다.")).toBeVisible();
+});
+
+test("다중 선택 AI 길찾기의 일부가 실패하면 성공 건은 저장하고 실패 부스를 다시 연다", async ({
+  page,
+}) => {
+  const calls = await mockBoothMap(page, {
+    boundary: true,
+    secondBooth: true,
+    secondAiFailure: true,
+  });
+  await page.goto(boothmapPath);
+
+  await page.getByRole("button", { name: "김밥천국", exact: true }).first().click();
+  await page.keyboard.down("Shift");
+  await page.getByRole("button", { name: "떡볶이집", exact: true }).first().click();
+  await page.keyboard.up("Shift");
+  await page.getByRole("button", { name: "AI 길찾기", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "AI 길찾기", exact: true }).click();
+
+  await expect.poll(() => calls.recommendations).toBe(2);
+  await expect.poll(() => calls.planWrites.length).toBe(1);
+  expect(calls.planBoothIds).toEqual([501]);
+  await expect(page.getByText("1개 부스의 AI 길찾기에 실패했습니다.")).toBeVisible();
+  await expect(page.getByText("1개 부스의 AI 대기줄은 저장했습니다.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "떡볶이집 줄 관리" })).toBeVisible();
 });
 
 test("줄 직접 설정의 X는 편집과 부스 선택을 함께 닫는다", async ({ page }) => {

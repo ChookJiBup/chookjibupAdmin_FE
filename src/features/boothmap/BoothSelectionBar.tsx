@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Cross1Icon, CornersIcon } from "@radix-ui/react-icons";
+import { Cross1Icon, CornersIcon, MagicWandIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,11 @@ export interface BoothSelectionBarProps {
   zones: SelectionZoneOption[];
   /** 고른 부스 중 이미 어느 구역엔가 묶여 있는 것이 있는지. */
   canUngroup: boolean;
+  aiRouteDisabledReason?: string;
+  aiRoutePending?: boolean;
+  aiRouteProgress?: string;
+  disabled?: boolean;
+  onAiRoute: () => void;
   onGroup: () => void;
   onAssignZone: (zoneId: string) => void;
   onUngroup: () => void;
@@ -43,6 +48,11 @@ export function BoothSelectionBar({
   groupableCount,
   zones,
   canUngroup,
+  aiRouteDisabledReason,
+  aiRoutePending = false,
+  aiRouteProgress,
+  disabled = false,
+  onAiRoute,
   onGroup,
   onAssignZone,
   onUngroup,
@@ -78,6 +88,20 @@ export function BoothSelectionBar({
       </p>
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
+        <span
+          className="flex"
+          title={aiRouteDisabledReason ?? "선택한 부스마다 AI 추천 대기줄을 만들고 저장합니다"}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            icon={<MagicWandIcon />}
+            disabled={disabled || Boolean(aiRouteDisabledReason)}
+            onClick={onAiRoute}
+          >
+            {aiRoutePending ? `AI 길찾기 ${aiRouteProgress ?? "진행 중"}` : "AI 길찾기"}
+          </Button>
+        </span>
         {/* 대기줄(사전 줄·현재 줄)과 헷갈리지 않게 무엇을 하는 버튼인지 적어 둔다. */}
         <span
           className="flex"
@@ -86,7 +110,7 @@ export function BoothSelectionBar({
           <Button
             type="button"
             variant="outline"
-            disabled={Boolean(lineUpDisabledReason)}
+            disabled={disabled || Boolean(lineUpDisabledReason)}
             onClick={onLineUp}
           >
             줄 세우기
@@ -100,7 +124,7 @@ export function BoothSelectionBar({
               icon={<CornersIcon />}
               selected={zoneMenuOpen}
               aria-expanded={zoneMenuOpen}
-              disabled={boothCount === 0}
+              disabled={disabled || boothCount === 0}
               title={boothCount === 0 ? "구역에 넣을 부스를 골라 주세요." : undefined}
               onClick={() => setZoneMenuOpen((open) => !open)}
             >
@@ -144,13 +168,19 @@ export function BoothSelectionBar({
           <Button
             type="button"
             variant="primary"
-            disabled={Boolean(groupDisabledReason)}
+            disabled={disabled || Boolean(groupDisabledReason)}
             onClick={onGroup}
           >
             그룹화
           </Button>
         </span>
-        <Button type="button" variant="ghost" icon={<Cross1Icon />} onClick={onClear}>
+        <Button
+          type="button"
+          variant="ghost"
+          icon={<Cross1Icon />}
+          disabled={disabled}
+          onClick={onClear}
+        >
           선택 해제
         </Button>
       </div>

@@ -49,7 +49,12 @@ import {
 import { BoothQueueActions } from "./BoothQueueActions";
 import { BoothSelectionBar } from "./BoothSelectionBar";
 import { snapToQueuePath } from "./queueSnap";
-import { getQueuePlan } from "./queuePlanApi";
+import {
+  getQueuePlan,
+  getQueueRecommendationStatus,
+  recommendQueuePlan,
+  saveQueuePlan,
+} from "./queuePlanApi";
 import { getManagedFestival } from "@/features/festivals/api";
 import { updateQueueTailAsAdmin as updateQueueTail } from "@/features/dashboard/api";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
@@ -438,6 +443,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [queueDraftRevision] = useState<number | undefined>();
   const [queueTailOnly] = useState(false);
   const [queuePlanBusy, setQueuePlanBusy] = useState(false);
+  const [bulkAiDialogOpen, setBulkAiDialogOpen] = useState(false);
+  const [bulkAiProgress, setBulkAiProgress] = useState({ completed: 0, total: 0 });
   const [queueDraftId, setQueueDraftId] = useState<string | null>(null);
   const [queueSaveError, setQueueSaveError] = useState<string | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -1326,6 +1333,114 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       : null;
   const selectedQueue =
     selectedOpsBoothId != null ? queueByBoothId.get(String(selectedOpsBoothId)) : undefined;
+  const bulkAiTargets = useMemo(
+    () =>
+      checkedBooths.flatMap((booth) => {
+        const boothId = relatedBoothIdByPinId.get(booth.id);
+        const nodeVersion = editorQuery.data?.nodes.find(
+          (node) => node.nodeId === booth.nodeId,
+        )?.version;
+        return booth.nodeType === "BOOTH" && boothId != null && nodeVersion != null
+          ? [{ pinId: booth.id, boothId, boothName: booth.name, nodeVersion }]
+          : [];
+      }),
+    [checkedBooths, relatedBoothIdByPinId, editorQuery.data?.nodes],
+  );
+  const bulkAiDisabledReason =
+    checkedShapes.length > 0
+      ? "AI 길찾기는 부스만 선택했을 때 사용할 수 있습니다."
+      : checkedBooths.some((booth) => booth.nodeType !== "BOOTH")
+        ? "AI 길찾기는 축제 부스에만 사용할 수 있습니다."
+        : checkedBooths.length < 2
+          ? "AI 길찾기를 실행할 부스를 2개 이상 선택해 주세요."
+          : festivalQuery.data?.role !== "FESTIVAL_OWNER"
+            ? "AI 길찾기는 축제 총괄 계정에서 가능합니다."
+            : hasUnsavedChanges
+              ? "지도 변경을 먼저 저장해 주세요."
+              : !siteBoundary || siteBoundary.length < 3
+                ? "행사장 경계를 먼저 저장해 주세요."
+                : bulkAiTargets.length !== checkedBooths.length
+                  ? "선택한 부스를 저장하고 운영 부스로 승인해 주세요."
+                  : undefined;
+  const bulkAiMutation = useMutation({
+    mutationFn: async () => {
+      const targets = [...bulkAiTargets];
+      const results: {
+        pinId: string;
+        boothId: number;
+        boothName: string;
+        success: boolean;
+        message?: string;
+      }[] = [];
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < targets.length) {
+          const target = targets[cursor++];
+          try {
+            const status = await getQueueRecommendationStatus(festivalId, target.boothId);
+            if (!status.available) {
+              results.push({
+                ...target,
+                success: false,
+                message: status.reason ?? "AI 길찾기를 사용할 수 없습니다.",
+              });
+              continue;
+            }
+            const recommendation = await recommendQueuePlan(festivalId, target.boothId, 40, 1);
+            const saved = await saveQueuePlan(festivalId, target.boothId, {
+              path: recommendation.path,
+              metersPerPerson: 1,
+              servedPersonsPerMinute: 2,
+              sourceNodeId: null,
+              expectedRevision: recommendation.expectedRevision,
+              expectedNodeVersion: recommendation.expectedNodeVersion,
+            });
+            queryClient.setQueryData(["booth-queue-plan", festivalId, target.boothId], saved);
+            results.push({ ...target, success: true });
+          } catch (error) {
+            results.push({
+              ...target,
+              success: false,
+              message: getApiErrorMessage(error, "AI 길찾기에 실패했습니다."),
+            });
+          } finally {
+            setBulkAiProgress((progress) => ({ ...progress, completed: progress.completed + 1 }));
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(2, targets.length) }, () => worker()));
+      return results;
+    },
+    onMutate: () => {
+      setQueuePlanBusy(true);
+      setBulkAiProgress({ completed: 0, total: bulkAiTargets.length });
+    },
+    onSuccess: (results) => {
+      const succeeded = results.filter((result) => result.success);
+      const failed = results.filter((result) => !result.success);
+      if (failed.length === 0) {
+        setCheckedIds(new Set());
+        toast.success(`${succeeded.length}개 부스의 AI 대기줄을 저장했습니다.`);
+        return;
+      }
+      setCheckedIds(new Set(failed.map((result) => result.pinId)));
+      const first = failed[0];
+      setEditingBoothId(failed.length === 1 ? first.pinId : null);
+      setSelectedShapeId(null);
+      toast.error(`${failed.length}개 부스의 AI 길찾기에 실패했습니다.`, {
+        description: `${first.boothName}: ${first.message}${
+          failed.length > 1 ? ` 외 ${failed.length - 1}개` : ""
+        }`,
+      });
+      if (succeeded.length > 0) {
+        toast.success(`${succeeded.length}개 부스의 AI 대기줄은 저장했습니다.`);
+      }
+    },
+    onSettled: () => {
+      setQueuePlanBusy(false);
+      void queryClient.invalidateQueries({ queryKey: ["festival-queues", festivalId] });
+    },
+  });
   const activeQueueEditor = useRef({
     queueId: queueDraftId,
     mode: queueMode,
@@ -4170,6 +4285,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             groupableCount={groupableBooths.length}
             zones={zoneOptions}
             canUngroup={checkedInAnyZone}
+            aiRouteDisabledReason={bulkAiDisabledReason}
+            aiRoutePending={bulkAiMutation.isPending}
+            aiRouteProgress={`${bulkAiProgress.completed}/${bulkAiProgress.total}`}
+            disabled={bulkAiMutation.isPending}
+            onAiRoute={() => setBulkAiDialogOpen(true)}
             onGroup={() => setGroupPopoverOpen(true)}
             onAssignZone={assignCheckedToZone}
             onUngroup={ungroupChecked}
@@ -4182,6 +4302,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           />
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={bulkAiDialogOpen}
+        onOpenChange={setBulkAiDialogOpen}
+        title={`${bulkAiTargets.length}개 부스에 AI 길찾기를 적용하시겠습니까?`}
+        description="각 부스의 기존 사전 대기줄은 새 추천 경로로 바뀝니다. 일부 요청이 실패해도 성공한 부스는 저장됩니다."
+        confirmLabel="AI 길찾기"
+        confirmVariant="primary"
+        confirmPending={bulkAiMutation.isPending}
+        onConfirm={() => {
+          setBulkAiDialogOpen(false);
+          bulkAiMutation.mutate();
+        }}
+      />
 
       <ConfirmDialog
         open={clearQueuePathOpen}
