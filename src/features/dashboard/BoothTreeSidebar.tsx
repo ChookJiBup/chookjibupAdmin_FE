@@ -12,19 +12,21 @@ import { MapSidePanel } from "@/components/map/MapSidePanel";
 import { cn } from "@/lib/utils";
 import type { Booth, BoothZone } from "./types";
 
+interface ZoneSectionProps {
+  zone: BoothZone;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  selectedBoothId: string | undefined;
+  onSelectBooth: (booth: Booth) => void;
+}
+
 function ZoneSection({
   zone,
   open,
   onOpenChange,
   selectedBoothId,
   onSelectBooth,
-}: {
-  zone: BoothZone;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  selectedBoothId: string | undefined;
-  onSelectBooth: (booth: Booth) => void;
-}) {
+}: ZoneSectionProps) {
   return (
     <Collapsible
       open={open}
@@ -52,7 +54,7 @@ function ZoneSection({
                   type="button"
                   onClick={() => onSelectBooth(booth)}
                   className={cn(
-                    "flex w-full items-center gap-1.5 rounded-lg py-2.5 text-left hover:bg-zinc-100",
+                    "flex w-full items-center gap-1.5 rounded-lg px-3 py-2.5 text-left hover:bg-zinc-100",
                     isSelected && "bg-zinc-100",
                   )}
                 >
@@ -72,17 +74,11 @@ export interface BoothZoneListProps {
   zones: BoothZone[];
   selectedBoothId: string | undefined;
   onSelectBooth: (booth: Booth) => void;
-  /** 목록 위에 표시할 제목. 기본값은 "축제부스". */
   title?: string;
-  /** 부스가 한 개도 없을 때 목록 자리에 보여줄 안내. 생략하면 아무것도 그리지 않는다. */
   emptyContent?: ReactNode;
   className?: string;
 }
 
-/**
- * 구역(존)별로 접히는 부스 목록. 관리자 대시보드 사이드바와 스태프 부스 찾기 화면이
- * 같은 목록을 쓰기 때문에 패널 셸과 분리해 둔다. 한 번에 한 구역만 펼쳐진다.
- */
 export function BoothZoneList({
   zones,
   selectedBoothId,
@@ -119,19 +115,15 @@ export function BoothZoneList({
   );
 }
 
+export type BoothTreeSidebarProps = Omit<BoothZoneListProps, "title">;
+
 export function BoothTreeSidebar({
   zones,
   selectedBoothId,
   onSelectBooth,
   emptyContent,
   className,
-}: {
-  zones: BoothZone[];
-  selectedBoothId: string | undefined;
-  onSelectBooth: (booth: Booth) => void;
-  emptyContent?: ReactNode;
-  className?: string;
-}) {
+}: BoothTreeSidebarProps) {
   return (
     <MapSidePanel className={className}>
       <BoothZoneList

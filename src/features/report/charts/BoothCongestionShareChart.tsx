@@ -1,9 +1,12 @@
 import type { CongestionLevel } from "@/features/dashboard/types";
-import type { BoothCongestionDurationRow } from "../types";
 
-/** 대시보드 `CongestionBadge`와 같은 색·같은 라벨을 쓴다. */
+interface BoothCongestionShareRow {
+  boothName: string;
+  shares: Record<CongestionLevel, number>;
+}
+
 const LEVEL_ORDER: CongestionLevel[] = ["HIGH", "MEDIUM", "LOW"];
-const LEVEL_LABEL: Record<CongestionLevel, string> = {
+const LEVEL_LABELS: Record<CongestionLevel, string> = {
   HIGH: "혼잡",
   MEDIUM: "보통",
   LOW: "여유",
@@ -14,19 +17,15 @@ const LEVEL_BAR_CLASSES: Record<CongestionLevel, string> = {
   LOW: "bg-secondary-600",
 };
 
-/**
- * 3-6. 부스 혼잡도 단계별 지속시간 비율.
- * x축 = 혼잡도 단계별 지속 비율, y축 = 부스명인 가로 누적 막대그래프.
- * 정렬 기준은 설계서대로 '혼잡' 비율이 높은 순.
- */
-export function BoothCongestionDurationChart({ rows }: { rows: BoothCongestionDurationRow[] }) {
+export function BoothCongestionShareChart({ rows }: { rows: BoothCongestionShareRow[] }) {
   if (!rows.length) return <p className="body-small text-zinc-400">혼잡도 데이터가 없습니다.</p>;
-  const sorted = [...rows].sort((a, b) => b.shares.HIGH - a.shares.HIGH);
+
+  const sortedRows = [...rows].sort((a, b) => b.shares.HIGH - a.shares.HIGH);
 
   return (
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-3">
-        {sorted.map((row) => {
+        {sortedRows.map((row) => {
           const total = LEVEL_ORDER.reduce((sum, level) => sum + row.shares[level], 0) || 1;
           return (
             <li
@@ -43,7 +42,7 @@ export function BoothCongestionDurationChart({ rows }: { rows: BoothCongestionDu
                       key={level}
                       className={`flex items-center justify-center ${LEVEL_BAR_CLASSES[level]}`}
                       style={{ width: `${percent}%` }}
-                      title={`${row.boothName} · ${LEVEL_LABEL[level]} ${Math.round(percent)}%`}
+                      title={`${row.boothName} · ${LEVEL_LABELS[level]} ${Math.round(percent)}%`}
                     >
                       {percent >= 12 ? (
                         <span className="body-caption text-white">{Math.round(percent)}%</span>
@@ -60,7 +59,7 @@ export function BoothCongestionDurationChart({ rows }: { rows: BoothCongestionDu
         {LEVEL_ORDER.map((level) => (
           <span key={level} className="flex items-center gap-1.5">
             <span className={`size-2.5 rounded-full ${LEVEL_BAR_CLASSES[level]}`} />
-            {LEVEL_LABEL[level]}
+            {LEVEL_LABELS[level]}
           </span>
         ))}
       </div>

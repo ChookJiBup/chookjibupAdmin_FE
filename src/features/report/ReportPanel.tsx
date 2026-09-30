@@ -9,15 +9,9 @@ import { getApiErrorMessage } from "@/lib/api/httpError";
 import { cn } from "@/lib/utils";
 import { AllReviewsDialog } from "./AllReviewsDialog";
 import { getFestivalReportEvaluation, getFestivalReportPerformance } from "./api";
-import { BoothCongestionDurationChart } from "./charts/BoothCongestionDurationChart";
+import { BoothCongestionShareChart } from "./charts/BoothCongestionShareChart";
 import { RatingDistributionChart } from "./charts/RatingDistributionChart";
-import { VisitPatternHeatmap } from "./charts/VisitPatternHeatmap";
 import { ZoneWaitRankingChart } from "./charts/ZoneWaitRankingChart";
-import {
-  MOCK_BADGE_LABEL,
-  MOCK_BOOTH_CONGESTION_DURATION,
-  MOCK_VISIT_PATTERN_ROWS,
-} from "./mockData";
 import { ReportBreadcrumb, type ReportSection } from "./ReportBreadcrumb";
 import { ReviewCard } from "./ReviewCard";
 import type {
@@ -67,14 +61,11 @@ function SummaryCard({
 function Panel({
   title,
   action,
-  mocked = false,
   className,
   children,
 }: {
   title?: string;
   action?: React.ReactNode;
-  /** 목업 데이터로 그린 패널이면 true — 화면에 "예시 데이터" 배지를 붙인다. */
-  mocked?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -82,14 +73,7 @@ function Panel({
     <section className={cn("rounded-lg border border-zinc-300 bg-white p-5", className)}>
       {title ? (
         <div className="flex min-h-[29px] items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 body-regular-bold text-zinc-950">
-            {title}
-            {mocked ? (
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 body-caption text-zinc-500">
-                {MOCK_BADGE_LABEL}
-              </span>
-            ) : null}
-          </h2>
+          <h2 className="body-regular-bold text-zinc-950">{title}</h2>
           {action}
         </div>
       ) : null}
@@ -165,7 +149,24 @@ function VisitorTrend({ data }: { data: FestivalReportPerformance["metrics"]["da
   );
 }
 
-/** 설계서 3-1 / 4. 증감·감성에 따라 강조 색이 바뀌는 리포트 상단 타이틀. */
+function PeakHours({ hours }: { hours: string[] }) {
+  if (!hours.length)
+    return <p className="body-small text-zinc-400">주요 방문 시간대 데이터가 없습니다.</p>;
+
+  return (
+    <ul className="flex flex-wrap gap-2">
+      {hours.map((hour) => (
+        <li
+          key={hour}
+          className="rounded-full bg-primary-50 px-3 py-1.5 body-small-bold text-primary-700"
+        >
+          {hour}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ReportHeadline({
   before,
   highlight,
@@ -196,10 +197,6 @@ function ReportHeadline({
   );
 }
 
-/**
- * 지난 리포트 보기 — 같은 시리즈의 직전 회차 결과리포트로 이동한다.
- * 이전 축제의 이름은 응답에 없어서, 같은 시리즈라는 전제로 올해 축제명 + 직전 연도로 표기한다.
- */
 function PreviousReportLink({
   previousFestivalId,
   festivalName,
@@ -242,9 +239,22 @@ function PerformanceView({
     visitors.direction === "DOWN" ? "감소" : visitors.direction === "FLAT" ? "변동 없음" : "증가";
   const economic = metrics.economicEffect;
   const efficiency = metrics.operationEfficiency;
-  // 백엔드가 아직 zoneWaitRanking을 채우지 않으면 설계서 3-5의 형태를 확인할 수 없어
-  // 빈 상태를 그대로 보여준다(목업으로 대체하지 않는다 — 필드는 이미 계약에 있다).
-  const zoneRanking = metrics.zoneWaitRanking;
+  const congestionShares = metrics.boothCongestionShare.reduce(
+    (shares, item) => {
+      if (
+        item.congestionLevel === "LOW" ||
+        item.congestionLevel === "MEDIUM" ||
+        item.congestionLevel === "HIGH"
+      ) {
+        shares[item.congestionLevel] = item.sharePercent;
+      }
+      return shares;
+    },
+    { LOW: 0, MEDIUM: 0, HIGH: 0 },
+  );
+  const congestionRows = metrics.boothCongestionShare.length
+    ? [{ boothName: "전체 부스", shares: congestionShares }]
+    : [];
 
   return (
     <>
@@ -259,7 +269,6 @@ function PerformanceView({
         />
       )}
 
-      {/* 3-2. 요약카드(3열) */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
         <SummaryCard
           label="총 관광객수"
@@ -315,23 +324,21 @@ function PerformanceView({
         />
       </div>
 
-      {/* 3-3(2/3) 일자별 관광객 추이 + 3-4(1/3) 일차/시간대별 방문 패턴 */}
-      <div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel title="일자별 관광객 추이" className="lg:col-span-2">
           <VisitorTrend data={metrics.dailyTrend} />
         </Panel>
-        <Panel title="일차/시간대별 방문 패턴" mocked>
-          <VisitPatternHeatmap rows={MOCK_VISIT_PATTERN_ROWS} />
+        <Panel title="주요 방문 시간대">
+          <PeakHours hours={metrics.visitPattern.available ? metrics.visitPattern.peakHours : []} />
         </Panel>
       </div>
 
-      {/* 3-5(1/3) 구역별 혼잡도 랭킹 + 3-6(2/3) 혼잡도 단계별 지속시간 비율 */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel title="구역별 혼잡도 랭킹">
-          <ZoneWaitRankingChart ranking={zoneRanking} />
+          <ZoneWaitRankingChart ranking={metrics.zoneWaitRanking} />
         </Panel>
-        <Panel title="혼잡도 단계별 지속시간 비율" className="lg:col-span-2" mocked>
-          <BoothCongestionDurationChart rows={MOCK_BOOTH_CONGESTION_DURATION} />
+        <Panel title="혼잡도 등급별 부스 비율" className="lg:col-span-2">
+          <BoothCongestionShareChart rows={congestionRows} />
         </Panel>
       </div>
 
@@ -348,7 +355,6 @@ function PerformanceView({
   );
 }
 
-/** 축제성과 화면 하단의 AI 요약(설계서 mock에는 없지만 이미 붙어 있던 영역). */
 function TextSummary({ summary }: { summary: FestivalReportTextSummary }) {
   const groups = [
     { title: "잘한 점", items: summary.positives },
@@ -412,7 +418,6 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* 종합 만족도 점수: 평균 별점 + 전년 대비 증감 + 평점 분포 히스토그램 + 총 리뷰 수 */}
         <Panel title="종합 만족도 점수">
           <div className="flex flex-col gap-6">
             <div>
@@ -444,7 +449,6 @@ function EvaluationView({ report }: { report: FestivalReportEvaluation }) {
         </Panel>
       </div>
 
-      {/* 방문객 대표 리뷰 + 5-1. 전체 리뷰 보기 */}
       <Panel
         title="방문객 대표 리뷰"
         action={
