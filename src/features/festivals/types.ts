@@ -99,6 +99,8 @@ export interface ManagedFestivalDetail {
   role: "FESTIVAL_OWNER" | "SUB_ADMIN";
   festivalStatus: "DRAFT" | "PUBLISHED" | "CANCELLED";
   progressStatus: "UPCOMING" | "ONGOING" | "COMPLETED";
+  /** null이면 날짜 자동 모드. */
+  progressStatusOverride?: "UPCOMING" | "ONGOING" | "COMPLETED" | null;
   address: string | null;
   detailAddress: string | null;
   startDate: string | null;

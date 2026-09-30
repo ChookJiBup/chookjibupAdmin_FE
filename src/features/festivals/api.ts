@@ -26,6 +26,15 @@ export async function getManagedFestival(festivalId: string): Promise<ManagedFes
   return data.data;
 }
 
+export async function updateFestivalProgressStatus(
+  festivalId: string,
+  request:
+    | { automatic: true }
+    | { automatic: false; progressStatus: "UPCOMING" | "ONGOING" | "COMPLETED" },
+): Promise<void> {
+  await adminApiClient.patch(`/festivals/${festivalId}/progress-status`, request);
+}
+
 export async function updateFestival(
   festivalId: string,
   request: UpdateFestivalRequest,

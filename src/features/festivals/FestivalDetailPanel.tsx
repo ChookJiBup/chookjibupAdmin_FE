@@ -22,6 +22,7 @@ import {
   updateFestivalVisitorCountInputMode,
 } from "./api";
 import { DateField } from "./DateField";
+import { FestivalProgressControl } from "./FestivalProgressControl";
 import {
   hasFestivalPeriodError,
   toDisplayDate,
@@ -226,6 +227,12 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
               festivalName={festival.festivalName ?? "축제"}
             />
           </div>
+
+          <FestivalProgressControl
+            key={festival.festivalId}
+            festival={festival}
+            disabled={updateMutation.isPending || deleteMutation.isPending}
+          />
 
           {isCompleted ? (
             <div className="flex flex-col gap-1 rounded-md bg-zinc-100 px-4 py-3">
