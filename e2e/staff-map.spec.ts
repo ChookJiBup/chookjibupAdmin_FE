@@ -149,6 +149,18 @@ test("부스검색에서 고른 부스가 지도 화면 하단바에 반영된�
   await expect(page.getByText("체험 구역 > 솜사탕 부스")).toBeVisible();
 });
 
+test("지도 빈 영역을 누르면 부스 선택을 풀고 축제 현황으로 돌아간다", async ({ page }) => {
+  await mockStaffApis(page);
+  await page.goto(`/staff/dashboard?boothId=1`);
+  await expect(page.getByText("먹거리 구역 > 떡볶이 부스")).toBeVisible();
+
+  await page.getByTestId("booth-map").click({ position: { x: 12, y: 180 } });
+
+  await expect(page).not.toHaveURL(/boothId=/);
+  await expect(page.getByText("먹거리 구역 > 떡볶이 부스")).toHaveCount(0);
+  await expect(page.getByText("가장 혼잡한 부스")).toBeVisible();
+});
+
 test("줄끝 갱신 시트는 자동 환산된 혼잡도와 존 선택을 보여준다", async ({ page }) => {
   const requests = await mockStaffApis(page);
   await page.goto(`/staff/dashboard?boothId=1`);
@@ -167,6 +179,13 @@ test("줄끝 갱신 시트는 자동 환산된 혼잡도와 존 선택을 보여
   await zoneSelect.click();
   await page.getByRole("option", { name: "존 2 · 20m" }).click();
   await expect(page.getByRole("button", { name: "줄끝 갱신하기" })).toBeEnabled();
+
+  // 저장 전에도 현재 줄과 변경 예정 줄의 길이를 색상 범례로 함께 비교한다.
+  const queueComparison = page.locator('dl[aria-label="줄 길이 비교"]');
+  await expect(queueComparison.getByText("현재 줄")).toBeVisible();
+  await expect(queueComparison.getByText("15m")).toBeVisible();
+  await expect(queueComparison.getByText("변경 예정")).toBeVisible();
+  await expect(queueComparison.getByText("20m")).toBeVisible();
 
   // 혼잡도는 서버가 계산하므로 프런트가 직접 보내지 않는다.
   expect(requests.filter((request) => request.method() === "PUT")).toEqual([]);

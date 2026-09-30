@@ -25,6 +25,8 @@ export interface QueuePathItem {
   congestionLevel?: CongestionLevel | null;
   boothLat: number;
   boothLng: number;
+  /** 저장 전 변경 예정 줄은 현재 줄과 겹쳐도 구분되도록 파란 점선으로 그린다. */
+  preview?: boolean;
 }
 
 /*
@@ -247,8 +249,9 @@ function QueuePathItemView({ queue }: { queue: QueuePathItem }) {
     <Polyline
       path={line}
       strokeWeight={QUEUE_LINE_WEIGHT}
-      strokeColor={QUEUE_LINE_COLOR}
+      strokeColor={queue.preview ? "#236CF6" : QUEUE_LINE_COLOR}
       strokeOpacity={0.95}
+      strokeStyle={queue.preview ? "shortdash" : "solid"}
     />
   );
 }

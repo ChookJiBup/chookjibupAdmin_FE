@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CustomOverlayMap,
@@ -12,15 +12,14 @@ import {
 } from "react-kakao-maps-sdk";
 import {
   CheckCircledIcon,
-  ChevronDownIcon,
   CornersIcon,
   Cross2Icon,
   DimensionsIcon,
   FileIcon,
   GroupIcon,
   HamburgerMenuIcon,
-  ImageIcon,
   PlusIcon,
+  QuestionMarkCircledIcon,
   RadiobuttonIcon,
   ResetIcon,
   RulerHorizontalIcon,
@@ -34,9 +33,6 @@ import { IconButton } from "@/components/ui/IconButton";
 import { MapSidePanel } from "@/components/map/MapSidePanel";
 import { getFestivalDashboard, getFestivalQueues } from "@/features/dashboard/api";
 import type { FestivalQueue, FestivalQueueList } from "@/features/staffMap/types";
-import { BoothMapHelpDialog } from "./BoothMapHelpDialog";
-import { AdminQueueZonePanel } from "./AdminQueueZonePanel";
-import { MapPopoverPortal } from "./MapPopoverPortal";
 import { QueuePlanPanel } from "./QueuePlanPanel";
 import { ShapeEditSection } from "./ShapeEditSection";
 import {
@@ -46,7 +42,9 @@ import {
   type PolygonPreset,
 } from "./shapeGeometry";
 import { BoothQueueActions } from "./BoothQueueActions";
+import { AdminQueueZonePanel } from "./AdminQueueZonePanel";
 import { BoothSelectionBar } from "./BoothSelectionBar";
+import { QueuePointEditor } from "./QueuePointEditor";
 import { snapToQueuePath } from "./queueSnap";
 import {
   getQueuePlan,
@@ -88,6 +86,7 @@ import { cornersFromAnchor } from "./overlayProjection";
 import { PamphletOverlay } from "./PamphletOverlay";
 import {
   containsPoint,
+  newPinPlacementError,
   uniqueVertices,
   validateBoundary,
   withoutClosingDuplicate,
@@ -118,6 +117,14 @@ import {
 import { useEditHistory } from "./useEditHistory";
 import { useMapAnalysis } from "./useMapAnalysis";
 import { ZoneListItem } from "./ZoneListItem";
+import { BoothMapOnboarding } from "./BoothMapOnboarding";
+import { BoothMapHelpDialog } from "./BoothMapHelpDialog";
+import {
+  BOOTH_MAP_GUIDE_QUERY_PARAM,
+  BOOTH_MAP_GUIDE_QUERY_VALUE,
+  consumeBoothMapGuide,
+} from "./boothMapGuidePreference";
+import { festivalMapKeys, invalidateFestivalMapQueries } from "./festivalMapQueries";
 
 let cachedEmptyDragImage: HTMLImageElement | null = null;
 /** 드래그 고스트를 숨기는 데 쓰는 1x1 투명 GIF — data URI라 동기적으로 디코딩된다. */
@@ -209,6 +216,7 @@ function applyPartitionedNodes(
   말풍선은 고른 대상 위에 뜬다. yAnchor를 정확히 1로 두면 말풍선 꼬리가 핀에 닿아
   핀을 가린다. 높이의 12%만큼 더 올려 핀이 보이게 띄운다.
 */
+const POPOVER_ANCHORS = { xAnchor: 0.5, yAnchor: 1.12 } as const;
 
 type PamphletUploadStatus =
   "pending" | "uploading" | "failed" | "uploaded-unsaved" | "saved-modified" | "saved";
@@ -330,6 +338,7 @@ function shapePopoverAnchor(shape: LocalMapShape) {
  */
 export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const setHideNav = useConsoleUiStore((state) => state.setHideNav);
   const setFullBleed = useConsoleUiStore((state) => state.setFullBleed);
@@ -338,14 +347,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [drawTool, setDrawTool] = useState<DrawTool>("select");
   const [pendingPinType, setPendingPinType] = useState<NodeType>("BOOTH");
   const [pinTypeMenuOpen, setPinTypeMenuOpen] = useState(false);
-  const [imageToolsOpen, setImageToolsOpen] = useState(false);
   const [mapLoading, mapError] = useKakaoMapLoader();
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const boothListRef = useRef<HTMLDivElement>(null);
   const mapToolsRef = useRef<HTMLDivElement>(null);
   /** 지도 위쪽 버튼 줄. 말풍선이 그 아래로 들어가도록 높이를 잰다. */
   const topActionBarRef = useRef<HTMLDivElement>(null);
-  const replaceFileInputRef = useRef<HTMLInputElement>(null);
   const overlayFileInputRef = useRef<HTMLInputElement>(null);
   const localImageFiles = useRef(new Map<string, File>());
   /*
@@ -362,6 +369,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [removePamphletOpen, setRemovePamphletOpen] = useState(false);
   const [clearQueuePathOpen, setClearQueuePathOpen] = useState(false);
   const [queueImportOpen, setQueueImportOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   /*
     분석 안내를 닫아 둔 작업 키. 새 분석이 시작되거나 상태가 바뀌면 다시 띄운다 —
     한 번 닫았다고 다음 결과까지 숨기면 무엇이 끝났는지 알 수 없다.
@@ -387,27 +396,60 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     queryFn: () => getManagedFestival(festivalId),
   });
   const mapQuery = useQuery({
-    queryKey: ["coordinate-map", festivalId],
+    queryKey: festivalMapKeys.current(festivalId),
     queryFn: () => ensureCoordinateMap(festivalId),
     // 축제 장소에 위경도가 없으면 400이 확정이라 재시도하지 않고 바로 안내한다.
     retry: false,
   });
   const editorQuery = useQuery({
-    queryKey: ["map-editor", festivalId, mapQuery.data?.mapId],
+    queryKey: festivalMapKeys.editor(festivalId, mapQuery.data?.mapId),
     queryFn: () => getMapEditor(festivalId, mapQuery.data!.mapId),
     enabled: !!mapQuery.data?.mapId,
   });
   const dashboardQuery = useQuery({
-    queryKey: ["festival-dashboard", festivalId],
+    queryKey: festivalMapKeys.dashboard(festivalId),
     queryFn: () => getFestivalDashboard(festivalId),
   });
   const queuesQuery = useQuery({
-    queryKey: ["festival-queues", festivalId],
+    queryKey: festivalMapKeys.queues(festivalId),
     queryFn: () => getFestivalQueues(festivalId),
   });
   const festivalCenter = useMemo(
     () => primaryFestivalCenter(festivalQuery.data?.locations),
     [festivalQuery.data?.locations],
+  );
+
+  useEffect(() => {
+    if (searchParams.get(BOOTH_MAP_GUIDE_QUERY_PARAM) !== BOOTH_MAP_GUIDE_QUERY_VALUE) return;
+
+    // `guide=1`은 등록 완료 화면이 보내는 명시적인 열기 신호다. 과거 열람 기록이
+    // 있더라도 이 신호를 localStorage가 막으면 등록 직후 안내가 사라진다.
+    consumeBoothMapGuide(window.localStorage, festivalId);
+    /*
+      개발 모드의 Strict Effects는 effect를 실행한 직후 정리하고 다시 실행한다.
+      requestAnimationFrame으로 열면 첫 실행의 frame은 취소되고, 두 번째 실행은 이미
+      소비한 localStorage 값 때문에 빠져 온보딩이 영영 열리지 않는다. 취소하지 않는
+      microtask에서 열어 등록 직후 신호가 한 번만 와도 확실히 보이게 한다.
+    */
+    queueMicrotask(() => setGuideOpen(true));
+  }, [festivalId, searchParams]);
+
+  const changeGuideOpen = useCallback(
+    (open: boolean) => {
+      setGuideOpen(open);
+      // 열기 전에 URL을 치우면 Next 내비게이션이 화면을 다시 만들면서 open 상태도
+      // 사라질 수 있다. 안내를 닫는 순간에만 일회성 쿼리를 정리한다.
+      if (open || searchParams.get(BOOTH_MAP_GUIDE_QUERY_PARAM) !== BOOTH_MAP_GUIDE_QUERY_VALUE) {
+        return;
+      }
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      nextSearchParams.delete(BOOTH_MAP_GUIDE_QUERY_PARAM);
+      const query = nextSearchParams.toString();
+      router.replace(`/console/festivals/${festivalId}/boothmap${query ? `?${query}` : ""}`, {
+        scroll: false,
+      });
+    },
+    [festivalId, router, searchParams],
   );
 
   const [booths, setBooths] = useState<LocalBoothPin[]>([]);
@@ -418,6 +460,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [seedToken, setSeedToken] = useState(0);
   const [seededKey, setSeededKey] = useState<string | null>(null);
   const [analyzeDialogOpen, setAnalyzeDialogOpen] = useState(false);
+  const [preparingExistingPamphlet, setPreparingExistingPamphlet] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [editingBoothId, setEditingBoothId] = useState<string | null>(null);
   const [zones, setZones] = useState<LocalZone[]>([]);
@@ -425,6 +468,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [shapes, setShapes] = useState<LocalMapShape[]>([]);
   const [preservedNodes, setPreservedNodes] = useState<PreservedNode[]>([]);
   const [siteBoundary, setSiteBoundary] = useState<LatLng[] | null>(null);
+  const savedSiteBoundary = useMemo(
+    () => presentationBoundary(editorQuery.data?.presentation),
+    [editorQuery.data?.presentation],
+  );
   const [boundaryDraft, setBoundaryDraft] = useState<LatLng[]>([]);
   const [deleteBoundaryOpen, setDeleteBoundaryOpen] = useState(false);
   const [pamphlet, setPamphlet] = useState<LocalPamphletOverlay | null>(null);
@@ -444,6 +491,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [queuePlanBusy, setQueuePlanBusy] = useState(false);
   const [bulkAiDialogOpen, setBulkAiDialogOpen] = useState(false);
   const [bulkAiProgress, setBulkAiProgress] = useState({ completed: 0, total: 0 });
+  const [showQueueCoordinates, setShowQueueCoordinates] = useState(false);
   const [queueDraftId, setQueueDraftId] = useState<string | null>(null);
   const [queueSaveError, setQueueSaveError] = useState<string | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -511,17 +559,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       booths.filter((booth) => !zoneIdByBoothId.has(booth.id) && !shapeIdByBoothId.has(booth.id)),
     [booths, zoneIdByBoothId, shapeIdByBoothId],
   );
-  // 그룹(구역)에 속한 부스 핀은 그 구역이 선택됐을 때만 지도에 노출한다 —
-  // "4-4. 축제부스지도 - 아무것도 선택하지 않은 경우" 화면설계서 기준(최상위구역 폴리곤만 노출).
-  const visibleBooths = useMemo(
-    () =>
-      booths.filter((booth) => {
-        const zoneId = zoneIdByBoothId.get(booth.id);
-        // 골라 둔 부스는 구역에 묶여 있어도 남긴다 — 고른 것이 안 보이면 함께 옮길 수 없다.
-        return !zoneId || zoneId === selectedZoneId || checkedIds.has(booth.id);
-      }),
-    [booths, zoneIdByBoothId, selectedZoneId, checkedIds],
-  );
+  /*
+    관리 지도와 대시보드는 같은 서버 부스 전체를 보여 준다. 구역 선택은 목록 탐색과
+    폴리곤 강조에만 쓰며, 구역에 속했다는 이유로 핀을 숨기지 않는다. 숨기면 구역에
+    묶이지 않은 핀만 남아 대시보드와 부스 수가 달라진다.
+  */
+  const visibleBooths = booths;
 
   function toggleZoneExpanded(id: string) {
     setExpandedZoneIds((prev) => {
@@ -587,27 +630,27 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   }, [selectedBooth, selectedShape]);
   const selectedLatitude = selectedFocus?.lat;
   const selectedLongitude = selectedFocus?.lng;
-  const panPinIntoView = useCallback(
-    (lat: number, lng: number) => {
-      const wrapper = mapWrapperRef.current;
-      if (!kakaoMap || !wrapper) return;
+  useEffect(() => {
+    const wrapper = mapWrapperRef.current;
+    if (selectedLatitude == null || selectedLongitude == null || !kakaoMap || !wrapper) return;
 
-      {
-        const bounds = wrapper.getBoundingClientRect();
-        const list = boothListRef.current?.getBoundingClientRect();
-        const tools = mapToolsRef.current?.getBoundingClientRect();
-        const topBar = topActionBarRef.current?.getBoundingClientRect();
-        // 메뉴가 덮고 있는 부분을 제외한 지도 영역의 가운데에 선택한 핀을 둔다.
-        const left = list?.width ? Math.max(0, list.right - bounds.left) : 0;
-        /*
+    function centerSelectedBooth() {
+      if (!wrapper || !kakaoMap) return;
+      const bounds = wrapper.getBoundingClientRect();
+      const list = boothListRef.current?.getBoundingClientRect();
+      const tools = mapToolsRef.current?.getBoundingClientRect();
+      const topBar = topActionBarRef.current?.getBoundingClientRect();
+      // 메뉴가 덮고 있는 부분을 제외한 지도 영역의 가운데에 선택한 핀을 둔다.
+      const left = list?.width ? Math.max(0, list.right - bounds.left) : 0;
+      /*
         좁은 화면에서는 버튼 줄이 지도 폭을 다 쓰므로 «버튼 줄 왼쪽»을 오른쪽 경계로
         삼으면 남는 폭이 0이 된다. 그럴 땐 가로로는 비켜설 자리가 없으니 지도 전체를
         쓴다(세로로 내려서 피한다).
       */
-        const toolsLeft = tools?.width ? tools.left - bounds.left : bounds.width;
-        const right = toolsLeft > left ? Math.min(bounds.width, toolsLeft) : bounds.width;
-        const targetX = (left + right) / 2;
-        /*
+      const toolsLeft = tools?.width ? tools.left - bounds.left : bounds.width;
+      const right = toolsLeft > left ? Math.min(bounds.width, toolsLeft) : bounds.width;
+      const targetX = (left + right) / 2;
+      /*
         말풍선이 대상 위쪽에 뜨므로, 화면이 낮으면 세로 가운데에 둬도
         상단 버튼 줄 밑으로 파고든다. 버튼 줄 아래에 말풍선이 들어갈 만큼은 내린다.
         버튼 줄은 좁은 화면에서 두 줄로 접히므로 높이를 실제로 재서 쓴다 — 상수로 두면
@@ -616,30 +659,24 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         재는 대상은 «위쪽» 버튼 줄이다. mapToolsRef는 오른쪽 «아래» 도구 열이라, 그쪽
         bottom을 쓰면 지도 높이만큼 더 내려보내 핀과 말풍선이 화면 밖으로 나간다.
       */
-        // 대기줄·모양 편집 영역이 붙으면서 말풍선이 약 350px까지 길어졌다.
-        const popoverRoom = 380;
-        const topBarBottom = topBar ? Math.max(0, topBar.bottom - bounds.top) : 96;
-        const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
-        const projection = kakaoMap.getProjection();
-        const point = projection.containerPointFromCoords(new window.kakao.maps.LatLng(lat, lng));
-        kakaoMap.panTo(
-          projection.coordsFromContainerPoint(
-            new window.kakao.maps.Point(
-              point.x + bounds.width / 2 - targetX,
-              point.y + bounds.height / 2 - targetY,
-            ),
+      // 대기줄·모양 편집 영역이 붙으면서 말풍선이 약 350px까지 길어졌다.
+      const popoverRoom = 380;
+      const topBarBottom = topBar ? Math.max(0, topBar.bottom - bounds.top) : 96;
+      const targetY = Math.max(bounds.height / 2, topBarBottom + popoverRoom);
+      const projection = kakaoMap.getProjection();
+      const point = projection.containerPointFromCoords(
+        new window.kakao.maps.LatLng(selectedLatitude!, selectedLongitude!),
+      );
+      kakaoMap.panTo(
+        projection.coordsFromContainerPoint(
+          new window.kakao.maps.Point(
+            point.x + bounds.width / 2 - targetX,
+            point.y + bounds.height / 2 - targetY,
           ),
-        );
-      }
-    },
-    [kakaoMap],
-  );
+        ),
+      );
+    }
 
-  useEffect(() => {
-    const wrapper = mapWrapperRef.current;
-    if (selectedLatitude == null || selectedLongitude == null || !kakaoMap || !wrapper) return;
-
-    const centerSelectedBooth = () => panPinIntoView(selectedLatitude, selectedLongitude);
     centerSelectedBooth();
     const observer = new ResizeObserver(centerSelectedBooth);
     observer.observe(wrapper);
@@ -647,15 +684,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     // 버튼 줄이 좁은 화면에서 접히면 높이가 달라지므로 같이 지켜본다.
     if (topActionBarRef.current) observer.observe(topActionBarRef.current);
     return () => observer.disconnect();
-  }, [
-    selectedId,
-    selectedShapeId,
-    selectedLatitude,
-    selectedLongitude,
-    kakaoMap,
-    boothListOpen,
-    panPinIntoView,
-  ]);
+  }, [selectedId, selectedShapeId, selectedLatitude, selectedLongitude, kakaoMap, boothListOpen]);
 
   // 서버 데이터를 새로 받을 때마다(최초 진입, AI 분석 완료 등) 부스 전체가 보이도록
   // 한 번 맞춘다. 그 뒤로는 사용자가 옮기고 확대한 위치를 존중한다.
@@ -715,6 +744,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       if (siteBoundary) {
         const error = validateBoundary(siteBoundary);
         if (error) throw new Error(error);
+        const outsideNewPins = booths.filter(
+          (booth) => booth.isNew && !containsPoint(siteBoundary, booth),
+        );
+        if (outsideNewPins.length > 0) {
+          throw new Error(
+            `부지 경계 밖의 새 핀 ${outsideNewPins.length}개를 경계 안으로 옮겨 주세요.`,
+          );
+        }
       }
       let overlay = pamphlet;
       if (overlay && !cornersFromAnchor(overlay.anchor, overlay.imageWidth, overlay.imageHeight)) {
@@ -776,15 +813,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       try {
         const approved = await approveBooths(festivalId, mapQuery.data!.mapId);
         approvedCount = approved.approvedCount;
-        if (approvedCount > 0) {
-          await queryClient.invalidateQueries({ queryKey: ["festival-dashboard", festivalId] });
-        }
       } catch (error) {
         toast.error(getApiErrorMessage(error, "부스를 운영 목록에 등록하지 못했습니다."), {
           description: "지도는 저장됐습니다. 잠시 후 다시 저장해 주세요.",
         });
       }
-      await queryClient.invalidateQueries({ queryKey: ["map-editor", festivalId] });
+      // 승인 수가 0이어도 기존 부스의 이동·이름·구역·삭제는 저장됐을 수 있다.
+      // 편집기와 대시보드의 모든 서버 투영을 함께 다시 읽게 한다.
+      await invalidateFestivalMapQueries(queryClient, festivalId);
       const editor = await getMapEditor(festivalId, mapQuery.data!.mapId);
       applyPartitionedNodes(editor.nodes, setBooths, setShapes, setPreservedNodes);
       setSiteBoundary(presentationBoundary(editor.presentation));
@@ -830,23 +866,24 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     },
   });
   const replaceMutation = useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: async (file: File) => {
       if (!mapQuery.data?.mapId) throw new Error("지도 정보를 불러오지 못했습니다.");
-      return replaceFestivalMap(festivalId, mapQuery.data.mapId, file);
+      const summary = await replaceFestivalMap(festivalId, mapQuery.data.mapId, file);
+      await uploadMapOverlay(festivalId, summary.mapId, file);
+      return summary;
     },
     onSuccess: async (summary) => {
       // 지도가 통째로 교체됐으므로 편집기 쿼리 키에 쓰이는 mapId를 먼저 바꿔야 한다.
       // 옛 mapId로 편집기를 다시 부르면 로드맵의 현재 지도와 어긋나 409가 난다.
       queryClient.setQueryData(
-        ["coordinate-map", festivalId],
+        festivalMapKeys.current(festivalId),
         (previous: CreateCoordinateMapResponse | undefined) =>
           previous ? { ...previous, mapId: summary.mapId } : previous,
       );
-      await queryClient.invalidateQueries({ queryKey: ["coordinate-map", festivalId] });
-      await queryClient.invalidateQueries({ queryKey: ["map-editor", festivalId] });
+      await invalidateFestivalMapQueries(queryClient, festivalId);
       await queryClient.invalidateQueries({ queryKey: ["map-analysis", festivalId] });
-      toast.success("배치도를 올렸습니다.", {
-        description: "AI가 부스를 찾는 동안 편집과 저장은 잠시 막힙니다.",
+      toast.success("팜플렛을 올리고 AI 분석을 시작했습니다.", {
+        description: "분석이 끝날 때까지 편집과 저장은 잠시 막힙니다.",
       });
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "배치도 업로드에 실패했습니다.")),
@@ -1023,6 +1060,31 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       pamphletFileNames[pamphlet.localObjectUrl ?? ""])
     : undefined;
 
+  async function analyzeExistingPamphlet() {
+    if (!pamphlet) return;
+    setPreparingExistingPamphlet(true);
+    try {
+      const localFile = pamphlet.localObjectUrl
+        ? localImageFiles.current.get(pamphlet.localObjectUrl)
+        : undefined;
+      let file = localFile;
+      if (!file) {
+        const response = await fetch(pamphlet.imageUrl);
+        if (!response.ok) throw new Error("저장된 팜플렛을 불러오지 못했습니다.");
+        const blob = await response.blob();
+        file = new File([blob], pamphletFileName ?? "pamphlet-image", {
+          type: blob.type || "image/png",
+        });
+      }
+      setAnalyzeDialogOpen(false);
+      replaceMutation.mutate(file);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "팜플렛 이미지를 읽지 못했습니다.");
+    } finally {
+      setPreparingExistingPamphlet(false);
+    }
+  }
+
   /*
     방문객 공개 상태. 저장해도 공개는 유지되고, 공개와 해제는 관리자가 버튼으로 직접 정한다.
     공개는 서버에 저장된 내용을 기준으로 하니, 저장하지 않은 편집이 남아 있으면 공개를 막는다.
@@ -1136,6 +1198,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   }, [hasUnsavedChanges]);
 
   function addBoothAt(lat: number, lng: number) {
+    const point = { lat, lng };
+    const placementError = newPinPlacementError(savedSiteBoundary, point);
+    if (placementError) {
+      toast.error(placementError, {
+        description: savedSiteBoundary
+          ? "저장된 경계 안쪽이나 경계선 위를 눌러 주세요."
+          : "경계를 그린 뒤 상단의 저장하기를 먼저 눌러 주세요.",
+      });
+      return;
+    }
     /*
       화면설계서 4-6은 상위구역을 고른 뒤 그 구역 폴리곤 안에 부스를 찍게 한다.
       밖에 찍었다고 막지는 않되(지도를 옮겨 가며 찍는 흐름을 끊는다), 어느 구역에도
@@ -1516,7 +1588,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         boothName={selectedBooth.name}
         planSummary={
           selectedPlanQuery.data && selectedPlanQuery.data.path.length >= 2
-            ? `대기 줄 ${Math.round(selectedPlanQuery.data.lengthMeters)}m · 약 ${selectedPlanQuery.data.estimatedCapacity}명`
+            ? `사전 줄 ${Math.round(selectedPlanQuery.data.lengthMeters)}m · 약 ${selectedPlanQuery.data.estimatedCapacity}명`
             : undefined
         }
         waitMinutes={selectedQueue?.waitMinutes}
@@ -1668,7 +1740,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
    */
   function importQueueDraftFrom(shape: LocalMapShape) {
     const points =
-      queueMode === "current" && queueTailOnly && selectedPlanQuery.data
+      queueMode === "current" && selectedPlanQuery.data
         ? [snapToQueuePath(selectedPlanQuery.data.path, shape.points.at(-1)!)]
         : shape.points;
     setQueueDraft(points.map((point) => ({ lat: point.lat, lng: point.lng })));
@@ -1755,6 +1827,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     const nextShapes = shapes.map((shape) =>
       ids.has(shape.id) ? { ...shape, points: shiftPoints(shape.points, delta) } : shape,
     );
+    const movedOutsideBoundary =
+      siteBoundary &&
+      nextBooths.some((booth) => ids.has(booth.id) && !containsPoint(siteBoundary, booth));
+    if (movedOutsideBoundary) {
+      toast.error("부지 경계 밖으로 옮길 수 없습니다.", {
+        description: "핀을 원래 위치로 되돌렸습니다.",
+      });
+      return;
+    }
     setBooths(nextBooths);
     setShapes(nextShapes);
     warnZoneChanges(nextBooths, nextShapes);
@@ -2018,7 +2099,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       setQueueDraft((points) =>
         points.map((p, i) =>
           i === index
-            ? queueMode === "current" && queueTailOnly && selectedPlanQuery.data
+            ? queueMode === "current" && selectedPlanQuery.data
               ? snapToQueuePath(selectedPlanQuery.data.path, {
                   lat: point.getLat(),
                   lng: point.getLng(),
@@ -2355,6 +2436,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     if (checkedBooths.length < 2) return;
     const lined = lineUpPoints(checkedBooths.map((booth) => ({ lat: booth.lat, lng: booth.lng })));
     const byId = new Map(checkedBooths.map((booth, index) => [booth.id, lined[index]]));
+    if (siteBoundary && lined.some((point) => !containsPoint(siteBoundary, point))) {
+      toast.error("부지 경계 밖으로 나가는 부스가 있어 줄 세우기를 취소했습니다.");
+      return;
+    }
     setBooths((prev) =>
       prev.map((booth) => {
         const placed = byId.get(booth.id);
@@ -2596,15 +2681,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           setDragBoothId(null);
           setDraggableRowId(null);
         }}
-        /*
-          고른 행의 배경은 패널 좌우 여백(p-6)까지 넓힌다. 안쪽으로 물러나 있으면 어디까지가
-          골라진 것인지 눈으로 잘라 읽어야 한다. 음수 마진으로 여백을 되물리고 그만큼 다시
-          패딩을 준다 — 들여쓴 행은 24px(패널 여백) + 28px(들여쓰기)라 pl-13이 된다.
-        */
-        className={`-mx-6 flex items-center gap-2 rounded-md py-2 pr-6 transition-[background-color,opacity] duration-150 ${
-          indent ? "pl-13" : "pl-7"
+        className={`mx-1 flex items-center gap-2 rounded-md py-2 pr-2 transition-[background-color,opacity] duration-150 hover:bg-zinc-100 ${
+          indent ? "pl-9" : "pl-2"
         } ${dragBoothId === booth.id ? "opacity-40" : ""} ${
-          dragBoothId && dragBoothId !== booth.id ? "hover:bg-zinc-100" : ""
+          dragBoothId && dragBoothId !== booth.id ? "bg-zinc-50" : ""
         } ${checkedIds.has(booth.id) ? "bg-primary/10" : ""}`}
       >
         {/* 구역 멤버는 서버가 부스만 받는다. 시설을 섞으면 저장 전체가 거부되므로 선택을 막는다. */}
@@ -2683,6 +2763,20 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             검색해 좌표를 저장한 뒤 다시 시도해 주세요.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  /*
+    신규 축제는 current 조회의 404를 받은 뒤 같은 queryFn 안에서 좌표 지도를 만든다.
+    그 작업이 끝나기 전에 festivalCenter만으로 카카오맵을 먼저 마운트하면, 생성 결과가
+    공용 캐시에 들어오기 전 편집 화면이 열려 초기화 오류가 화면 전체 ErrorBoundary로
+    번질 수 있다. map 생성과 빈 editor 조회까지 성공한 뒤에만 실제 편집기를 연다.
+  */
+  if (mapQuery.isPending || editorQuery.isPending) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-zinc-50 px-8">
+        <p className="body-small text-zinc-600">부스맵을 준비하는 중...</p>
       </div>
     );
   }
@@ -2808,7 +2902,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 if (queueMode === "plan" && selectedPlanQuery.isPending) return;
                 if (isSamePlace(queueDraft[queueDraft.length - 1], point)) return;
                 setQueueDraft((prev) =>
-                  queueMode === "current" && queueTailOnly && selectedPlanQuery.data
+                  queueMode === "current" && selectedPlanQuery.data
                     ? [snapToQueuePath(selectedPlanQuery.data.path, point)]
                     : [...prev, point],
                 );
@@ -3195,7 +3289,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       setCheckedIds(new Set([booth.id]));
                       setEditingBoothId(booth.id);
                       setBoothListOpen(false);
-                      panPinIntoView(booth.lat, booth.lng);
                     }}
                     /*
                       아이콘을 넣으면서 히트 영역을 넉넉히 잡는다(28px). 점(12px)만 할 때는
@@ -3256,7 +3349,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               선택을 그대로 둬야 하는데, 말풍선까지 떠 있으면 그릴 자리를 가린다.
             */}
             {selectedBooth && !editingLocked && drawTool === "select" && checkedIds.size <= 1 ? (
-              <MapPopoverPortal position={pinPositionOf(selectedBooth)}>
+              <CustomOverlayMap
+                position={pinPositionOf(selectedBooth)}
+                {...POPOVER_ANCHORS}
+                zIndex={30}
+              >
                 <MapInfoPopover
                   key={selectedBooth.id}
                   mode="booth-edit"
@@ -3301,14 +3398,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     setSelectedZoneId(null);
                   }}
                 />
-              </MapPopoverPortal>
+              </CustomOverlayMap>
             ) : null}
             {selectedShape && !editingLocked && drawTool === "select" ? (
-              <MapPopoverPortal
+              <CustomOverlayMap
                 position={shapePopoverAnchor({
                   ...selectedShape,
                   points: shapePointsOf(selectedShape),
                 })}
+                {...POPOVER_ANCHORS}
+                zIndex={30}
               >
                 <MapInfoPopover
                   mode="booth-edit"
@@ -3341,13 +3440,17 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     />
                   }
                 />
-              </MapPopoverPortal>
+              </CustomOverlayMap>
             ) : null}
             {groupPopoverOpen
               ? (() => {
                   if (pendingGroupMembers.length < 2) return null;
                   return (
-                    <MapPopoverPortal position={centroidOf(pendingGroupMembers)}>
+                    <CustomOverlayMap
+                      position={centroidOf(pendingGroupMembers)}
+                      {...POPOVER_ANCHORS}
+                      zIndex={30}
+                    >
                       <MapInfoPopover
                         mode="group-create"
                         style={{ position: "static" }}
@@ -3374,7 +3477,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                         onCancel={() => setGroupPopoverOpen(false)}
                         onDelete={() => setGroupPopoverOpen(false)}
                       />
-                    </MapPopoverPortal>
+                    </CustomOverlayMap>
                   );
                 })()
               : null}
@@ -3384,7 +3487,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             !editingLocked &&
             checkedIds.size === 0 &&
             selectedZoneMembers.length > 0 ? (
-              <MapPopoverPortal position={centroidOf(selectedZoneMembers)}>
+              <CustomOverlayMap
+                position={centroidOf(selectedZoneMembers)}
+                {...POPOVER_ANCHORS}
+                zIndex={30}
+              >
                 <MapInfoPopover
                   mode="zone-edit"
                   style={{ position: "static" }}
@@ -3403,7 +3510,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     setSelectedZoneId(null);
                   }}
                 />
-              </MapPopoverPortal>
+              </CustomOverlayMap>
             ) : null}
           </KakaoMap>
         </div>
@@ -3444,38 +3551,34 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       </Button>
       <div
         ref={boothListRef}
+        data-boothmap-guide="booth-editing"
         className={cn(
           "absolute top-44 bottom-4 left-4 w-[calc(100%-80px)] lg:top-10 lg:bottom-10 lg:left-8 lg:block lg:w-72",
-          // 하단 선택 바(72px)가 떠 있으면 목록이 그 아래로 깔려 마지막 행이 가려진다.
-          selectionBarOpen && "bottom-[88px] lg:bottom-[88px]",
           !boothListOpen && "hidden",
         )}
       >
-        <MapSidePanel className="h-full w-full">
-          <div className="flex items-center justify-between gap-3">
-            <p className="body-large-bold min-w-0 text-zinc-950">
-              {/* 공개 안내와 숫자가 어긋나지 않게 부스만 센다(입구·화장실 같은 시설은 뺀다). */}
-              축제부스 <span className="text-primary">{boothOnlyCount}</span>
-              {reviewRequiredCount > 0 ? (
-                <span className="body-small ml-2 text-secondary-600">
-                  검수 필요 {reviewRequiredCount}
-                </span>
-              ) : null}
-            </p>
-          </div>
-          {isCompleted ? <p className="body-small-bold text-zinc-950">종료된 축제입니다.</p> : null}
-          <div className="hidden">
-            {!isCompleted ? (
-              <p className="body-small-bold text-zinc-950">
-                {analyzing
+        <MapSidePanel className="h-full w-full overflow-hidden">
+          <p className="body-large-bold text-zinc-950">
+            {/* 공개 안내와 숫자가 어긋나지 않게 부스만 센다(입구·화장실 같은 시설은 뺀다). */}
+            축제부스 <span className="text-primary">{boothOnlyCount}</span>
+            {reviewRequiredCount > 0 ? (
+              <span className="body-small ml-2 text-secondary-600">
+                검수 필요 {reviewRequiredCount}
+              </span>
+            ) : null}
+          </p>
+          <div className="flex flex-col gap-2 rounded-md bg-zinc-100 px-4 py-3 text-left">
+            <p className="body-small-bold text-zinc-950">
+              {isCompleted
+                ? "종료된 축제입니다."
+                : analyzing
                   ? "AI가 배치도를 읽고 있습니다."
                   : booths.length === 0
                     ? "아직 찍은 부스가 없습니다."
                     : reviewRequiredCount > 0
                       ? "AI가 찾은 부스를 확인해 주세요."
                       : "지도에서 부스를 편집하세요."}
-              </p>
-            ) : null}
+            </p>
             <p className="body-caption text-zinc-950">
               {isCompleted
                 ? "결과리포트가 이 배치를 근거로 삼기 때문에 부스맵은 더 이상 수정할 수 없습니다. 지난 축제의 배치는 그대로 확인할 수 있습니다."
@@ -3489,174 +3592,106 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
             </p>
           </div>
 
-          <div className="hidden">
-            <Button
-              type="button"
-              variant="outline"
-              icon={<FileIcon />}
-              disabled={replaceMutation.isPending || editingLocked}
-              title={
-                editLockReason ??
-                (hasBlueprintImage ? "다른 배치도 이미지로 다시 분석" : "배치도 이미지로 AI 분석")
-              }
-              onClick={() => setAnalyzeDialogOpen(true)}
-            >
-              {replaceMutation.isPending
-                ? "올리는 중..."
-                : hasBlueprintImage
-                  ? "재분석"
-                  : "AI 분석"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              icon={<ImageIcon />}
-              disabled={editingLocked}
-              title={editLockReason ?? "팜플렛 이미지 올리기"}
-              onClick={() => overlayFileInputRef.current?.click()}
-            >
-              팜플렛
-            </Button>
-          </div>
+          {/* 헤더·안내와 하단 액션은 고정하고, 이 목록만 스크롤한다. */}
+          <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            {standaloneZones.map((zone) => {
+              const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
+              const expanded = expandedZoneIds.has(zone.id);
+              return (
+                <ZoneListItem
+                  key={zone.id}
+                  name={zone.name}
+                  count={members.length}
+                  expanded={expanded}
+                  checked={selectedZoneId === zone.id}
+                  selected={selectedZoneId === zone.id}
+                  reorder={zoneReorderProps(zone.id)}
+                  onToggleExpanded={() => toggleZoneExpanded(zone.id)}
+                  onCheckedChange={(checked) =>
+                    checked ? selectZone(zone.id) : setSelectedZoneId(null)
+                  }
+                  onSelect={() => selectZone(zone.id)}
+                >
+                  {members.map((booth) => renderBoothRow(booth, { indent: true }))}
+                </ZoneListItem>
+              );
+            })}
+            {ungroupedBooths.map((booth) => renderBoothRow(booth, { indent: false }))}
+            {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
+            {polygonShapes.length > 0 ? (
+              <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
+                {polygonShapes.map((shape) => {
+                  const members = booths.filter(
+                    (booth) => shapeIdByBoothId.get(booth.id) === shape.id,
+                  );
+                  return (
+                    <ZoneListItem
+                      key={shape.id}
+                      name={shape.name}
+                      count={members.length}
+                      expanded={expandedZoneIds.has(shape.id)}
+                      checked={selectedShapeId === shape.id || checkedIds.has(shape.id)}
+                      selected={selectedShapeId === shape.id || checkedIds.has(shape.id)}
+                      reorder={zoneReorderProps(shape.id)}
+                      onToggleExpanded={() => toggleZoneExpanded(shape.id)}
+                      onCheckedChange={(checked) => {
+                        setEditingBoothId(null);
+                        setSelectedShapeId(checked ? shape.id : null);
+                      }}
+                      onSelect={() => {
+                        setEditingBoothId(null);
+                        setSelectedShapeId(shape.id);
+                      }}
+                    >
+                      {members.map((booth) => renderBoothRow(booth, { indent: true }))}
+                    </ZoneListItem>
+                  );
+                })}
+              </div>
+            ) : null}
 
-          <div className="hidden">
-            <span className="body-small-bold text-zinc-950">사용자 화면 노출</span>
-            <Button
-              type="button"
-              variant={isPublished ? "primary" : "outline"}
-              title={
-                isPublished
-                  ? "방문객 앱에 공개 중입니다. 눌러 비공개로 전환합니다."
-                  : (publishLockReason ?? "방문객 앱에 비공개 상태입니다. 눌러 공개합니다.")
-              }
-              disabled={
-                isPublished
-                  ? unpublishMutation.isPending
-                  : publishMutation.isPending || publishLockReason !== null
-              }
-              onClick={() =>
-                isPublished ? setUnpublishDialogOpen(true) : setPublishDialogOpen(true)
-              }
-            >
-              {publishMutation.isPending || unpublishMutation.isPending
-                ? "변경 중..."
-                : isPublished
-                  ? "공개"
-                  : "비공개"}
-            </Button>
-          </div>
-
-          {ungroupedBooths.length > 0 ? (
-            <section className="flex flex-col gap-1">
-              <p className="body-caption-bold text-zinc-500">
-                구역 미지정 <span className="text-primary">{ungroupedBooths.length}</span>
-              </p>
-              {ungroupedBooths.map((booth) => renderBoothRow(booth, { indent: false }))}
-            </section>
-          ) : null}
-
-          {standaloneZones.length + polygonShapes.length > 0 ? (
-            <section className="flex flex-col gap-2 pt-2">
-              <p className="body-caption-bold text-zinc-500">
-                구역{" "}
-                <span className="text-primary">
-                  {standaloneZones.length + polygonShapes.length}
-                </span>
-              </p>
-              {standaloneZones.map((zone) => {
-                const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
-                const expanded = expandedZoneIds.has(zone.id);
-                return (
-                  <ZoneListItem
-                    key={zone.id}
-                    name={zone.name}
-                    count={members.length}
-                    expanded={expanded}
-                    checked={selectedZoneId === zone.id}
-                    selected={selectedZoneId === zone.id}
-                    reorder={zoneReorderProps(zone.id)}
-                    onToggleExpanded={() => toggleZoneExpanded(zone.id)}
-                    onCheckedChange={(checked) =>
-                      checked ? selectZone(zone.id) : setSelectedZoneId(null)
-                    }
-                    onSelect={() => selectZone(zone.id)}
-                  >
-                    {members.map((booth) => renderBoothRow(booth, { indent: true }))}
-                  </ZoneListItem>
-                );
-              })}
-              {/* 구역 폴리곤은 그 안에 든 부스를 하위로 품는다(화면설계서 4-6). */}
-              {polygonShapes.map((shape) => {
-                const members = booths.filter(
-                  (booth) => shapeIdByBoothId.get(booth.id) === shape.id,
-                );
-                return (
-                  <ZoneListItem
+            {/* 라인은 부스를 품지 않으므로 따로 나열한다. */}
+            {lineShapes.length > 0 ? (
+              <div className="flex flex-col gap-1 border-t border-zinc-200 pt-3">
+                <p className="body-small-bold text-zinc-950">
+                  도형 <span className="text-primary">{lineShapes.length}</span>
+                </p>
+                {lineShapes.map((shape) => (
+                  <button
                     key={shape.id}
-                    name={shape.name}
-                    count={members.length}
-                    expanded={expandedZoneIds.has(shape.id)}
-                    checked={selectedShapeId === shape.id || checkedIds.has(shape.id)}
-                    selected={selectedShapeId === shape.id || checkedIds.has(shape.id)}
-                    reorder={zoneReorderProps(shape.id)}
-                    onToggleExpanded={() => toggleZoneExpanded(shape.id)}
-                    onCheckedChange={(checked) => {
-                      setEditingBoothId(null);
-                      setSelectedShapeId(checked ? shape.id : null);
-                    }}
-                    onSelect={() => {
+                    type="button"
+                    onClick={() => {
                       setEditingBoothId(null);
                       setSelectedShapeId(shape.id);
+                      const anchor = shapeAnchor(shape);
+                      kakaoMapRef.current?.panTo(
+                        new window.kakao.maps.LatLng(anchor.lat, anchor.lng),
+                      );
                     }}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-zinc-100",
+                      selectedShapeId === shape.id && "bg-primary/10 hover:bg-primary/10",
+                    )}
                   >
-                    {members.map((booth) => renderBoothRow(booth, { indent: true }))}
-                  </ZoneListItem>
-                );
-              })}
-            </section>
-          ) : null}
-
-          {/* 라인은 부스를 품지 않으므로 따로 나열한다. */}
-          {lineShapes.length > 0 ? (
-            <section className="flex flex-col gap-1 pt-2">
-              <p className="body-caption-bold text-zinc-500">
-                도형 <span className="text-primary">{lineShapes.length}</span>
-              </p>
-              {lineShapes.map((shape) => (
-                <button
-                  key={shape.id}
-                  type="button"
-                  onClick={() => {
-                    setEditingBoothId(null);
-                    setSelectedShapeId(shape.id);
-                    const anchor = shapeAnchor(shape);
-                    kakaoMapRef.current?.panTo(
-                      new window.kakao.maps.LatLng(anchor.lat, anchor.lng),
-                    );
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-zinc-100",
-                    selectedShapeId === shape.id && "bg-primary/10 hover:bg-primary/10",
-                  )}
-                >
-                  <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
-                    {shape.kind === "polygon" ? <DimensionsIcon /> : <RulerHorizontalIcon />}
-                  </span>
-                  <span className="body-small truncate text-zinc-950">{shape.name}</span>
-                  <span className="body-caption ml-auto shrink-0 text-zinc-500">
-                    {SHAPE_LABEL[shape.kind]}
-                  </span>
-                </button>
-              ))}
-            </section>
-          ) : null}
+                    <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
+                      {shape.kind === "polygon" ? <DimensionsIcon /> : <RulerHorizontalIcon />}
+                    </span>
+                    <span className="body-small truncate text-zinc-950">{shape.name}</span>
+                    <span className="body-caption ml-auto shrink-0 text-zinc-500">
+                      {SHAPE_LABEL[shape.kind]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </MapSidePanel>
       </div>
 
       <div
         ref={topActionBarRef}
         data-map-tools
-        className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-end gap-2 lg:top-10 lg:right-8 lg:left-auto"
+        className="absolute top-4 right-4 left-4 flex flex-wrap items-center justify-end gap-2 lg:top-10 lg:right-8 lg:left-auto lg:gap-4"
       >
         <div className="flex items-center gap-2">
           <span
@@ -3673,7 +3708,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               aria-label="실행취소"
               disabled={undoDisabled}
               onClick={undo}
-              className={`${undoDisabled ? "text-zinc-500" : "text-zinc-950"} shadow-md`}
+              className={undoDisabled ? "text-zinc-500" : "text-zinc-950"}
             />
           </span>
           <span
@@ -3690,143 +3725,104 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               aria-label="다시실행"
               disabled={redoDisabled}
               onClick={redo}
-              className={`${redoDisabled ? "text-zinc-500" : "text-zinc-950"} shadow-md`}
+              className={redoDisabled ? "text-zinc-500" : "text-zinc-950"}
             />
           </span>
-          {/* 저장·공개 옆에 두면 급할 때 잘못 눌리므로 되돌리기 쪽에 붙인다. */}
-          <BoothMapHelpDialog />
+          {/* 편집 기능과 구분되면서도 바로 찾을 수 있게 상단 작업 영역에서 강조한다. */}
+          <IconButton
+            icon={<QuestionMarkCircledIcon />}
+            size="default"
+            iconClassName="size-4 [&_svg]:size-4"
+            aria-label="도움말"
+            title="부스 편집 도움말"
+            className="bg-white text-primary ring-1 ring-primary-300 hover:bg-primary-300"
+            onClick={() => setHelpOpen(true)}
+          />
         </div>
-        <div className="contents">
+        <div className="flex items-center gap-3">
           <input
-            ref={replaceFileInputRef}
+            ref={overlayFileInputRef}
             type="file"
             accept="image/png,image/jpeg"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
-              if (file) replaceMutation.mutate(file);
+              if (file) {
+                loadOverlayFile(file);
+                replaceMutation.mutate(file);
+              }
               event.currentTarget.value = "";
             }}
           />
-          <input
-            ref={overlayFileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) loadOverlayFile(file);
-              event.currentTarget.value = "";
-            }}
-          />
-          <div className="relative">
+          <Button
+            type="button"
+            variant="outline"
+            icon={<FileIcon />}
+            data-boothmap-guide="ai-analysis"
+            disabled={replaceMutation.isPending || editingLocked}
+            title={
+              editLockReason ??
+              (hasBlueprintImage ? "다른 배치도 이미지로 다시 분석" : "배치도 이미지로 AI 분석")
+            }
+            onClick={() => setAnalyzeDialogOpen(true)}
+          >
+            {replaceMutation.isPending ? "올리는 중..." : hasBlueprintImage ? "재분석" : "AI 분석"}
+          </Button>
+          <div className="flex items-center gap-3" data-boothmap-guide="save-publish">
             <Button
               type="button"
-              variant="outline"
-              icon={<ImageIcon />}
-              aria-expanded={imageToolsOpen}
-              onClick={() => setImageToolsOpen((open) => !open)}
+              variant={hasUnsavedChanges ? "primary" : "outline"}
+              aria-label="저장하기"
+              disabled={saveMutation.isPending || editingLocked || !hasUnsavedChanges}
+              title={saveLockReason}
+              onClick={() => setSaveDialogOpen(true)}
             >
-              <span className="flex items-center gap-1">
-                도구
-                <ChevronDownIcon
-                  className={cn("transition-transform", imageToolsOpen && "rotate-180")}
-                />
-              </span>
+              {saveMutation.isPending ? "저장 중..." : "저장"}
             </Button>
-            {imageToolsOpen ? (
-              <div className="absolute top-full left-0 z-30 mt-1 w-full overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-md">
-                <button
-                  type="button"
-                  disabled={replaceMutation.isPending || editingLocked}
-                  title={
-                    editLockReason ??
-                    (hasBlueprintImage
-                      ? "다른 배치도 이미지로 다시 분석"
-                      : "배치도 이미지로 AI 분석")
-                  }
-                  onClick={() => {
-                    setImageToolsOpen(false);
-                    setAnalyzeDialogOpen(true);
-                  }}
-                  className="body-small flex w-full items-center gap-2 px-3 py-2.5 text-left text-zinc-950 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <FileIcon className="size-4 shrink-0" />
-                  {replaceMutation.isPending
-                    ? "올리는 중..."
-                    : hasBlueprintImage
-                      ? "AI 재분석"
-                      : "AI 분석"}
-                </button>
-                <div className="mx-3 border-t border-zinc-200" />
-                <button
-                  type="button"
-                  disabled={editingLocked}
-                  title={editLockReason ?? "팜플렛 이미지 올리기"}
-                  onClick={() => {
-                    setImageToolsOpen(false);
-                    overlayFileInputRef.current?.click();
-                  }}
-                  className="body-small flex w-full items-center gap-2 px-3 py-2.5 text-left text-zinc-950 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <ImageIcon className="size-4 shrink-0" />
-                  팜플렛
-                </button>
-              </div>
-            ) : null}
+            {/*
+            공개 여부는 방문객에게 보이는지를 가르는 유일한 신호라 항상 자리를 지킨다.
+            공개된 지도도 눌러서 내릴 수 있어야 한다. 상태 표시로만 두면 잘못 그린 채
+            공개했을 때 부스를 전부 지우는 것 말고는 감출 방법이 없다.
+          */}
+            {isPublished ? (
+              <button
+                type="button"
+                className="body-regular-bold flex items-center rounded-md border border-primary-300 bg-white px-4 py-2 text-primary hover:bg-zinc-100 disabled:opacity-50"
+                title="현재 공개 상태입니다. 눌러서 공개를 해제합니다."
+                disabled={unpublishMutation.isPending}
+                onClick={() => setUnpublishDialogOpen(true)}
+              >
+                {unpublishMutation.isPending ? "비공개 처리 중..." : "공개"}
+              </button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                disabled={publishMutation.isPending || publishLockReason !== null}
+                title={publishLockReason ?? "현재 비공개 상태입니다. 눌러서 방문객에게 공개합니다."}
+                onClick={() => setPublishDialogOpen(true)}
+              >
+                {publishMutation.isPending ? "공개 처리 중..." : "비공개"}
+              </Button>
+            )}
           </div>
-          <Button
-            type="button"
-            variant={isPublished ? "primary" : "outline"}
-            aria-label={isPublished ? "공개됨" : "공개하기"}
-            title={
-              isPublished
-                ? "방문객 앱에 공개 중입니다. 눌러 비공개로 전환합니다."
-                : (publishLockReason ?? "방문객 앱에 비공개 상태입니다. 눌러 공개합니다.")
-            }
-            disabled={
-              isPublished
-                ? unpublishMutation.isPending
-                : publishMutation.isPending || publishLockReason !== null
-            }
-            onClick={() =>
-              isPublished ? setUnpublishDialogOpen(true) : setPublishDialogOpen(true)
-            }
-          >
-            {publishMutation.isPending || unpublishMutation.isPending
-              ? "변경 중..."
-              : isPublished
-                ? "공개"
-                : "비공개"}
-          </Button>
-          <Button
-            type="button"
-            variant={hasUnsavedChanges ? "primary" : "outline"}
-            disabled={saveMutation.isPending || editingLocked || !hasUnsavedChanges}
-            title={saveLockReason}
-            onClick={() => setSaveDialogOpen(true)}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장하기"}
-          </Button>
         </div>
-        <div className="contents">
-          <IconButton
-            icon={<Cross2Icon />}
-            size="lg"
-            iconClassName="size-5 [&_svg]:size-5"
-            aria-label="닫기"
-            className="text-zinc-950 ring-1 ring-zinc-200 shadow-md"
-            onClick={() => setCloseDialogOpen(true)}
-          />
-        </div>
+        <IconButton
+          icon={<Cross2Icon />}
+          size="lg"
+          iconClassName="size-5 [&_svg]:size-5"
+          aria-label="닫기"
+          className="text-zinc-950"
+          onClick={() => setCloseDialogOpen(true)}
+        />
       </div>
 
       <div
         ref={mapToolsRef}
         data-map-tools
+        data-boothmap-guide="drawing-tools"
         className={cn(
           "absolute right-4 bottom-4 flex flex-col items-center gap-5 lg:right-8 lg:bottom-10",
-          selectionBarOpen && "bottom-[88px] lg:bottom-[88px]",
         )}
       >
         <div className="flex flex-col gap-1">
@@ -3871,12 +3867,18 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 <button
                   key={option.value}
                   type="button"
+                  disabled={!savedSiteBoundary || uniqueVertices(savedSiteBoundary).length < 3}
+                  title={
+                    !savedSiteBoundary || uniqueVertices(savedSiteBoundary).length < 3
+                      ? "부지 경계를 그리고 저장한 뒤 추가할 수 있습니다."
+                      : undefined
+                  }
                   onClick={() => {
                     setPendingPinType(option.value);
                     setDrawTool("pin");
                     setPinTypeMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
+                  className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   <span className="size-4 shrink-0 text-primary [&_svg]:size-4">{option.icon}</span>
                   <span className="body-small text-zinc-950">{option.label}</span>
@@ -3911,17 +3913,11 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         */}
       </div>
 
+      <BoothMapOnboarding open={guideOpen} onOpenChange={changeGuideOpen} />
+      <BoothMapHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
       {drawTool === "polygon" || drawTool === "line" ? (
-        <div className="pointer-events-auto absolute right-16 bottom-4 left-4 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 pr-12 shadow-md lg:right-28 lg:bottom-10 lg:left-[23rem]">
-          <IconButton
-            icon={<Cross2Icon />}
-            aria-label="그만두기"
-            title="그만두기"
-            variant="ghost"
-            size="sm"
-            className="absolute right-3 top-3"
-            onClick={cancelDraftShape}
-          />
+        <div className="pointer-events-auto absolute right-16 bottom-4 left-4 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 shadow-md lg:right-28 lg:bottom-10 lg:left-[23rem]">
           <p className="body-small text-zinc-950">
             지도를 눌러 {SHAPE_LABEL[drawTool]} 꼭짓점을 찍으세요
             <span className="body-small-bold ml-2 text-primary">
@@ -3936,6 +3932,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           >
             한 점 취소
           </Button>
+          <Button type="button" variant="outline" onClick={cancelDraftShape}>
+            그만두기
+          </Button>
           <Button
             type="button"
             variant="primary"
@@ -3949,17 +3948,19 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
 
       {drawTool === "boundary" ? (
         <div className="pointer-events-auto absolute right-16 bottom-4 left-4 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md lg:right-28 lg:bottom-10 lg:left-[23rem]">
-          <Button type="button" variant="outline" onClick={cancelDraftShape}>
-            취소
-          </Button>
-          <Button type="button" variant="primary" onClick={finishBoundary}>
-            경계 완료
-          </Button>
           {siteBoundary ? (
             <Button type="button" variant="destructive" onClick={() => setDeleteBoundaryOpen(true)}>
               경계 삭제
             </Button>
           ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={cancelDraftShape}>
+              취소
+            </Button>
+            <Button type="button" variant="primary" onClick={finishBoundary}>
+              경계 완료
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -3997,20 +3998,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               locked={editingLocked || hasUnsavedChanges || !canPlanQueue}
             />
           ) : (
-            <div className="relative flex flex-col gap-3">
-              <IconButton
-                icon={<Cross2Icon />}
-                aria-label="그만두기"
-                title="그만두기"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0"
-                onClick={() => {
-                  cancelDraftShape();
-                  setEditingBoothId(null);
-                }}
-              />
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-10">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <p className="body-small text-zinc-950">
                   {selectedBooth ? (
                     <>
@@ -4019,7 +4008,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   ) : null}
                   {queueTailOnly
                     ? "지도를 눌러 현재 줄 끝을 찍으세요. 사전 경로 위로 맞춰집니다"
-                    : "점을 끌어 줄을 수정하거나 지도를 눌러 지점을 추가하세요"}
+                    : "지도를 눌러 현재 줄이 꺾이는 지점을 찍으세요"}
                   <span className="body-small-bold ml-2 text-primary">
                     {selectedQueue?.waitMinutes != null
                       ? `현재 대기 ${selectedQueue.waitMinutes}분`
@@ -4027,6 +4016,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   </span>
                 </p>
                 <div className="ml-auto flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={cancelDraftShape}>
+                    그만두기
+                  </Button>
                   <Button
                     type="button"
                     variant="primary"
@@ -4083,6 +4075,18 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                     ) : null}
                   </div>
                 ) : null}
+                {queueDraft.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    selected={showQueueCoordinates}
+                    aria-expanded={showQueueCoordinates}
+                    onClick={() => setShowQueueCoordinates((open) => !open)}
+                  >
+                    좌표 직접 입력
+                  </Button>
+                ) : null}
                 {/* 이미 저장된 경로가 있을 때만. 서버에는 빈 배열이 곧 삭제다. */}
                 {selectedQueue?.path && selectedQueue.path.length > 0 ? (
                   <Button
@@ -4097,6 +4101,32 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   </Button>
                 ) : null}
               </div>
+              {showQueueCoordinates && !queueTailOnly ? (
+                <QueuePointEditor
+                  path={queueDraft}
+                  onChange={setQueueDraft}
+                  locked={
+                    editingLocked ||
+                    queueSaveMutation.isPending ||
+                    selectedQueue?.queueId !== queueDraftId
+                  }
+                />
+              ) : null}
+              {showQueueCoordinates && queueTailOnly && queueDraft.length === 1 ? (
+                <QueuePointEditor
+                  path={queueDraft}
+                  onChange={(points) => {
+                    if (!points.length) setQueueDraft([]);
+                    else if (
+                      selectedPlanQuery.data &&
+                      Number.isFinite(points[0].lat) &&
+                      Number.isFinite(points[0].lng)
+                    )
+                      setQueueDraft([snapToQueuePath(selectedPlanQuery.data.path, points[0])]);
+                  }}
+                  locked={queueSaveMutation.isPending}
+                />
+              ) : null}
               {queueSaveError ? <p className="body-caption text-error">{queueSaveError}</p> : null}
             </div>
           )}
@@ -4246,7 +4276,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           />
         </div>
       ) : null}
-
       <ConfirmDialog
         open={bulkAiDialogOpen}
         onOpenChange={setBulkAiDialogOpen}
@@ -4345,19 +4374,47 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       <ConfirmDialog
         open={analyzeDialogOpen}
         onOpenChange={setAnalyzeDialogOpen}
-        title="배치도 이미지로 AI 분석을 시작할까요?"
+        title="분석할 팜플렛 이미지를 선택해 주세요"
         description={
           booths.length > 0
-            ? `지도를 새로 만들면 부스 ${boothOnlyCount}개와 시설 ${booths.length - boothOnlyCount}개가 모두 사라집니다. 저장하지 않은 편집도 함께 사라집니다.`
-            : "AI가 배치도에서 부스를 찾아 핀으로 뿌려 줍니다. 분석이 끝날 때까지 편집과 저장은 막힙니다."
+            ? `선택한 이미지를 팜플렛으로 등록하고 AI가 분석합니다. 지금 찍혀 있는 핀 ${booths.length}개와 저장하지 않은 편집은 사라집니다.`
+            : "선택한 이미지를 팜플렛으로 등록하고, AI가 부스를 찾아 지도에 표시합니다."
         }
-        confirmLabel="이미지 선택"
+        confirmLabel="새 이미지 업로드"
         confirmVariant="primary"
+        confirmPending={replaceMutation.isPending || preparingExistingPamphlet}
         onConfirm={() => {
           setAnalyzeDialogOpen(false);
-          replaceFileInputRef.current?.click();
+          overlayFileInputRef.current?.click();
         }}
-      />
+      >
+        {pamphlet ? (
+          <button
+            type="button"
+            className="mt-6 flex w-full items-center gap-3 rounded-lg border border-zinc-200 p-3 text-left hover:bg-zinc-50 disabled:opacity-50"
+            disabled={replaceMutation.isPending || preparingExistingPamphlet}
+            onClick={analyzeExistingPamphlet}
+          >
+            {/* 서명 URL이라 next/image 최적화 대상이 아니다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={pamphlet.imageUrl}
+              alt=""
+              className="size-14 shrink-0 rounded-md border border-zinc-200 object-cover"
+            />
+            <span className="min-w-0">
+              <span className="body-small-bold block truncate text-zinc-950">
+                기존 팜플렛으로 분석
+              </span>
+              <span className="body-caption block truncate text-zinc-500">
+                {preparingExistingPamphlet
+                  ? "이미지 불러오는 중..."
+                  : (pamphletFileName ?? "저장된 팜플렛 이미지")}
+              </span>
+            </span>
+          </button>
+        ) : null}
+      </ConfirmDialog>
       <ConfirmDialog
         open={closeDialogOpen}
         onOpenChange={setCloseDialogOpen}

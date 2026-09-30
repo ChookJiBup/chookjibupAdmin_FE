@@ -63,8 +63,8 @@ export function VisitorCountForm({
   );
   const editableDayIndexes = days.flatMap((day, index) => (day.inputAllowed ? [index] : []));
 
-  // 백엔드는 지난 일자(일일마감된 일자)만 입력을 허용한다. 아직 마감된 일자가
-  // 하나도 없으면 저장할 것이 없으므로 제출을 막는다.
+  // 백엔드는 축제 시작일부터 오늘까지만 입력을 허용한다. 아직 시작 전이면
+  // 저장할 것이 없으므로 제출을 막는다.
   const dailyValid =
     editableDayIndexes.length > 0 &&
     editableDayIndexes.every((index) => {
@@ -100,8 +100,8 @@ export function VisitorCountForm({
       : pickedMode === "TOTAL"
         ? "총 방문객 수를 입력해 주세요."
         : editableDayIndexes.length === 0
-          ? "아직 마감된 일자가 없어 입력할 수 있는 날이 없습니다."
-          : "마감된 모든 일차의 방문 인원을 입력해 주세요.";
+          ? "아직 축제가 시작하지 않아 입력할 수 있는 날이 없습니다."
+          : "오늘까지의 모든 일차 방문 인원을 입력해 주세요.";
 
   return (
     /*

@@ -69,7 +69,6 @@ export function StaffHeader() {
         onOpenChange={setLogoutOpen}
         title="로그아웃하시겠습니까?"
         confirmLabel="로그아웃"
-        overlayClassName="top-0"
         className="p-6"
         onConfirm={async () => {
           // 세션을 지우기 전에 담당 축제 ID를 읽어 둬야 로그인 화면에 다시 실어 줄 수 있다.

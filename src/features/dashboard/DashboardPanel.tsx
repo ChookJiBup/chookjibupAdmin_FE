@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { MapMetric } from "@/components/map/MapMetric";
 import { MapZoomControls } from "@/components/map/MapZoomControls";
 import { getCurrentMap } from "@/features/boothmap/api";
+import { festivalMapKeys } from "@/features/boothmap/festivalMapQueries";
 import { boothsToQueuePathItems } from "@/features/boothmap/QueuePathLayer";
 import { presentationBoundary, presentationOverlay } from "@/features/boothmap/mapPresentation";
 import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
@@ -73,7 +74,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   // "활성 대기열 8개" 같은 숫자가 뜨므로 조회 자체를 하지 않는다.
   const isRealtimeScope = progressStatus === "ONGOING";
   const mapDataQuery = useQuery({
-    queryKey: ["dashboard-map", festivalId, festivalQuery.data?.role],
+    queryKey: festivalMapKeys.current(festivalId),
     enabled: festivalQuery.isSuccess,
     queryFn: () => getCurrentMap(festivalId),
     // 지도 미등록 또는 좌표 누락은 재시도로 해결되지 않는다.
@@ -85,13 +86,13 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     저장 전 초안 노드까지 통째로 내려온다. 대시보드는 보기만 하면 된다.
   */
   const operationsMapQuery = useQuery({
-    queryKey: ["festival-operations-map", festivalId],
+    queryKey: festivalMapKeys.operationsMap(festivalId),
     enabled: festivalQuery.isSuccess,
     queryFn: () => getFestivalOperationsMap(festivalId),
     retry: false,
   });
   const dashboardQuery = useQuery({
-    queryKey: ["festival-dashboard", festivalId],
+    queryKey: festivalMapKeys.dashboard(festivalId),
     queryFn: () => getFestivalDashboard(festivalId),
   });
   const congestionQuery = useQuery({
@@ -105,15 +106,10 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     queryFn: () => getFestivalOperationSuggestions(festivalId),
   });
   const queuesQuery = useQuery({
-    queryKey: ["festival-queues", festivalId],
+    queryKey: festivalMapKeys.queues(festivalId),
     enabled: isRealtimeScope,
     queryFn: () => getFestivalQueues(festivalId),
   });
-  /*
-    방문 인원은 총괄관리자가 날짜별로 쌓는 값이다. 운영자(제2관리자)는 입력 주체가
-    아니라 조회조차 하지 않는다. 역할은 계정 세션이 아니라 «이 축제의 역할»로 본다 —
-    계정 대표 역할로 판단하면 다른 축제에서만 총괄인 사람에게도 게이트가 걸린다.
-  */
   const isFestivalOwner = festivalQuery.data?.role === "FESTIVAL_OWNER";
   const mapBooths = useMemo((): Booth[] => {
     const dashboardBooths = dashboardQuery.data?.booths ?? [];
@@ -206,9 +202,11 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     : null;
   // 줄끝을 갱신하면 백엔드가 혼잡도 이력까지 함께 쌓으므로 관련 조회를 모두 다시 읽는다.
   const refetchRealtime = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["festival-dashboard", festivalId] });
-    queryClient.invalidateQueries({ queryKey: ["festival-congestion", festivalId] });
-    queryClient.invalidateQueries({ queryKey: ["festival-queues", festivalId] });
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: festivalMapKeys.dashboard(festivalId) }),
+      queryClient.invalidateQueries({ queryKey: festivalMapKeys.congestion(festivalId) }),
+      queryClient.invalidateQueries({ queryKey: festivalMapKeys.queues(festivalId) }),
+    ]);
   }, [queryClient, festivalId]);
   const dashboardMapCenter = mapDataQuery.data?.center ?? mapCenter;
   const queuePathItems = useMemo(() => {
@@ -279,11 +277,6 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {/*
-        하루가 끝난 일차의 방문 인원이 비어 있으면 대시보드를 덮는다. 조회 실패로
-        목록을 못 받았을 때는 게이트를 걸지 않는다 — 입력해야 할 날을 모르는 채로
-        막으면 빠져나갈 방법이 없다.
-      */}
       {dashboardMapCenter ? (
         <BoothMapView
           booths={mapBooths}
@@ -419,14 +412,12 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
                     실시간 혼잡도와 대기열 지표는 더 이상 갱신되지 않습니다.
                   </p>
                 </div>
-                {isFestivalOwner ? (
-                  <Link
-                    href={`/console/festivals/${festivalId}/report`}
-                    className={BOOTH_MAP_CTA_CLASSES}
-                  >
-                    결과리포트 보기
-                  </Link>
-                ) : null}
+                <Link
+                  href={`/console/festivals/${festivalId}/report`}
+                  className={BOOTH_MAP_CTA_CLASSES}
+                >
+                  운영리포트 보기
+                </Link>
               </div>
             ) : dashboard?.dataAvailable ? (
               <div className="flex flex-wrap items-center gap-3 rounded-lg lg:gap-6 border border-zinc-200 bg-white px-5 py-4 shadow-md">

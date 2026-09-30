@@ -110,7 +110,11 @@ const evaluation = {
   },
 };
 
-async function mockReport(page: Page) {
+async function mockReport(
+  page: Page,
+  role: "FESTIVAL_OWNER" | "SUB_ADMIN" = "FESTIVAL_OWNER",
+  progressStatus: "ONGOING" | "COMPLETED" = "COMPLETED",
+) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     let data: unknown;
@@ -128,14 +132,15 @@ async function mockReport(page: Page) {
       data = {
         festivalId,
         festivalName: "테스트 축제",
-        role: "FESTIVAL_OWNER",
+        role,
         festivalStatus: "CLOSED",
+        progressStatus,
         locations: [],
       };
     } else if (path.endsWith("/reports/status")) {
       data = {
         festivalId,
-        progressStatus: "DONE",
+        progressStatus,
         visitorInput: "COMPLETE",
         generationStatus: "COMPLETED",
         progressDayIndex: null,
@@ -182,7 +187,7 @@ async function mockReport(page: Page) {
   });
 }
 
-test("결과리포트는 브레드크럼으로 축제성과·방문객평가를 전환하고 전체 리뷰 모달을 연다", async ({
+test("운영리포트는 브레드크럼으로 축제성과·방문객평가를 전환하고 전체 리뷰 모달을 연다", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -221,6 +226,131 @@ test("결과리포트는 브레드크럼으로 축제성과·방문객평가를 
   await expect(page.getByText("종합 만족도 점수")).toBeVisible();
 });
 
+test("운영자도 진행 중 축제의 운영리포트를 바로 연다", async ({ page }) => {
+  await mockReport(page, "SUB_ADMIN", "ONGOING");
+
+  await page.goto(reportPath);
+
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("23%");
+  await expect(page.locator(`a[href="${reportPath}"]`)).toHaveAttribute("aria-current", "page");
+});
+
+test("진행 중 DAILY 저장 후 오늘까지의 누적 성과를 즉시 다시 읽는다", async ({ page }) => {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const iso = (date: Date) =>
+    [
+      date.getFullYear(),
+      `${date.getMonth() + 1}`.padStart(2, "0"),
+      `${date.getDate()}`.padStart(2, "0"),
+    ].join("-");
+  const dates = [iso(yesterday), iso(today)];
+  const counts: Record<string, number | null> = { [dates[0]]: 100, [dates[1]]: null };
+  const puts: Array<{ date: string; count: number }> = [];
+  let performanceReads = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const daily = path.match(/\/operations\/visitors\/daily\/([\d-]+)$/);
+    let data: unknown;
+    if (daily && request.method() === "PUT") {
+      const count = (request.postDataJSON() as { visitorCount: number }).visitorCount;
+      counts[daily[1]] = count;
+      puts.push({ date: daily[1], count });
+      data = null;
+    } else if (path === "/api/admin/me") {
+      data = {
+        adminId: "00000000-0000-0000-0000-000000000001",
+        email: "operator@example.com",
+        name: "테스트 운영자",
+        organization: "축제 운영팀",
+        accountKind: "GOVERNMENT",
+        status: "ACTIVE",
+      };
+    } else if (path === `/api/admin/me/managed-festivals/${festivalId}`) {
+      data = {
+        festivalId,
+        festivalName: "테스트 축제",
+        role: "SUB_ADMIN",
+        festivalStatus: "PUBLISHED",
+        progressStatus: "ONGOING",
+        locations: [],
+      };
+    } else if (path.endsWith("/reports/status")) {
+      data = {
+        festivalId,
+        progressStatus: "ONGOING",
+        visitorInput: counts[dates[1]] === null ? "PARTIAL" : "COMPLETE",
+        generationStatus: "NONE",
+        performanceAvailable: counts[dates[1]] !== null,
+        evaluationAvailable: false,
+        previousFestivalId: null,
+      };
+    } else if (path.endsWith("/operations/visitors")) {
+      const values = dates.map((date) => counts[date]);
+      data = {
+        festivalId,
+        startDate: dates[0],
+        endDate: iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)),
+        visitorCountInputMode: "DAILY",
+        days: dates.map((date, index) => ({
+          visitDate: date,
+          dayIndex: index + 1,
+          visitorCount: counts[date],
+          inputAllowed: true,
+          saved: counts[date] !== null,
+        })),
+        filledDayCount: values.filter((value) => value !== null).length,
+        totalDayCount: 3,
+        allDaysFilled: false,
+        sumVisitorCount: values.reduce<number>((sum, value) => sum + (value ?? 0), 0),
+        effectiveVisitorCount: null,
+        effectiveSource: "DAILY_SUM",
+        effectiveStatus: counts[dates[1]] === null ? "PARTIAL" : "READY",
+        reportReadyToGenerate: false,
+      };
+    } else if (path.endsWith("/reports/performance")) {
+      performanceReads += 1;
+      const current = Object.values(counts).reduce<number>((sum, value) => sum + (value ?? 0), 0);
+      data = {
+        ...performance,
+        generationStatus: "NONE",
+        metrics: {
+          ...performance.metrics,
+          visitorInputCompleted: false,
+          totalVisitors: {
+            current,
+            previous: null,
+            delta: null,
+            changeRatePercent: null,
+            direction: "NONE",
+          },
+          dailyTrend: dates.map((date, index) => ({
+            dayIndex: index + 1,
+            visitDate: date,
+            currentCount: counts[date],
+            previousCount: null,
+          })),
+        },
+      };
+    }
+    await route.fulfill(data === undefined ? { status: 404, body: "{}" } : ok(data));
+  });
+
+  await page.goto(reportPath);
+  await page.getByLabel("2일차").fill("250");
+  await page.getByRole("button", { name: "입력하기", exact: true }).click();
+
+  await expect(page.getByText("350명")).toBeVisible();
+  expect(puts).toEqual([
+    { date: dates[0], count: 100 },
+    { date: dates[1], count: 250 },
+  ]);
+  expect(performanceReads).toBeGreaterThan(0);
+});
+
 test("집계 방식이 없으면 방문 인원 입력 폼 안에서 총합/일자별을 먼저 고른다", async ({ page }) => {
   const saved: string[] = [];
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -251,7 +381,7 @@ test("집계 방식이 없으면 방문 인원 입력 폼 안에서 총합/일�
     } else if (path.endsWith("/reports/status")) {
       data = {
         festivalId,
-        progressStatus: "DONE",
+        progressStatus: "COMPLETED",
         visitorInput: "MISSING",
         generationStatus: "NONE",
         progressDayIndex: null,

@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BoothMapView } from "@/features/dashboard/BoothMapView";
+import { queueTailPointForMeters } from "@/features/dashboard/queueDistanceZones";
 import { boothsToQueuePathItems } from "@/features/boothmap/QueuePathLayer";
 import { getApiErrorMessage } from "@/lib/api/httpError";
 import { QueueUpdateSheet } from "./QueueUpdateSheet";
@@ -55,6 +56,7 @@ export function StaffMapPanel() {
   const [selectedBoothId, setSelectedBoothId] = useState<string | null>(boothIdParam);
   const [appliedBoothIdParam, setAppliedBoothIdParam] = useState<string | null>(boothIdParam);
   const [queueSheetOpen, setQueueSheetOpen] = useState(false);
+  const [previewQueueTailMeters, setPreviewQueueTailMeters] = useState<number | null>(null);
   const [zoomStep, setZoomStep] = useState(MIN_ZOOM_STEP);
   const festival = useStaffFestival();
 
@@ -67,6 +69,7 @@ export function StaffMapPanel() {
     setAppliedBoothIdParam(boothIdParam);
     setSelectedBoothId(boothIdParam);
     setQueueSheetOpen(false);
+    setPreviewQueueTailMeters(null);
   }
 
   /*
@@ -109,6 +112,34 @@ export function StaffMapPanel() {
     () => boothsToQueuePathItems(visibleBooths, festival.queueByBoothId),
     [visibleBooths, festival.queueByBoothId],
   );
+  const queuesWithPreview = useMemo(() => {
+    if (
+      !queueSheetOpen ||
+      previewQueueTailMeters === null ||
+      !selectedBooth ||
+      selectedBooth.lat === undefined ||
+      selectedBooth.lng === undefined
+    ) {
+      return queues;
+    }
+    const tail = queueTailPointForMeters(
+      { lat: selectedBooth.lat, lng: selectedBooth.lng },
+      previewQueueTailMeters,
+    );
+    return [
+      ...queues,
+      {
+        queueId: `preview-${selectedBooth.boothId}`,
+        boothId: selectedBooth.boothId,
+        path: null,
+        tail,
+        waitMinutes: null,
+        boothLat: selectedBooth.lat,
+        boothLng: selectedBooth.lng,
+        preview: true,
+      },
+    ];
+  }, [previewQueueTailMeters, queueSheetOpen, queues, selectedBooth]);
   const fitPoints = useMemo(
     () =>
       visibleBooths
@@ -150,8 +181,21 @@ export function StaffMapPanel() {
       params.delete("boothId");
       setSelectedBoothId(null);
       setQueueSheetOpen(false);
+      setPreviewQueueTailMeters(null);
     }
 
+    const query = params.toString();
+    router.replace(query ? `/staff/dashboard?${query}` : "/staff/dashboard", { scroll: false });
+  };
+
+  const clearSelectedBooth = () => {
+    setSelectedBoothId(null);
+    setQueueSheetOpen(false);
+    setPreviewQueueTailMeters(null);
+
+    if (!boothIdParam) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("boothId");
     const query = params.toString();
     router.replace(query ? `/staff/dashboard?${query}` : "/staff/dashboard", { scroll: false });
   };
@@ -192,14 +236,20 @@ export function StaffMapPanel() {
         facilities={festival.facilities}
         selectedBooth={selectedBooth}
         onSelectBooth={(booth) => {
-          setSelectedBoothId(booth?.boothId ?? null);
+          if (!booth) {
+            clearSelectedBooth();
+            return;
+          }
+          setSelectedBoothId(booth.boothId);
           setQueueSheetOpen(false);
+          setPreviewQueueTailMeters(null);
         }}
+        onMapClick={clearSelectedBooth}
         showPopup={false}
         zoomStep={zoomStep}
         minLevel={STAFF_MAP_MIN_LEVEL}
         center={festival.mapCenter}
-        queues={queues}
+        queues={queuesWithPreview}
         pamphlet={festival.pamphlet}
         boundary={festival.siteBoundary}
         fitPoints={fitPoints}
@@ -249,7 +299,12 @@ export function StaffMapPanel() {
           booth={selectedBooth}
           queue={selectedQueue}
           mapCenter={festival.mapCenter}
-          onClose={() => setQueueSheetOpen(false)}
+          currentQueueTailMeters={tailMeters}
+          onPreviewMetersChange={setPreviewQueueTailMeters}
+          onClose={() => {
+            setQueueSheetOpen(false);
+            setPreviewQueueTailMeters(null);
+          }}
           refreshing={festival.isRefetching}
           onUpdated={festival.refetch}
         />
@@ -259,7 +314,10 @@ export function StaffMapPanel() {
           zoneName={selectedZone?.name ?? "구역 미지정"}
           queueTailMeters={tailMeters}
           disabledReason={queueDisabledReason}
-          onUpdateQueue={() => setQueueSheetOpen(true)}
+          onUpdateQueue={() => {
+            setPreviewQueueTailMeters(null);
+            setQueueSheetOpen(true);
+          }}
         />
       ) : (
         <StaffFestivalBar

@@ -16,6 +16,7 @@ import {
 } from "./api";
 import { ReportPanel } from "./ReportPanel";
 import { VisitorCountForm } from "./VisitorCountForm";
+import { missingPastVisitorDays } from "./visitorDays";
 
 export function ReportFlow({ festivalId }: { festivalId: string }) {
   const router = useRouter();
@@ -34,11 +35,20 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
   const [reinputRequested, setReinputRequested] = useState(false);
   const generationStatus = statusQuery.data?.generationStatus;
   const isGenerating = generationStatus === "PENDING" || generationStatus === "PROCESSING";
+  const progressStatus = statusQuery.data?.progressStatus;
+  const isOngoing = progressStatus === "ONGOING";
+  const isCompleted = progressStatus === "COMPLETED";
+  const hasMissingElapsedDay = missingPastVisitorDays(visitorsQuery.data).length > 0;
   // FAILED/CANCELLED를 폼 조건에서 빼지 않으면, 생성이 실패했을 때
   // 아무 설명 없이 방문 인원 입력 폼만 다시 떠서 원인을 알 수 없다.
   const isGenerationBroken = generationStatus === "FAILED" || generationStatus === "CANCELLED";
-  const showForm =
-    !isGenerating && generationStatus !== "COMPLETED" && (!isGenerationBroken || reinputRequested);
+  const showForm = isOngoing
+    ? hasMissingElapsedDay || reinputRequested
+    : isCompleted
+      ? !isGenerating &&
+        generationStatus !== "COMPLETED" &&
+        (!isGenerationBroken || reinputRequested)
+      : false;
   const closeForm = useCallback(() => {
     setReinputRequested(false);
     router.push(`/console/festivals/${festivalId}`);
@@ -61,7 +71,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
     }) => {
       if (typeof value === "number") {
         await updateTotalVisitorCount(festivalId, value);
-        await generateFestivalReport(festivalId);
+        if (isCompleted) await generateFestivalReport(festivalId);
         return;
       }
       const days = visitorsQuery.data?.days ?? [];
@@ -73,7 +83,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
         ),
       );
       const refreshed = await getFestivalVisitorCounts(festivalId);
-      if (refreshed.reportReadyToGenerate) {
+      if (isCompleted && refreshed.reportReadyToGenerate) {
         await generateFestivalReport(festivalId);
       }
     },
@@ -82,6 +92,8 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["festival-visitor-counts", festivalId] }),
         queryClient.invalidateQueries({ queryKey: ["festival-report-status", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: ["festival-report-performance", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: ["festival-report-evaluation", festivalId] }),
         queryClient.invalidateQueries({ queryKey: ["managed-festival", festivalId] }),
       ]);
     },
@@ -121,7 +133,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
     );
   }
 
-  if (isGenerationBroken) {
+  if (isCompleted && isGenerationBroken) {
     const cancelled = generationStatus === "CANCELLED";
     return (
       <div className="col-span-3 flex flex-col items-start gap-4 rounded-lg border border-zinc-300 bg-white px-5 py-6 sm:px-8">
@@ -150,7 +162,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
     );
   }
 
-  if (isGenerating) {
+  if (isCompleted && isGenerating) {
     return (
       <div className="fixed inset-x-0 top-[var(--console-topbar-height,72px)] bottom-0 z-10 flex flex-col items-center justify-center gap-4 bg-white">
         <p className="body-regular text-zinc-950">
@@ -170,6 +182,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
       <ReportPanel
         festivalId={festivalId}
         previousFestivalId={statusQuery.data?.previousFestivalId ?? null}
+        live={isOngoing}
       />
     </div>
   );

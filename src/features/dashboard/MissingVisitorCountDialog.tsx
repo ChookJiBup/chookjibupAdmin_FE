@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { DIALOG_OVERLAY_CLASSES } from "@/components/ui/dialogOverlay";
+import { festivalMapKeys } from "@/features/boothmap/festivalMapQueries";
 import { updateDailyVisitorCount } from "@/features/report/api";
 import {
   VisitorCountCard,
@@ -80,12 +81,19 @@ export function MissingVisitorCountDialog({
       날짜별로 요청이 따로 나가므로 일부만 성공할 수 있다. 실패했을 때도 목록을 다시
       받아 와야 «이미 저장된 날»이 값이 채워진 상태로 다시 뜬다.
     */
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: ["festival-visitor-counts", festivalId] }),
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["festival-visitor-counts", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: ["festival-report-status", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: ["festival-report-performance", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: ["festival-report-evaluation", festivalId] }),
+        queryClient.invalidateQueries({ queryKey: festivalMapKeys.dashboard(festivalId) }),
+      ]);
+    },
   });
 
   const filled = values.every((value) => value.trim() !== "" && Number(value) >= 0);
-  const blockedReason = filled ? null : "지나간 일차의 방문 인원을 모두 입력해 주세요.";
+  const blockedReason = filled ? null : "오늘까지의 방문 인원을 모두 입력해 주세요.";
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>

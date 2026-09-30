@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { DIALOG_OVERLAY_CLASSES } from "./dialogOverlay";
 
 /**
  * `Button`의 primary + size="lg" 스타일을 그대로 옮긴 값 — 실제 네비게이션이
@@ -32,7 +33,7 @@ export function CompleteDialog({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[1000] bg-dimmed" />
+        <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
         <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[calc(100dvh-32px)] w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center overflow-y-auto rounded-2xl bg-white p-5 sm:p-8">
           <div className="size-[75px] rounded-full bg-zinc-200" />
 
