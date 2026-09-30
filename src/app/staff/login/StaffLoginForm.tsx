@@ -74,7 +74,7 @@ export function StaffLoginForm({ festivalId, sessionExpired = false }: StaffLogi
       {/* 화면설계서 AUTH01: 헤더 타이틀이 붙은 카드 안에 아이디·비밀번호 폼과 CTA를 담는다. */}
       <div className="w-full rounded-2xl bg-white">
         <div className="px-5 pt-4">
-          <h1 className="heading-regular text-zinc-950">로그인</h1>
+          <h1 className="heading-regular text-center text-zinc-950">로그인</h1>
           {sessionExpired ? (
             <p role="status" className="body-small mt-2 text-zinc-950">
               로그인이 만료되었습니다. 다시 로그인해 주세요.
