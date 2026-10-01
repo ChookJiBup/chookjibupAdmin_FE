@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ClockIcon,
   CornersIcon,
   GroupIcon,
   InfoCircledIcon,
@@ -51,10 +50,9 @@ const GUIDE_STEPS: GuideStep[] = [
 ];
 
 const DRAW_TOOL_GUIDE_ITEMS = [
-  { label: "범위 선택", icon: GroupIcon },
-  { label: "핀 추가", icon: RadiobuttonIcon },
   { label: "부지 경계", icon: CornersIcon },
-  { label: "대기줄", icon: ClockIcon },
+  { label: "핀 추가", icon: RadiobuttonIcon },
+  { label: "범위 선택", icon: GroupIcon },
 ] as const;
 
 interface SpotlightRect {
@@ -251,7 +249,7 @@ export function BoothMapOnboarding({ open, onOpenChange }: BoothMapOnboardingPro
         </div>
 
         {stepIndex === 1 ? (
-          <div className="mt-4 grid grid-cols-2 gap-2" aria-label="그리기 도구 안내">
+          <div className="mt-4 grid grid-cols-3 gap-2" aria-label="그리기 도구 안내">
             {DRAW_TOOL_GUIDE_ITEMS.map(({ label, icon: Icon }) => (
               <div
                 key={label}
