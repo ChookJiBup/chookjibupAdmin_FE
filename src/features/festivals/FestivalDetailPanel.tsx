@@ -12,7 +12,12 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
+import { festivalMapKeys } from "@/features/boothmap/festivalMapQueries";
 import { primaryFestivalCenter } from "@/features/boothmap/mapCenter";
+import { presentationBoundary, presentationOverlay } from "@/features/boothmap/mapPresentation";
+import { BoothMapView } from "@/features/dashboard/BoothMapView";
+import { getFestivalOperationsMap } from "@/features/dashboard/api";
+import type { Booth } from "@/features/dashboard/types";
 import { getApiErrorCode, getApiErrorMessage } from "@/lib/api/httpError";
 import {
   deleteFestival,
@@ -310,7 +315,7 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
         </div>
 
         <div className="relative min-h-[360px] xl:col-span-2 xl:min-h-[calc(100vh-252px)] overflow-hidden rounded-lg bg-zinc-100">
-          <FestivalLocationMap locations={festival?.locations} />
+          <FestivalLocationMap festivalId={festivalId} locations={festival?.locations} />
           {isCompleted ? null : (
             <Button
               type="button"
@@ -388,9 +393,33 @@ export function FestivalDetailPanel({ festivalId }: { festivalId: string }) {
   );
 }
 
-function FestivalLocationMap({ locations }: { locations: FestivalLocationResponse[] | undefined }) {
+function FestivalLocationMap({
+  festivalId,
+  locations,
+}: {
+  festivalId: string;
+  locations: FestivalLocationResponse[] | undefined;
+}) {
   const [loading, error] = useKakaoMapLoader();
+  const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
   const center = useMemo(() => primaryFestivalCenter(locations), [locations]);
+  const operationsMapQuery = useQuery({
+    queryKey: festivalMapKeys.operationsMap(festivalId),
+    queryFn: () => getFestivalOperationsMap(festivalId),
+    retry: false,
+  });
+  const booths = useMemo<Booth[]>(
+    () =>
+      (operationsMapQuery.data?.booths ?? []).map((booth) => ({
+        boothId: String(booth.boothId),
+        name: booth.name,
+        zoneId: "unassigned",
+        nodeType: booth.nodeType,
+        lat: booth.lat,
+        lng: booth.lng,
+      })),
+    [operationsMapQuery.data?.booths],
+  );
 
   if (!center) {
     return (
@@ -411,6 +440,27 @@ function FestivalLocationMap({ locations }: { locations: FestivalLocationRespons
               : "지도를 불러오는 중..."}
         </p>
       </div>
+    );
+  }
+
+  if (operationsMapQuery.data) {
+    const fitPoints = booths.flatMap((booth) =>
+      booth.lat !== undefined && booth.lng !== undefined
+        ? [{ lat: booth.lat, lng: booth.lng }]
+        : [],
+    );
+    return (
+      <BoothMapView
+        booths={booths}
+        facilities={operationsMapQuery.data.facilities ?? []}
+        selectedBooth={selectedBooth}
+        onSelectBooth={setSelectedBooth}
+        center={center}
+        pamphlet={presentationOverlay(operationsMapQuery.data.presentation)}
+        boundary={presentationBoundary(operationsMapQuery.data.presentation)}
+        fitPoints={fitPoints}
+        fitKey={`festival-detail-${operationsMapQuery.data.editRevision}`}
+      />
     );
   }
 
