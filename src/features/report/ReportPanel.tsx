@@ -70,7 +70,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("rounded-lg border border-zinc-300 bg-white p-5", className)}>
+    <section className={cn("min-w-0 rounded-lg border border-zinc-300 bg-white p-5", className)}>
       {title ? (
         <div className="flex min-h-[29px] items-center justify-between gap-3">
           <h2 className="body-regular-bold text-zinc-950">{title}</h2>
@@ -92,6 +92,7 @@ function EmptyState({ message }: { message: string }) {
 
 function VisitorTrend({ data }: { data: FestivalReportPerformance["metrics"]["dailyTrend"] }) {
   if (!data.length) return <p className="body-small text-zinc-400">방문 추이 데이터가 없습니다.</p>;
+  const chartMinWidth = data.length > 7 ? data.length * 88 : undefined;
   const maximum = Math.max(
     1,
     ...data.flatMap((item) => [item.currentCount ?? 0, item.previousCount ?? 0]),
@@ -105,41 +106,47 @@ function VisitorTrend({ data }: { data: FestivalReportPerformance["metrics"]["da
       .join(" ");
   return (
     <div>
-      <svg
-        viewBox="0 0 100 120"
-        className="h-52 w-full"
-        preserveAspectRatio="none"
-        aria-label="일자별 방문객 추이 차트"
-      >
-        {[20, 50, 80, 110].map((y) => (
-          <line
-            key={y}
-            x1="0"
-            x2="100"
-            y1={y}
-            y2={y}
-            stroke="var(--color-zinc-200)"
-            strokeWidth="0.5"
-          />
-        ))}
-        <polyline
-          points={points("previousCount")}
-          fill="none"
-          stroke="var(--color-zinc-400)"
-          strokeWidth="1"
-          strokeDasharray="3 2"
-        />
-        <polyline
-          points={points("currentCount")}
-          fill="none"
-          stroke="var(--color-primary-600)"
-          strokeWidth="1.5"
-        />
-      </svg>
-      <div className="flex justify-between body-caption text-zinc-500">
-        {data.map((item) => (
-          <span key={item.visitDate}>{item.dayIndex}일차</span>
-        ))}
+      <div className="max-w-full overflow-x-auto overscroll-x-contain">
+        <div style={{ minWidth: chartMinWidth }}>
+          <svg
+            viewBox="0 0 100 120"
+            className="h-52 w-full"
+            preserveAspectRatio="none"
+            aria-label="일자별 방문객 추이 차트"
+          >
+            {[20, 50, 80, 110].map((y) => (
+              <line
+                key={y}
+                x1="0"
+                x2="100"
+                y1={y}
+                y2={y}
+                stroke="var(--color-zinc-200)"
+                strokeWidth="0.5"
+              />
+            ))}
+            <polyline
+              points={points("previousCount")}
+              fill="none"
+              stroke="var(--color-zinc-400)"
+              strokeWidth="1"
+              strokeDasharray="3 2"
+            />
+            <polyline
+              points={points("currentCount")}
+              fill="none"
+              stroke="var(--color-primary-600)"
+              strokeWidth="1.5"
+            />
+          </svg>
+          <div className="flex justify-between body-caption text-zinc-500">
+            {data.map((item) => (
+              <span key={item.visitDate} className="shrink-0">
+                {item.dayIndex}일차
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="mt-4 flex gap-5 body-caption text-zinc-500">
         <span>━ 올해</span>

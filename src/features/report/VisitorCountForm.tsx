@@ -110,7 +110,7 @@ export function VisitorCountForm({
       `items-center`와 달리 위쪽이 스크롤로 닿지 않는 영역에 잘려 들어가지 않는다.
     */
     <VisitorCountCard
-      className="my-auto max-h-full"
+      className="my-auto max-h-[min(720px,calc(100dvh-64px))]"
       hint={visitorCountHint(days)}
       headerAction={
         onClose ? (

@@ -112,7 +112,7 @@ export function MissingVisitorCountDialog({
           onEscapeKeyDown={(event) => event.preventDefault()}
         >
           <VisitorCountCard
-            className="min-h-0 flex-1"
+            className="min-h-0 max-h-[720px] flex-1"
             hint={visitorCountHint(days)}
             title={
               <div className="flex min-w-0 flex-col items-center">

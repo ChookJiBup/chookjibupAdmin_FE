@@ -70,7 +70,17 @@ async function mockDashboard(
         mapId: "test-map",
         editRevision: 0,
         mapKind: "COORDINATE",
-        booths: [],
+        booths: [
+          {
+            boothId: 1,
+            nodeId: "test-node",
+            name: "테스트 먹거리 부스",
+            nodeType: "BOOTH",
+            lat: 37.5665,
+            lng: 126.978,
+          },
+        ],
+        facilities: [],
       };
     } else if (path.endsWith("/operations/queues")) {
       data = { queues: [] };
@@ -97,6 +107,48 @@ async function mockDashboard(
   });
   return requests;
 }
+
+test("대시보드 지도는 축제관리에서 저장한 최신 운영 부스를 보여준다", async ({ page }) => {
+  await mockDashboard(page, "FESTIVAL_OWNER", "GOVERNMENT");
+  await page.route("**/api/festivals/*/operations/map", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: 0,
+        message: "OK",
+        data: {
+          mapId: "test-map",
+          editRevision: 1,
+          mapKind: "COORDINATE",
+          booths: [
+            {
+              boothId: 1,
+              nodeId: "test-node",
+              name: "축제관리에서 바꾼 부스",
+              nodeType: "BOOTH",
+              lat: 37.567,
+              lng: 126.979,
+            },
+          ],
+          facilities: [],
+        },
+      }),
+    });
+  });
+
+  await page.goto(dashboardPath);
+  await page.getByRole("button", { name: /먹거리 구역/ }).click();
+  await expect(
+    page
+      .getByRole("complementary")
+      .getByRole("button", { name: "축제관리에서 바꾼 부스", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("complementary")
+      .getByRole("button", { name: "테스트 먹거리 부스", exact: true }),
+  ).toHaveCount(0);
+});
 
 for (const scenario of [
   { name: "총괄관리자", role: "FESTIVAL_OWNER", kind: "GOVERNMENT", menuCount: 5 },
@@ -210,6 +262,22 @@ test("부스가 하나도 없으면 부스맵을 만들라고 안내한다", asy
           averageWaitMinutes: null,
           booths: [],
           zones: [],
+        },
+      }),
+    });
+  });
+  await page.route("**/api/festivals/*/operations/map", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: 0,
+        message: "OK",
+        data: {
+          mapId: "test-map",
+          editRevision: 0,
+          mapKind: "COORDINATE",
+          booths: [],
+          facilities: [],
         },
       }),
     });
