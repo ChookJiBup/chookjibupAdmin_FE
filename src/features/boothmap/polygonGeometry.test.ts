@@ -106,7 +106,7 @@ describe("polygonGeometry", () => {
     );
   });
 
-  it("이미 볼록한 경계는 시작점과 진행 방향을 유지한다", () => {
+  it("이미 볼록한 경계도 입력 순서 대신 계산된 볼록 껍질 순서로 강제한다", () => {
     const boundary = [
       { lat: 2, lng: 2 },
       { lat: 2, lng: 0 },
@@ -114,7 +114,10 @@ describe("polygonGeometry", () => {
       { lat: 0, lng: 2 },
     ];
 
-    assert.deepEqual(convexBoundary(boundary), boundary);
+    const completed = convexBoundary(boundary);
+    assert.notDeepEqual(completed, boundary);
+    assert.equal(validateBoundary(completed), null);
+    assert.equal(hasSelfIntersection(completed), false);
   });
 });
 

@@ -741,14 +741,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         설정만 담긴 요청을 받아 준다. 다만 둘 다 없으면 저장할 것이 없다.
       */
       const nodes = boothMapPinsToNodeChanges(booths, deletedNodeIds, shapes, preservedNodes);
+      const boundaryToSave = siteBoundary ? convexBoundary(siteBoundary) : null;
       if (nodes.length === 0 && !siteBoundary && !pamphlet && !serverHasBoundary) {
         throw new Error("저장할 부스나 경계·팜플렛이 없습니다.");
       }
-      if (siteBoundary) {
-        const error = validateBoundary(siteBoundary);
+      if (boundaryToSave) {
+        const error = validateBoundary(boundaryToSave);
         if (error) throw new Error(error);
         const outsideNewPins = booths.filter(
-          (booth) => booth.isNew && !containsPoint(siteBoundary, booth),
+          (booth) => booth.isNew && !containsPoint(boundaryToSave, booth),
         );
         if (outsideNewPins.length > 0) {
           throw new Error(
@@ -778,8 +779,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       return saveMapEditor(festivalId, mapQuery.data.mapId, {
         baseRevision: editRevision,
         presentation: {
-          ...(siteBoundary
-            ? { boundary: { geometryType: "POLYGON", schemaVersion: "2.0", points: siteBoundary } }
+          ...(boundaryToSave
+            ? {
+                boundary: {
+                  geometryType: "POLYGON",
+                  schemaVersion: "2.0",
+                  points: boundaryToSave,
+                },
+              }
             : { clearBoundary: true }),
           /*
             팜플렛을 지운 채로 저장하면 서버에도 지워야 한다. 아무것도 안 보내면
@@ -793,7 +800,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   ...overlay.anchor,
                   opacity: overlay.opacity,
                   visible: overlay.visible,
-                  clipToBoundary: Boolean(siteBoundary && overlay.clipToBoundary),
+                  clipToBoundary: Boolean(boundaryToSave && overlay.clipToBoundary),
                 },
               }
             : serverHasOverlay

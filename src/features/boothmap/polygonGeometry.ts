@@ -45,18 +45,9 @@ export function convexBoundary(points: LatLng[]): LatLng[] {
 
   const lower = halfHull(sorted);
   const upper = halfHull([...sorted].reverse());
-  const hull = [...lower.slice(0, -1), ...upper.slice(0, -1)];
-
-  // 이미 교차 없는 볼록 경계라면 시작 꼭짓점과 진행 방향을 바꾸지 않는다. 편집 화면을
-  // 열었다가 그대로 완료한 것만으로 불필요한 변경 이력이 생기는 일을 막는다.
-  if (
-    hull.length === vertices.length &&
-    !hasSelfIntersection(vertices) &&
-    polygonArea(vertices) > 0
-  ) {
-    return vertices;
-  }
-  return hull;
+  // 기존 순서가 정상으로 보여도 그대로 두지 않는다. 모든 완료 경계를 같은 순서의
+  // 볼록 껍질로 강제해 복잡한 교차 형태가 저장 단계까지 남지 않게 한다.
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
 /** 신발끈 공식. 위경도를 평면으로 근사한다. */
