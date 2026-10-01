@@ -292,6 +292,7 @@ export function BoothMapOnboarding({ open, onOpenChange }: BoothMapOnboardingPro
             <Button
               type="button"
               variant="outline"
+              className="flex-1"
               disabled={stepIndex === 0}
               onClick={() => setStepIndex((value) => value - 1)}
             >
@@ -299,6 +300,7 @@ export function BoothMapOnboarding({ open, onOpenChange }: BoothMapOnboardingPro
             </Button>
             <Button
               type="button"
+              className="flex-1"
               onClick={() =>
                 stepIndex === GUIDE_STEPS.length - 1 ? finish() : setStepIndex((value) => value + 1)
               }
