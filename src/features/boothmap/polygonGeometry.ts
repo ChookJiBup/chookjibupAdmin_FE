@@ -132,11 +132,11 @@ export function containsPoint(polygon: LatLng[], point: LatLng): boolean {
   return inside;
 }
 
-/** 신규 핀은 서버에 저장된 부지 경계가 있고, 그 안에 찍을 때만 만들 수 있다. */
-export function newPinPlacementError(savedBoundary: LatLng[] | null, point: LatLng): string | null {
-  if (!savedBoundary || uniqueVertices(savedBoundary).length < 3) {
-    return "부지 경계를 먼저 그리고 저장해 주세요.";
+/** 신규 핀은 현재 편집 중인 부지 경계가 있고, 그 안에 찍을 때만 만들 수 있다. */
+export function newPinPlacementError(boundary: LatLng[] | null, point: LatLng): string | null {
+  if (!boundary || uniqueVertices(boundary).length < 3) {
+    return "부지 경계를 먼저 그려 주세요.";
   }
-  if (!containsPoint(savedBoundary, point)) return "부지 경계 밖에는 핀을 추가할 수 없습니다.";
+  if (!containsPoint(boundary, point)) return "부지 경계 밖에는 핀을 추가할 수 없습니다.";
   return null;
 }

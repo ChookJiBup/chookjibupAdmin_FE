@@ -114,18 +114,18 @@ describe("newPinPlacementError", () => {
     { lat: 3, lng: 1 },
   ];
 
-  it("저장된 경계가 없으면 종류와 관계없이 신규 핀을 만들 수 없다", () => {
+  it("완성된 편집 경계가 없으면 종류와 관계없이 신규 핀을 만들 수 없다", () => {
     assert.equal(
       newPinPlacementError(null, { lat: 2, lng: 2 }),
-      "부지 경계를 먼저 그리고 저장해 주세요.",
+      "부지 경계를 먼저 그려 주세요.",
     );
     assert.equal(
       newPinPlacementError(boundary.slice(0, 2), { lat: 2, lng: 2 }),
-      "부지 경계를 먼저 그리고 저장해 주세요.",
+      "부지 경계를 먼저 그려 주세요.",
     );
   });
 
-  it("저장된 경계 안과 경계선 위에서만 신규 핀을 허용한다", () => {
+  it("현재 편집 경계 안과 경계선 위에서만 신규 핀을 허용한다", () => {
     assert.equal(newPinPlacementError(boundary, { lat: 2, lng: 2 }), null);
     assert.equal(newPinPlacementError(boundary, { lat: 2, lng: 1 }), null);
     assert.equal(

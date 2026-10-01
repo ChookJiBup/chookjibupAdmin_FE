@@ -468,10 +468,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [shapes, setShapes] = useState<LocalMapShape[]>([]);
   const [preservedNodes, setPreservedNodes] = useState<PreservedNode[]>([]);
   const [siteBoundary, setSiteBoundary] = useState<LatLng[] | null>(null);
-  const savedSiteBoundary = useMemo(
-    () => presentationBoundary(editorQuery.data?.presentation),
-    [editorQuery.data?.presentation],
-  );
   const [boundaryDraft, setBoundaryDraft] = useState<LatLng[]>([]);
   const [deleteBoundaryOpen, setDeleteBoundaryOpen] = useState(false);
   const [pamphlet, setPamphlet] = useState<LocalPamphletOverlay | null>(null);
@@ -1199,12 +1195,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
 
   function addBoothAt(lat: number, lng: number) {
     const point = { lat, lng };
-    const placementError = newPinPlacementError(savedSiteBoundary, point);
+    const placementError = newPinPlacementError(siteBoundary, point);
     if (placementError) {
       toast.error(placementError, {
-        description: savedSiteBoundary
-          ? "저장된 경계 안쪽이나 경계선 위를 눌러 주세요."
-          : "경계를 그린 뒤 상단의 저장하기를 먼저 눌러 주세요.",
+        description: siteBoundary
+          ? "경계 안쪽이나 경계선 위를 눌러 주세요."
+          : "부지 경계를 먼저 그려 주세요.",
       });
       return;
     }
@@ -3867,10 +3863,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 <button
                   key={option.value}
                   type="button"
-                  disabled={!savedSiteBoundary || uniqueVertices(savedSiteBoundary).length < 3}
+                  disabled={editingLocked || !hasSiteBoundary}
                   title={
-                    !savedSiteBoundary || uniqueVertices(savedSiteBoundary).length < 3
-                      ? "부지 경계를 그리고 저장한 뒤 추가할 수 있습니다."
+                    !hasSiteBoundary
+                      ? "부지 경계를 그린 뒤 추가할 수 있습니다."
                       : undefined
                   }
                   onClick={() => {

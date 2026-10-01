@@ -21,7 +21,7 @@ const GUIDE_STEPS: GuideStep[] = [
   },
   {
     title: "지도에 직접 그리기",
-    description: ["부지 경계를 먼저 그려 저장하고,", "저장한 경계 안에 부스와 시설을 추가합니다."],
+    description: ["부지 경계를 먼저 그리고,", "경계 안에 부스와 시설을 추가한 뒤 함께 저장합니다."],
     target: '[data-boothmap-guide="drawing-tools"]',
   },
   {
