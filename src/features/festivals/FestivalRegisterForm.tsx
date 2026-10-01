@@ -28,7 +28,12 @@ import { useKakaoMapLoader } from "@/lib/kakaoMapLoader";
 import { useAdminAuthStore } from "@/store/adminAuthStore";
 import { DateField } from "./DateField";
 import { FestivalLocationFields } from "./FestivalLocationFields";
-import { hasFestivalPeriodError, toIsoDate, validateFestivalPeriod } from "./dateFormat";
+import {
+  hasFestivalPeriodError,
+  isFestivalEnded,
+  toIsoDate,
+  validateFestivalPeriod,
+} from "./dateFormat";
 import {
   createInitialLocationDrafts,
   createLocationDraft,
@@ -240,6 +245,10 @@ export function FestivalRegisterForm() {
       toast.error("축제 기간을 확인해 주세요.");
       return;
     }
+    if (isFestivalEnded(endDate)) {
+      toast.error("이미 종료된 축제입니다.");
+      return;
+    }
     if (locations.some((location) => !isLocationDraftComplete(location))) {
       toast.error("모든 장소의 주소를 입력해 주세요.");
       return;
@@ -273,6 +282,15 @@ export function FestivalRegisterForm() {
     setSubmitDialogOpen(true);
   }
 
+  function handleConfirmRegistration() {
+    if (isFestivalEnded(endDate)) {
+      setSubmitDialogOpen(false);
+      toast.error("이미 종료된 축제입니다.");
+      return;
+    }
+    createMutation.mutate(submitLocations);
+  }
+
   const addressSearchTarget = locations.find((loc) => loc.key === addressSearchTargetKey) ?? null;
 
   return (
@@ -286,7 +304,14 @@ export function FestivalRegisterForm() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               button={
-                <Button type="button" onClick={() => setFestivalSearchOpen(true)}>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setFestivalSearchState("default");
+                    setFestivalSearchResults([]);
+                    setFestivalSearchOpen(true);
+                  }}
+                >
                   축제 검색하기
                 </Button>
               }
@@ -456,7 +481,7 @@ export function FestivalRegisterForm() {
         confirmLabel="등록"
         confirmVariant="primary"
         confirmPending={createMutation.isPending}
-        onConfirm={() => createMutation.mutate(submitLocations)}
+        onConfirm={handleConfirmRegistration}
       />
     </div>
   );
