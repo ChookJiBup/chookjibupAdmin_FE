@@ -74,6 +74,11 @@ export function formatDday(isoStartDate: string) {
   return dday > 0 ? `D-${dday}` : `D+${Math.abs(dday)}`;
 }
 
+/** 종료일이 로컬 달력 기준 오늘보다 이전인지 확인한다. 오늘 종료하는 축제는 등록할 수 있다. */
+export function isFestivalEnded(endDate: string, today = new Date()) {
+  return endDate < toIsoDateString(today);
+}
+
 /**
  * 숫자만 입력받아 "yyyy-MM-dd" 형태로 자동 포맷팅한다.
  *

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   formatDateInput,
   hasFestivalPeriodError,
+  isFestivalEnded,
   isRealDate,
   normalizeDisplayDate,
   toCalendarDate,
@@ -99,6 +100,19 @@ describe("formatDateInput", () => {
 
   it("8자리를 넘는 숫자는 잘라 낸다", () => {
     assert.equal(formatDateInput("2026092012"), "2026-09-20");
+  });
+});
+
+describe("isFestivalEnded", () => {
+  const today = new Date(2026, 9, 1, 12);
+
+  it("종료일이 오늘보다 이전이면 종료된 축제로 판정한다", () => {
+    assert.equal(isFestivalEnded("2026-09-30", today), true);
+  });
+
+  it("오늘 종료하거나 앞으로 종료하는 축제는 종료된 것으로 판정하지 않는다", () => {
+    assert.equal(isFestivalEnded("2026-10-01", today), false);
+    assert.equal(isFestivalEnded("2026-10-02", today), false);
   });
 });
 
