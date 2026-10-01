@@ -113,6 +113,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   const isFestivalOwner = festivalQuery.data?.role === "FESTIVAL_OWNER";
   const mapBooths = useMemo((): Booth[] => {
     const dashboardBooths = dashboardQuery.data?.booths ?? [];
+    const dashboardBoothById = new Map(dashboardBooths.map((booth) => [booth.boothId, booth]));
     const zoneIdByNodeId = new Map<string, string>();
     (dashboardQuery.data?.zones ?? []).forEach((zone) =>
       zone.boothNodeIds.forEach((nodeId) => zoneIdByNodeId.set(nodeId, zone.zoneId)),
@@ -140,34 +141,57 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
         .filter((booth) => booth.nodeType)
         .map((booth) => [booth.boothId, booth.nodeType as NodeType]),
     );
-    return dashboardBooths.map((dashboardBooth) => {
-      const congestion = congestionByBoothId.get(dashboardBooth.boothId);
-      const queue = queueByBoothId.get(dashboardBooth.boothId);
+    /*
+      지도에 보여 줄 부스 집합·이름·좌표는 운영 지도 응답을 기준으로 삼는다. 이 응답은
+      축제관리에서 저장한 최신 로드맵 노드에서 만들어진다. 대시보드 통계 응답을 기준으로
+      삼으면 두 API의 갱신 시점 차이 때문에 삭제한 부스가 남거나 새 부스가 빠질 수 있다.
+      운영 지도 조회 자체가 실패한 이전 서버와 지도 미등록 상태에서만 통계 응답으로
+      폴백하고, 혼잡도·대기열 값은 어느 경우든 boothId로 덧붙인다.
+    */
+    const sourceBooths = operationsMapQuery.data
+      ? operationsMapQuery.data.booths.map((booth) => {
+          const dashboardBooth = dashboardBoothById.get(booth.boothId);
+          return {
+            boothId: booth.boothId,
+            boothName: booth.name,
+            roadmapNodePublicId: booth.nodeId,
+            nodeType: booth.nodeType,
+            lat: booth.lat,
+            lng: booth.lng,
+            congestionLevel: dashboardBooth?.congestionLevel ?? null,
+            waitMinutes: dashboardBooth?.waitMinutes ?? null,
+            congestionUpdatedAt: dashboardBooth?.congestionUpdatedAt ?? null,
+          };
+        })
+      : dashboardBooths.map((booth) => ({ ...booth, nodeType: undefined }));
+    return sourceBooths.map((sourceBooth) => {
+      const congestion = congestionByBoothId.get(sourceBooth.boothId);
+      const queue = queueByBoothId.get(sourceBooth.boothId);
       return {
-        boothId: String(dashboardBooth.boothId),
+        boothId: String(sourceBooth.boothId),
         queueId: queue?.queueId,
         observationRevision: queue?.observationRevision,
         planRevision: queue?.planRevision ?? undefined,
-        name: dashboardBooth.boothName,
-        nodeType: nodeTypeByBoothId.get(dashboardBooth.boothId),
+        name: sourceBooth.boothName,
+        nodeType: sourceBooth.nodeType ?? nodeTypeByBoothId.get(sourceBooth.boothId),
         zoneId:
           zoneIdByNodeId.get(
-            dashboardBooth.roadmapNodePublicId ?? nodeIdByBoothId.get(dashboardBooth.boothId) ?? "",
+            sourceBooth.roadmapNodePublicId ?? nodeIdByBoothId.get(sourceBooth.boothId) ?? "",
           ) ?? "unassigned",
-        lat: dashboardBooth.lat ?? undefined,
-        lng: dashboardBooth.lng ?? undefined,
+        lat: sourceBooth.lat ?? undefined,
+        lng: sourceBooth.lng ?? undefined,
         congestionLevel:
           queue?.congestionLevel !== undefined
             ? (queue.congestionLevel ?? undefined)
-            : (congestion?.congestionLevel ?? dashboardBooth?.congestionLevel ?? undefined),
+            : (congestion?.congestionLevel ?? sourceBooth.congestionLevel ?? undefined),
         waitMinutes:
           queue?.waitMinutes !== undefined
             ? (queue.waitMinutes ?? undefined)
-            : (congestion?.waitMinutes ?? dashboardBooth?.waitMinutes ?? undefined),
+            : (congestion?.waitMinutes ?? sourceBooth.waitMinutes ?? undefined),
         congestionUpdatedAt:
           queue?.observedAt !== undefined
             ? (queue.observedAt ?? undefined)
-            : (congestion?.updatedAt ?? dashboardBooth?.congestionUpdatedAt ?? undefined),
+            : (congestion?.updatedAt ?? sourceBooth.congestionUpdatedAt ?? undefined),
         lastQueueUpdater:
           queue?.lastModifierName && queue.lastModifierType
             ? { name: queue.lastModifierName, role: queue.lastModifierType }
@@ -178,7 +202,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     congestionQuery.data?.booths,
     dashboardQuery.data?.booths,
     dashboardQuery.data?.zones,
-    operationsMapQuery.data?.booths,
+    operationsMapQuery.data,
     queuesQuery.data?.queues,
   ]);
   const mapZones = useMemo((): BoothZone[] => {
