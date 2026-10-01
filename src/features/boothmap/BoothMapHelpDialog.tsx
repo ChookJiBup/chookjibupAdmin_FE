@@ -15,7 +15,8 @@ const DRAW_TOOLS: HelpItem[] = [
   {
     icon: <CornersIcon />,
     name: "부지 경계",
-    description: "축제장 테두리입니다. 핀과 범위를 사용하기 전에 먼저 설정합니다.",
+    description:
+      "축제장 테두리입니다. 저장된 경계는 꼭짓점을 끌어 수정하거나 아래 바에서 삭제할 수 있습니다.",
   },
   {
     icon: <RadiobuttonIcon />,
@@ -106,7 +107,8 @@ export function BoothMapHelpDialog({
           <HelpSection title="부스를 여러 개 고르면" items={SELECTION_ACTIONS} />
           <HelpSection title="부스를 하나 고르면" items={BOOTH_QUEUE_ACTIONS} />
           <p className="body-caption mt-6 text-zinc-500">
-            부지 경계를 그릴 때는 아래 안내 바에서 완료하거나 취소할 수 있습니다.
+            경계의 큰 점은 이동, 변 사이의 +는 꼭짓점 추가입니다. 완료하면 교차된 선과 안쪽 점을
+            정리해 겹치지 않는 볼록 경계로 만듭니다.
           </p>
         </Dialog.Content>
       </Dialog.Portal>

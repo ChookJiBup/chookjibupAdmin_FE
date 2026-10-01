@@ -19,6 +19,46 @@ export function uniqueVertices(points: LatLng[]): LatLng[] {
   return unique;
 }
 
+/**
+ * 입력한 점을 모두 감싸는 최소 볼록 경계를 만든다.
+ *
+ * 사용자가 꼭짓점을 찍은 순서가 뒤섞이거나 선이 교차해도 완료 시 단순한 경계가 되도록
+ * monotonic chain으로 정렬한다. 안쪽의 오목한 점과 한 변 위의 중간 점은 경계에서 빠진다.
+ */
+export function convexBoundary(points: LatLng[]): LatLng[] {
+  const vertices = uniqueVertices(withoutClosingDuplicate(points));
+  if (vertices.some((point) => !readLatLng(point)) || vertices.length < 3) return vertices;
+
+  const sorted = [...vertices].sort((a, b) => a.lng - b.lng || a.lat - b.lat);
+  const cross = (origin: LatLng, a: LatLng, b: LatLng) =>
+    (a.lng - origin.lng) * (b.lat - origin.lat) - (a.lat - origin.lat) * (b.lng - origin.lng);
+  const halfHull = (source: LatLng[]) => {
+    const hull: LatLng[] = [];
+    source.forEach((point) => {
+      while (hull.length >= 2 && cross(hull[hull.length - 2], hull[hull.length - 1], point) <= 0) {
+        hull.pop();
+      }
+      hull.push(point);
+    });
+    return hull;
+  };
+
+  const lower = halfHull(sorted);
+  const upper = halfHull([...sorted].reverse());
+  const hull = [...lower.slice(0, -1), ...upper.slice(0, -1)];
+
+  // 이미 교차 없는 볼록 경계라면 시작 꼭짓점과 진행 방향을 바꾸지 않는다. 편집 화면을
+  // 열었다가 그대로 완료한 것만으로 불필요한 변경 이력이 생기는 일을 막는다.
+  if (
+    hull.length === vertices.length &&
+    !hasSelfIntersection(vertices) &&
+    polygonArea(vertices) > 0
+  ) {
+    return vertices;
+  }
+  return hull;
+}
+
 /** 신발끈 공식. 위경도를 평면으로 근사한다. */
 export function polygonArea(points: LatLng[]): number {
   const ring = withoutClosingDuplicate(points);

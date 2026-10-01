@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   containsPoint,
+  convexBoundary,
   hasSelfIntersection,
   newPinPlacementError,
   polygonArea,
@@ -74,6 +75,47 @@ describe("polygonGeometry", () => {
       2,
     );
   });
+
+  it("교차하는 입력도 모든 바깥 점을 감싸는 볼록 경계로 자동 완성한다", () => {
+    const completed = convexBoundary([
+      { lat: 0, lng: 0 },
+      { lat: 2, lng: 2 },
+      { lat: 0, lng: 2 },
+      { lat: 2, lng: 0 },
+    ]);
+
+    assert.equal(completed.length, 4);
+    assert.equal(hasSelfIntersection(completed), false);
+    assert.equal(validateBoundary(completed), null);
+    assert.equal(polygonArea(completed), 4);
+  });
+
+  it("오목한 안쪽 점과 직선 위 중간 점은 볼록 경계에서 제외한다", () => {
+    const completed = convexBoundary([
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 1 },
+      { lat: 0, lng: 2 },
+      { lat: 2, lng: 2 },
+      { lat: 1, lng: 1 },
+      { lat: 2, lng: 0 },
+    ]);
+
+    assert.deepEqual(
+      new Set(completed.map((point) => `${point.lat}:${point.lng}`)),
+      new Set(["0:0", "0:2", "2:2", "2:0"]),
+    );
+  });
+
+  it("이미 볼록한 경계는 시작점과 진행 방향을 유지한다", () => {
+    const boundary = [
+      { lat: 2, lng: 2 },
+      { lat: 2, lng: 0 },
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 2 },
+    ];
+
+    assert.deepEqual(convexBoundary(boundary), boundary);
+  });
 });
 
 describe("containsPoint", () => {
@@ -115,10 +157,7 @@ describe("newPinPlacementError", () => {
   ];
 
   it("완성된 편집 경계가 없으면 종류와 관계없이 신규 핀을 만들 수 없다", () => {
-    assert.equal(
-      newPinPlacementError(null, { lat: 2, lng: 2 }),
-      "부지 경계를 먼저 그려 주세요.",
-    );
+    assert.equal(newPinPlacementError(null, { lat: 2, lng: 2 }), "부지 경계를 먼저 그려 주세요.");
     assert.equal(
       newPinPlacementError(boundary.slice(0, 2), { lat: 2, lng: 2 }),
       "부지 경계를 먼저 그려 주세요.",
