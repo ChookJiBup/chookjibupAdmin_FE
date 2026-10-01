@@ -66,7 +66,6 @@ export function FestivalRegisterForm() {
   const [primaryKey, setPrimaryKey] = useState(() => locations[0].key);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
   const [festivalThumbnail, setFestivalThumbnail] = useState<File | null>(null);
   const [festivalThumbnailError, setFestivalThumbnailError] = useState<string | null>(null);
 
@@ -76,7 +75,6 @@ export function FestivalRegisterForm() {
     [],
   );
   const [festivalSearchPending, setFestivalSearchPending] = useState(false);
-  const [selectedFestival, setSelectedFestival] = useState<FestivalSeriesSearchResult | null>(null);
   const [addressSearchTargetKey, setAddressSearchTargetKey] = useState<string | null>(null);
   const [addressSearchState, setAddressSearchState] = useState<SearchDialogState>("default");
   const [addressSearchResults, setAddressSearchResults] = useState<SearchDialogResult[]>([]);
@@ -95,11 +93,6 @@ export function FestivalRegisterForm() {
     endDate: periodTouched.endDate ? periodErrors.endDate : null,
   };
   const periodBlocksSubmit = hasFestivalPeriodError(visiblePeriodErrors);
-  const submitBlockedMessage =
-    formError ?? (periodBlocksSubmit ? "축제 기간을 확인해 주세요." : null);
-  const willConnectExistingFestival =
-    selectedFestival?.latestFestivalId != null &&
-    selectedFestival.latestYear === Number(startDate.slice(0, 4));
 
   useKakaoMapLoader();
 
@@ -115,7 +108,6 @@ export function FestivalRegisterForm() {
   }
 
   async function applyFestivalSeries(series: FestivalSeriesSearchResult) {
-    setSelectedFestival(series);
     setName(series.name);
     setDescription(series.latestDescription ?? "");
     setStartDate(toDisplayDateOrEmpty(series.latestStartDate));
@@ -188,7 +180,6 @@ export function FestivalRegisterForm() {
   const createMutation = useMutation({
     mutationFn: async (locationsToSubmit: LocationDraft[]) => {
       const request = {
-        seriesId: selectedFestival?.seriesId ?? undefined,
         name,
         description,
         locations: toFestivalLocationRequests(locationsToSubmit, primaryKey),
@@ -203,23 +194,20 @@ export function FestivalRegisterForm() {
         visitorCountInputMode: "DAILY" as FestivalVisitorCountInputMode,
       };
 
-      const festival = festivalThumbnail
-        ? await createFestivalWithThumbnail(request, festivalThumbnail)
-        : await createFestival(request);
-      return { festival, connected: selectedFestival?.latestFestivalId === festival.festivalId };
+      return festivalThumbnail
+        ? createFestivalWithThumbnail(request, festivalThumbnail)
+        : createFestival(request);
     },
-    onSuccess: ({ festival, connected }) => {
+    onSuccess: (festival) => {
       // 등록 직후 부스맵으로 넘어가므로, 이동한 화면에서 결과를 알 수 있게 토스트를 남긴다.
-      toast.success(connected ? "기존 축제를 관리 축제로 연결했습니다." : "축제를 등록했습니다.", {
+      toast.success("축제를 등록했습니다.", {
         description: "이어서 부스 위치를 찍어 주세요.",
       });
       router.push(`/console/festivals/${festival.festivalId}/boothmap?guide=1`);
     },
     onError: (error) => {
       setSubmitDialogOpen(false);
-      toast.error("축제를 등록하지 못했습니다.", {
-        description: getApiErrorMessage(error),
-      });
+      toast.error(getApiErrorMessage(error, "축제를 등록하지 못했습니다."));
     },
   });
 
@@ -240,24 +228,23 @@ export function FestivalRegisterForm() {
 
   async function handleSubmitClick() {
     if (name.trim().length === 0) {
-      setFormError("축제명을 입력해 주세요.");
+      toast.error("축제명을 입력해 주세요.");
       return;
     }
     if (description.trim().length === 0) {
-      setFormError("축제 설명을 입력해 주세요.");
+      toast.error("축제 설명을 입력해 주세요.");
       return;
     }
     if (hasFestivalPeriodError(periodErrors)) {
       setPeriodTouched({ startDate: true, endDate: true });
-      setFormError(null);
+      toast.error("축제 기간을 확인해 주세요.");
       return;
     }
     if (locations.some((location) => !isLocationDraftComplete(location))) {
-      setFormError("모든 장소의 주소를 입력해 주세요.");
+      toast.error("모든 장소의 주소를 입력해 주세요.");
       return;
     }
 
-    setFormError(null);
     setAddressErrorKeys([]);
     setGeocodePending(true);
     let resolved: LocationDraft[];
@@ -278,7 +265,7 @@ export function FestivalRegisterForm() {
     if (unresolved.length > 0) {
       const names = unresolved.map((location) => location.locationName.trim() || "이름 없는 장소");
       setAddressErrorKeys(unresolved.map((location) => location.key));
-      setFormError(`${names.join(", ")}의 ${ADDRESS_GEOCODE_FAILED_MESSAGE}`);
+      toast.error(`${names.join(", ")}의 ${ADDRESS_GEOCODE_FAILED_MESSAGE}`);
       return;
     }
 
@@ -297,10 +284,7 @@ export function FestivalRegisterForm() {
               layout="with-button"
               placeholder="축제명을 입력해 주세요"
               value={name}
-              onChange={(event) => {
-                setSelectedFestival(null);
-                setName(event.target.value);
-              }}
+              onChange={(event) => setName(event.target.value)}
               button={
                 <Button type="button" onClick={() => setFestivalSearchOpen(true)}>
                   축제 검색하기
@@ -367,27 +351,10 @@ export function FestivalRegisterForm() {
         </section>
       </div>
 
-      {submitBlockedMessage ? (
-        <p className="body-small text-error">{submitBlockedMessage}</p>
-      ) : null}
-
-      {willConnectExistingFestival ? (
-        <p className="body-small text-zinc-500">
-          {selectedFestival?.latestYear}년 기존 축제를 선택했습니다. 등록하면 새로 만들지 않고 관리
-          축제로 연결합니다.
-        </p>
-      ) : null}
-
       <Bottombar
         onCancel={() => setCancelDialogOpen(true)}
         onSubmit={handleSubmitClick}
-        submitLabel={
-          geocodePending
-            ? "주소 확인 중..."
-            : willConnectExistingFestival
-              ? "기존 축제 연결하기"
-              : undefined
-        }
+        submitLabel={geocodePending ? "주소 확인 중..." : undefined}
         submitDisabled={geocodePending || periodBlocksSubmit}
       />
 
@@ -411,7 +378,6 @@ export function FestivalRegisterForm() {
           if (series) void applyFestivalSeries(series);
         }}
         onManualInput={(value) => {
-          setSelectedFestival(null);
           setName(value);
           setFestivalSearchOpen(false);
         }}
