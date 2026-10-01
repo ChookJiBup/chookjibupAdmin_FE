@@ -75,9 +75,7 @@ export function DateField({
             disabled={disabled}
             onClick={openCalendar}
             className={`inline-flex size-10 items-center justify-center rounded-lg border border-zinc-400 bg-white text-zinc-950 disabled:cursor-default ${
-              disabled
-                ? "border-zinc-200 text-zinc-400"
-                : "cursor-pointer hover:bg-zinc-100"
+              disabled ? "border-zinc-200 text-zinc-400" : "cursor-pointer hover:bg-zinc-100"
             }`}
           >
             <CalendarIcon className="size-5" aria-hidden />
