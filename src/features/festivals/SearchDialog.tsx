@@ -134,7 +134,10 @@ export function SearchDialog({
                   <li key={result.id}>
                     <button
                       type="button"
-                      onClick={() => onSelectResult(result)}
+                      onClick={() => {
+                        setValue("");
+                        onSelectResult(result);
+                      }}
                       className="flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors hover:bg-zinc-100"
                     >
                       <span className="body-small-bold text-zinc-950">{result.label}</span>
@@ -154,7 +157,11 @@ export function SearchDialog({
                   variant="outline"
                   className="self-start"
                   disabled={manualInputPending}
-                  onClick={() => onManualInput(value.trim())}
+                  onClick={() => {
+                    const trimmed = value.trim();
+                    setValue("");
+                    onManualInput(trimmed);
+                  }}
                 >
                   {manualInputLabel}
                 </Button>

@@ -304,7 +304,14 @@ export function FestivalRegisterForm() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               button={
-                <Button type="button" onClick={() => setFestivalSearchOpen(true)}>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setFestivalSearchState("default");
+                    setFestivalSearchResults([]);
+                    setFestivalSearchOpen(true);
+                  }}
+                >
                   축제 검색하기
                 </Button>
               }
