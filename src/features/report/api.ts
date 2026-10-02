@@ -2,22 +2,12 @@ import { adminApiClient } from "@/lib/api/adminApiClient";
 import type { ApiResponse } from "@/lib/api/types";
 import type {
   FestivalReportGenerateResult,
-  FestivalCongestionHistory,
   FestivalReportEvaluation,
   FestivalReportPerformance,
   FestivalReportStatus,
   FestivalReportSummary,
   FestivalVisitorCounts,
 } from "./types";
-
-export async function getFestivalCongestionHistory(
-  festivalId: string,
-): Promise<FestivalCongestionHistory> {
-  const { data } = await adminApiClient.get<ApiResponse<FestivalCongestionHistory>>(
-    `/festivals/${festivalId}/operations/congestion/history`,
-  );
-  return data.data;
-}
 
 export async function getFestivalReportSummary(festivalId: string): Promise<FestivalReportSummary> {
   const { data } = await adminApiClient.get<ApiResponse<FestivalReportSummary>>(

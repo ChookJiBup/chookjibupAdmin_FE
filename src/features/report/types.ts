@@ -102,21 +102,6 @@ export interface FestivalReportPerformance {
   };
 }
 
-export interface FestivalCongestionHistory {
-  festivalId: string;
-  days: Array<{
-    visitDate: string;
-    averageWaitMinutes: number | null;
-    booths: Array<{
-      boothId: number;
-      boothName: string;
-      congestionLevel: "LOW" | "MEDIUM" | "HIGH";
-      waitMinutes: number | null;
-      updatedAt: string;
-    }>;
-  }>;
-}
-
 export interface FestivalReportEvaluationAi {
   headlineSentiment: string;
   positiveKeywords: string[];
