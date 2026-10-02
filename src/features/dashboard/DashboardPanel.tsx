@@ -69,10 +69,10 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
     [festivalQuery.data?.locations],
   );
   const progressStatus = festivalQuery.data?.progressStatus;
-  // 실시간 지표(혼잡도·대기열·AI 운영 제안)는 축제가 열려 있는 동안에만 의미가 있다.
-  // 진행예정 축제에서 이 값을 그대로 보여주면 아직 시작하지도 않은 축제에
-  // "활성 대기열 8개" 같은 숫자가 뜨므로 조회 자체를 하지 않는다.
+  // 완료된 축제도 축제 기간에 저장된 마지막 혼잡 상태는 운영 기록으로 조회한다.
+  // 대기열 갱신과 AI 운영 제안만 진행 중 축제로 제한한다.
   const isRealtimeScope = progressStatus === "ONGOING";
+  const canReadCongestion = progressStatus === "ONGOING" || progressStatus === "COMPLETED";
   const mapDataQuery = useQuery({
     queryKey: festivalMapKeys.current(festivalId),
     enabled: festivalQuery.isSuccess,
@@ -97,7 +97,7 @@ export function DashboardPanel({ festivalId }: { festivalId: string }) {
   });
   const congestionQuery = useQuery({
     queryKey: ["festival-congestion", festivalId],
-    enabled: isRealtimeScope,
+    enabled: canReadCongestion,
     queryFn: () => getFestivalCongestion(festivalId),
   });
   const suggestionsQuery = useQuery({

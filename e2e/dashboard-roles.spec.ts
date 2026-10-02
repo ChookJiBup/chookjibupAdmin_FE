@@ -233,7 +233,7 @@ test("진행예정 축제의 대시보드는 실시간 지표 대신 준비 현�
 });
 
 test("종료된 축제의 대시보드는 부스맵 수정을 막고 운영리포트로 안내한다", async ({ page }) => {
-  await mockDashboard(page, "FESTIVAL_OWNER", "GOVERNMENT", false, "COMPLETED");
+  const requests = await mockDashboard(page, "FESTIVAL_OWNER", "GOVERNMENT", false, "COMPLETED");
   await page.goto(dashboardPath);
   await expect(page.getByText("종료된 축제입니다.", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "운영리포트 보기", exact: true })).toHaveAttribute(
@@ -241,6 +241,12 @@ test("종료된 축제의 대시보드는 부스맵 수정을 막고 운영리�
     `/console/festivals/${festivalId}/report`,
   );
   await expect(page.getByRole("button", { name: "수정하기", exact: true })).toBeDisabled();
+  await expect
+    .poll(() => requests.some((request) => request.endsWith("/operations/congestion")))
+    .toBe(true);
+  expect(requests.filter((request) => /\/operations\/(queues|suggestions)/.test(request))).toEqual(
+    [],
+  );
 });
 
 test("부스가 하나도 없으면 부스맵을 만들라고 안내한다", async ({ page }) => {
