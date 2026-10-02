@@ -15,8 +15,8 @@ export function Footer({ className }: FooterProps) {
     >
       <p className="body-caption text-zinc-500">
         © {new Date().getFullYear()} 축지법 ·{" "}
-        <a href="mailto:chookjibup@email.com" className="hover:text-zinc-950">
-          chookjibup@email.com
+        <a href="mailto:chookjibup@gmail.com" className="hover:text-zinc-950">
+          chookjibup@gmail.com
         </a>{" "}
         · 한국관광공사 TourAPI 4.0 OpenAPI 데이터 활용
       </p>
