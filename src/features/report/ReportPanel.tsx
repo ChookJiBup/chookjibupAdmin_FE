@@ -11,7 +11,9 @@ import { AllReviewsDialog } from "./AllReviewsDialog";
 import { getFestivalReportEvaluation, getFestivalReportPerformance } from "./api";
 import { BoothCongestionShareChart } from "./charts/BoothCongestionShareChart";
 import { RatingDistributionChart } from "./charts/RatingDistributionChart";
+import { VisitPatternHeatmap } from "./charts/VisitPatternHeatmap";
 import { ZoneWaitRankingChart } from "./charts/ZoneWaitRankingChart";
+import { createMockVisitPatternRows, MOCK_BADGE_LABEL } from "./mockData";
 import { ReportBreadcrumb, type ReportSection } from "./ReportBreadcrumb";
 import { ReviewCard } from "./ReviewCard";
 import type {
@@ -61,11 +63,13 @@ function SummaryCard({
 function Panel({
   title,
   action,
+  mocked = false,
   className,
   children,
 }: {
   title?: string;
   action?: React.ReactNode;
+  mocked?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -73,7 +77,14 @@ function Panel({
     <section className={cn("min-w-0 rounded-lg border border-zinc-300 bg-white p-5", className)}>
       {title ? (
         <div className="flex min-h-[29px] items-center justify-between gap-3">
-          <h2 className="body-regular-bold text-zinc-950">{title}</h2>
+          <h2 className="flex items-center gap-2 body-regular-bold text-zinc-950">
+            {title}
+            {mocked ? (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 body-caption text-zinc-500">
+                {MOCK_BADGE_LABEL}
+              </span>
+            ) : null}
+          </h2>
           {action}
         </div>
       ) : null}
@@ -153,24 +164,6 @@ function VisitorTrend({ data }: { data: FestivalReportPerformance["metrics"]["da
         <span>┄ 전년도</span>
       </div>
     </div>
-  );
-}
-
-function PeakHours({ hours }: { hours: string[] }) {
-  if (!hours.length)
-    return <p className="body-small text-zinc-400">주요 혼잡 시간대 데이터가 없습니다.</p>;
-
-  return (
-    <ul className="flex flex-wrap gap-2">
-      {hours.map((hour) => (
-        <li
-          key={hour}
-          className="rounded-full bg-primary-50 px-3 py-1.5 body-small-bold text-primary-700"
-        >
-          {hour}
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -335,8 +328,8 @@ function PerformanceView({
         <Panel title="일자별 관광객 추이" className="lg:col-span-2">
           <VisitorTrend data={metrics.dailyTrend} />
         </Panel>
-        <Panel title="주요 혼잡 시간대">
-          <PeakHours hours={metrics.visitPattern.available ? metrics.visitPattern.peakHours : []} />
+        <Panel title="일차/시간대별 방문 패턴" mocked>
+          <VisitPatternHeatmap rows={createMockVisitPatternRows(metrics.totalDayCount)} />
         </Panel>
       </div>
 

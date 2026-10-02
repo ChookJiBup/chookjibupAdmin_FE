@@ -197,8 +197,9 @@ test("운영리포트는 브레드크럼으로 축제성과·방문객평가를 
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("23%");
   await expect(page.getByText("구역별 혼잡도 랭킹")).toBeVisible();
-  await expect(page.getByText("주요 혼잡 시간대")).toBeVisible();
-  await expect(page.getByText("14:00")).toBeVisible();
+  await expect(page.getByText("일차/시간대별 방문 패턴")).toBeVisible();
+  await expect(page.getByText("예시 데이터")).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: "3일차" })).toBeVisible();
   await expect(page.getByText("혼잡도 등급별 부스 비율")).toBeVisible();
   // 상위 5개만 노출되는지 (주차 구역은 6위라 빠져야 함)
   await expect(page.getByText("주차 구역")).toHaveCount(0);
