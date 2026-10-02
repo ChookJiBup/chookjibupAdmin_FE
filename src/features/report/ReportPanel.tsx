@@ -158,7 +158,7 @@ function VisitorTrend({ data }: { data: FestivalReportPerformance["metrics"]["da
 
 function PeakHours({ hours }: { hours: string[] }) {
   if (!hours.length)
-    return <p className="body-small text-zinc-400">주요 방문 시간대 데이터가 없습니다.</p>;
+    return <p className="body-small text-zinc-400">주요 혼잡 시간대 데이터가 없습니다.</p>;
 
   return (
     <ul className="flex flex-wrap gap-2">
@@ -335,7 +335,7 @@ function PerformanceView({
         <Panel title="일자별 관광객 추이" className="lg:col-span-2">
           <VisitorTrend data={metrics.dailyTrend} />
         </Panel>
-        <Panel title="주요 방문 시간대">
+        <Panel title="주요 혼잡 시간대">
           <PeakHours hours={metrics.visitPattern.available ? metrics.visitPattern.peakHours : []} />
         </Panel>
       </div>
