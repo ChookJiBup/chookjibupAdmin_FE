@@ -5,10 +5,16 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { CongestionText } from "@/components/ui/CongestionBadge";
 import { getApiErrorMessage } from "@/lib/api/httpError";
+import { formatWaitMinutes } from "@/lib/formatWaitMinutes";
 import { cn } from "@/lib/utils";
 import { AllReviewsDialog } from "./AllReviewsDialog";
-import { getFestivalReportEvaluation, getFestivalReportPerformance } from "./api";
+import {
+  getFestivalCongestionHistory,
+  getFestivalReportEvaluation,
+  getFestivalReportPerformance,
+} from "./api";
 import { BoothCongestionShareChart } from "./charts/BoothCongestionShareChart";
 import { RatingDistributionChart } from "./charts/RatingDistributionChart";
 import { ZoneWaitRankingChart } from "./charts/ZoneWaitRankingChart";
@@ -16,9 +22,86 @@ import { ReportBreadcrumb, type ReportSection } from "./ReportBreadcrumb";
 import { ReviewCard } from "./ReviewCard";
 import type {
   FestivalReportEvaluation,
+  FestivalCongestionHistory,
   FestivalReportPerformance,
   FestivalReportTextSummary,
 } from "./types";
+
+function DailyCongestionHistory({ history }: { history: FestivalCongestionHistory }) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const selectedDay =
+    history.days.find((day) => day.visitDate === selectedDate) ?? history.days.at(-1);
+
+  return (
+    <Panel title="날짜별 부스 혼잡도">
+      {!selectedDay ? (
+        <p className="body-small text-zinc-400">축제 기간에 등록된 혼잡도 데이터가 없습니다.</p>
+      ) : (
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="혼잡도 조회 날짜">
+            {history.days.map((day) => {
+              const active = day.visitDate === selectedDay.visitDate;
+              return (
+                <button
+                  key={day.visitDate}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 body-small-bold transition-colors",
+                    active
+                      ? "border-primary bg-primary text-white"
+                      : "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50",
+                  )}
+                  onClick={() => setSelectedDate(day.visitDate)}
+                >
+                  {day.visitDate}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="body-small text-zinc-500">
+            일 평균 대기시간 {formatWaitMinutes(selectedDay.averageWaitMinutes)} · 마지막 등록값
+            기준
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-separate border-spacing-0 text-left">
+              <thead>
+                <tr className="body-caption text-zinc-500">
+                  <th className="border-b border-zinc-200 px-3 py-2 font-normal">부스</th>
+                  <th className="border-b border-zinc-200 px-3 py-2 font-normal">혼잡도</th>
+                  <th className="border-b border-zinc-200 px-3 py-2 font-normal">대기시간</th>
+                  <th className="border-b border-zinc-200 px-3 py-2 font-normal">마지막 갱신</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedDay.booths.map((booth) => (
+                  <tr key={booth.boothId} className="body-small text-zinc-950">
+                    <td className="border-b border-zinc-100 px-3 py-3">{booth.boothName}</td>
+                    <td className="border-b border-zinc-100 px-3 py-3">
+                      <CongestionText level={booth.congestionLevel} />
+                    </td>
+                    <td className="border-b border-zinc-100 px-3 py-3">
+                      {formatWaitMinutes(booth.waitMinutes)}
+                    </td>
+                    <td className="border-b border-zinc-100 px-3 py-3 text-zinc-500">
+                      {new Date(booth.updatedAt).toLocaleTimeString("ko-KR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 function SummaryCard({
   label,
@@ -514,6 +597,12 @@ export function ReportPanel({
     enabled: activeSection === "방문객평가",
     refetchInterval: live ? 60_000 : false,
   });
+  const congestionHistoryQuery = useQuery({
+    queryKey: ["festival-congestion-history", festivalId],
+    queryFn: () => getFestivalCongestionHistory(festivalId),
+    enabled: activeSection === "축제성과",
+    refetchInterval: live ? 60_000 : false,
+  });
   const activeQuery = activeSection === "축제성과" ? performanceQuery : evaluationQuery;
 
   return (
@@ -526,7 +615,23 @@ export function ReportPanel({
         <p className="body-small text-error">{getApiErrorMessage(activeQuery.error)}</p>
       ) : null}
       {activeSection === "축제성과" && performanceQuery.data ? (
-        <PerformanceView report={performanceQuery.data} previousFestivalId={previousFestivalId} />
+        <>
+          <PerformanceView report={performanceQuery.data} previousFestivalId={previousFestivalId} />
+          {congestionHistoryQuery.isLoading ? (
+            <p className="body-small text-zinc-500">혼잡도 이력을 불러오는 중...</p>
+          ) : null}
+          {congestionHistoryQuery.isError ? (
+            <p className="body-small text-error">
+              {getApiErrorMessage(
+                congestionHistoryQuery.error,
+                "혼잡도 이력을 불러오지 못했습니다.",
+              )}
+            </p>
+          ) : null}
+          {congestionHistoryQuery.data ? (
+            <DailyCongestionHistory history={congestionHistoryQuery.data} />
+          ) : null}
+        </>
       ) : null}
       {activeSection === "방문객평가" && evaluationQuery.data ? (
         <EvaluationView key={festivalId} report={evaluationQuery.data} />

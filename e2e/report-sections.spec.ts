@@ -110,6 +110,38 @@ const evaluation = {
   },
 };
 
+const congestionHistory = {
+  festivalId,
+  days: [
+    {
+      visitDate: "2026-05-01",
+      averageWaitMinutes: 35,
+      booths: [
+        {
+          boothId: 496,
+          boothName: "로컬 푸드트럭 존",
+          congestionLevel: "HIGH",
+          waitMinutes: 50,
+          updatedAt: "2026-05-01T18:34:00",
+        },
+      ],
+    },
+    {
+      visitDate: "2026-05-02",
+      averageWaitMinutes: 20,
+      booths: [
+        {
+          boothId: 496,
+          boothName: "로컬 푸드트럭 존",
+          congestionLevel: "MEDIUM",
+          waitMinutes: 20,
+          updatedAt: "2026-05-02T17:10:00",
+        },
+      ],
+    },
+  ],
+};
+
 async function mockReport(
   page: Page,
   role: "FESTIVAL_OWNER" | "SUB_ADMIN" = "FESTIVAL_OWNER",
@@ -172,6 +204,8 @@ async function mockReport(
       };
     } else if (path.endsWith("/reports/performance")) {
       data = performance;
+    } else if (path.endsWith("/operations/congestion/history")) {
+      data = congestionHistory;
     } else if (path.endsWith("/reports/evaluation")) {
       data = evaluation;
     }
@@ -199,6 +233,12 @@ test("운영리포트는 브레드크럼으로 축제성과·방문객평가를 
   await expect(page.getByText("주요 방문 시간대")).toBeVisible();
   await expect(page.getByText("14:00")).toBeVisible();
   await expect(page.getByText("혼잡도 등급별 부스 비율")).toBeVisible();
+  await expect(page.getByText("날짜별 부스 혼잡도")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "2026-05-02" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByText("로컬 푸드트럭 존")).toBeVisible();
   // 상위 5개만 노출되는지 (주차 구역은 6위라 빠져야 함)
   await expect(page.getByText("주차 구역")).toHaveCount(0);
   // 지난 리포트 보기 링크가 직전 회차 리포트로 연결된다.
