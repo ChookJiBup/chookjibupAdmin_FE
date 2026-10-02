@@ -19,6 +19,37 @@ export function uniqueVertices(points: LatLng[]): LatLng[] {
   return unique;
 }
 
+/**
+ * 입력한 점을 모두 감싸는 최소 볼록 경계를 만든다.
+ *
+ * 사용자가 꼭짓점을 찍은 순서가 뒤섞이거나 선이 교차해도 완료 시 단순한 경계가 되도록
+ * monotonic chain으로 정렬한다. 안쪽의 오목한 점과 한 변 위의 중간 점은 경계에서 빠진다.
+ */
+export function convexBoundary(points: LatLng[]): LatLng[] {
+  const vertices = uniqueVertices(withoutClosingDuplicate(points));
+  if (vertices.some((point) => !readLatLng(point)) || vertices.length < 3) return vertices;
+
+  const sorted = [...vertices].sort((a, b) => a.lng - b.lng || a.lat - b.lat);
+  const cross = (origin: LatLng, a: LatLng, b: LatLng) =>
+    (a.lng - origin.lng) * (b.lat - origin.lat) - (a.lat - origin.lat) * (b.lng - origin.lng);
+  const halfHull = (source: LatLng[]) => {
+    const hull: LatLng[] = [];
+    source.forEach((point) => {
+      while (hull.length >= 2 && cross(hull[hull.length - 2], hull[hull.length - 1], point) <= 0) {
+        hull.pop();
+      }
+      hull.push(point);
+    });
+    return hull;
+  };
+
+  const lower = halfHull(sorted);
+  const upper = halfHull([...sorted].reverse());
+  // 기존 순서가 정상으로 보여도 그대로 두지 않는다. 모든 완료 경계를 같은 순서의
+  // 볼록 껍질로 강제해 복잡한 교차 형태가 저장 단계까지 남지 않게 한다.
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
 /** 신발끈 공식. 위경도를 평면으로 근사한다. */
 export function polygonArea(points: LatLng[]): number {
   const ring = withoutClosingDuplicate(points);
@@ -154,11 +185,11 @@ export function polylineWithinPolygon(polygon: LatLng[], path: LatLng[]): boolea
   return true;
 }
 
-/** 신규 핀은 서버에 저장된 부지 경계가 있고, 그 안에 찍을 때만 만들 수 있다. */
-export function newPinPlacementError(savedBoundary: LatLng[] | null, point: LatLng): string | null {
-  if (!savedBoundary || uniqueVertices(savedBoundary).length < 3) {
-    return "부지 경계를 먼저 그리고 저장해 주세요.";
+/** 신규 핀은 현재 편집 중인 부지 경계가 있고, 그 안에 찍을 때만 만들 수 있다. */
+export function newPinPlacementError(boundary: LatLng[] | null, point: LatLng): string | null {
+  if (!boundary || uniqueVertices(boundary).length < 3) {
+    return "부지 경계를 먼저 그려 주세요.";
   }
-  if (!containsPoint(savedBoundary, point)) return "부지 경계 밖에는 핀을 추가할 수 없습니다.";
+  if (!containsPoint(boundary, point)) return "부지 경계 밖에는 핀을 추가할 수 없습니다.";
   return null;
 }

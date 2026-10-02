@@ -202,11 +202,10 @@ export function BoothMapHelpDialog({
               <HelpCard key={card.step} {...card} />
             ))}
           </div>
-
           <footer className="-mt-2 flex shrink-0 items-center justify-center gap-1.5">
             <InfoCircledIcon className="size-3.5 shrink-0 text-zinc-500" />
             <p className="body-caption text-zinc-500">
-              경계 편집은 하단의 취소·경계 저장 버튼으로 마무리해요.
+              경계의 점을 끌어 수정하고, 하단의 취소·경계 완료 버튼으로 마무리해요.
             </p>
           </footer>
         </Dialog.Content>

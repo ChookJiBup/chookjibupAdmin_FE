@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarIcon } from "@radix-ui/react-icons";
+import { useRef } from "react";
 import { Input } from "@/components/ui/Input";
 import { DATE_FORMAT_LABEL, formatDateInput, isRealDate } from "./dateFormat";
 
@@ -22,10 +23,9 @@ export interface DateFieldProps {
  * `formatDateInput`이 `20260327`도 `2026-03-27`로 맞춰 주고, 달력은 네이티브
  * `input[type=date]`의 값이 규격상 이미 `yyyy-MM-dd`라 그대로 쓴다.
  *
- * 달력은 별도 라이브러리를 들이지 않고 네이티브 피커를 아이콘 위에 투명하게 겹쳐
- * 띄운다. `showPicker()`는 브라우저마다 있고 없고가 갈리는데, 이렇게 두면 그냥
- * 눌리는 것만으로 열려 어디서나 같게 동작한다. 달력에서 고른 뒤에도 글자는 계속
- * 고칠 수 있어, 둘 중 편한 쪽을 쓰면 된다.
+ * 달력 버튼은 지원 브라우저에서 네이티브 피커를 직접 열고, 지원하지 않으면 숨겨진
+ * 날짜 입력의 기본 클릭 동작을 사용한다. 달력에서 고른 뒤에도 글자는 계속 고칠 수
+ * 있어, 둘 중 편한 쪽을 쓰면 된다.
  */
 export function DateField({
   label,
@@ -36,6 +36,23 @@ export function DateField({
   disabled,
   wrapperClassName,
 }: DateFieldProps) {
+  const calendarInputRef = useRef<HTMLInputElement>(null);
+
+  function openCalendar() {
+    const calendarInput = calendarInputRef.current;
+    if (!calendarInput || disabled) return;
+    if (typeof calendarInput.showPicker === "function") {
+      try {
+        calendarInput.showPicker();
+        return;
+      } catch {
+        // 브라우저가 showPicker를 노출하고도 호출을 막는 경우 기본 동작으로 시도한다.
+      }
+    }
+    calendarInput.focus();
+    calendarInput.click();
+  }
+
   return (
     <Input
       label={label}
@@ -51,26 +68,33 @@ export function DateField({
       onChange={(event) => onChange(formatDateInput(event.target.value))}
       onBlur={onBlur}
       button={
-        <span
-          className={`relative inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-zinc-400 bg-white text-zinc-950 ${
-            disabled ? "border-zinc-200 text-zinc-400" : "hover:bg-zinc-100"
-          }`}
-        >
-          <CalendarIcon className="size-5" aria-hidden />
+        <span className="relative inline-flex shrink-0">
+          <button
+            type="button"
+            aria-label={`${label} 달력 열기`}
+            disabled={disabled}
+            onClick={openCalendar}
+            className={`inline-flex size-10 items-center justify-center rounded-lg border border-zinc-400 bg-white text-zinc-950 disabled:cursor-default ${
+              disabled ? "border-zinc-200 text-zinc-400" : "cursor-pointer hover:bg-zinc-100"
+            }`}
+          >
+            <CalendarIcon className="size-5" aria-hidden />
+          </button>
           {/*
-            네이티브 달력. 눈에는 안 보이지만 아이콘 자리를 그대로 덮고 있어, 아이콘을
-            누르면 곧바로 열린다. 값 형식은 규격상 yyyy-MM-dd라 변환 없이 쓴다.
-            달력을 닫으며 비운 경우(value === "")에는 적어 둔 날짜를 지우지 않는다.
+            실제 날짜 값은 네이티브 input이 관리한다. 버튼에서 showPicker를 호출하므로
+            브라우저 내부 달력 아이콘의 작은 클릭 영역에 의존하지 않는다.
           */}
           <input
+            ref={calendarInputRef}
             type="date"
-            aria-label={`${label} 달력에서 고르기`}
+            aria-hidden
+            tabIndex={-1}
             disabled={disabled}
             value={isRealDate(value) ? value : ""}
             onChange={(event) => {
               if (event.target.value) onChange(event.target.value);
             }}
-            className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
+            className="pointer-events-none absolute right-0 bottom-0 size-px opacity-0"
           />
         </span>
       }

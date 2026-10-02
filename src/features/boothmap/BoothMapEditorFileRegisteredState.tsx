@@ -88,11 +88,12 @@ import { cornersFromAnchor } from "./overlayProjection";
 import { PamphletOverlay } from "./PamphletOverlay";
 import {
   containsPoint,
+  convexBoundary,
+  MAX_BOUNDARY_VERTICES,
   newPinPlacementError,
   polylineWithinPolygon,
   uniqueVertices,
   validateBoundary,
-  withoutClosingDuplicate,
 } from "./polygonGeometry";
 import { boothsToQueuePathItems, QueuePathLayer } from "./QueuePathLayer";
 import { MapAnalysisProgressCard } from "./MapAnalysisProgressCard";
@@ -435,15 +436,18 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const [shapes, setShapes] = useState<LocalMapShape[]>([]);
   const [preservedNodes, setPreservedNodes] = useState<PreservedNode[]>([]);
   const [siteBoundary, setSiteBoundary] = useState<LatLng[] | null>(null);
-  const savedSiteBoundary = useMemo(
-    () => presentationBoundary(editorQuery.data?.presentation),
-    [editorQuery.data?.presentation],
-  );
   const [boundaryDraft, setBoundaryDraft] = useState<LatLng[]>([]);
+  const [draggingBoundaryVertex, setDraggingBoundaryVertex] = useState<{
+    index: number;
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [deleteBoundaryOpen, setDeleteBoundaryOpen] = useState(false);
   const [pamphlet, setPamphlet] = useState<LocalPamphletOverlay | null>(null);
   /** 서버에 저장된 팜플렛이 있는지. 화면에서 지웠을 때 삭제 요청을 보낼지 판단한다. */
   const serverHasOverlay = Boolean(editorQuery.data?.presentation?.overlay);
+  /** 경계만 있는 지도에서도 삭제 요청을 저장할 수 있어야 한다. */
+  const serverHasBoundary = Boolean(editorQuery.data?.presentation?.boundary);
   const [queueDraft, setQueueDraft] = useState<LatLng[]>([]);
   const [queueMode, setQueueMode] = useState<"current" | "plan">("current");
   const [queuePanelExpanded, setQueuePanelExpanded] = useState(false);
@@ -733,14 +737,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         설정만 담긴 요청을 받아 준다. 다만 둘 다 없으면 저장할 것이 없다.
       */
       const nodes = boothMapPinsToNodeChanges(booths, deletedNodeIds, shapes, preservedNodes);
-      if (nodes.length === 0 && !siteBoundary && !pamphlet) {
+      const boundaryToSave = siteBoundary ? convexBoundary(siteBoundary) : null;
+      if (nodes.length === 0 && !siteBoundary && !pamphlet && !serverHasBoundary) {
         throw new Error("저장할 부스나 경계·팜플렛이 없습니다.");
       }
-      if (siteBoundary) {
-        const error = validateBoundary(siteBoundary);
+      if (boundaryToSave) {
+        const error = validateBoundary(boundaryToSave);
         if (error) throw new Error(error);
         const outsideNewPins = booths.filter(
-          (booth) => booth.isNew && !containsPoint(siteBoundary, booth),
+          (booth) => booth.isNew && !containsPoint(boundaryToSave, booth),
         );
         if (outsideNewPins.length > 0) {
           throw new Error(
@@ -770,8 +775,14 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       return saveMapEditor(festivalId, mapQuery.data.mapId, {
         baseRevision: editRevision,
         presentation: {
-          ...(siteBoundary
-            ? { boundary: { geometryType: "POLYGON", schemaVersion: "2.0", points: siteBoundary } }
+          ...(boundaryToSave
+            ? {
+                boundary: {
+                  geometryType: "POLYGON",
+                  schemaVersion: "2.0",
+                  points: boundaryToSave,
+                },
+              }
             : { clearBoundary: true }),
           /*
             팜플렛을 지운 채로 저장하면 서버에도 지워야 한다. 아무것도 안 보내면
@@ -785,7 +796,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   ...overlay.anchor,
                   opacity: overlay.opacity,
                   visible: overlay.visible,
-                  clipToBoundary: Boolean(siteBoundary && overlay.clipToBoundary),
+                  clipToBoundary: Boolean(boundaryToSave && overlay.clipToBoundary),
                 },
               }
             : serverHasOverlay
@@ -1009,6 +1020,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     setPamphlet(presentationOverlay(editorQuery.data.presentation));
     setDraftPoints([]);
     setBoundaryDraft([]);
+    setDraggingBoundaryVertex(null);
     setQueueDraft([]);
     setSelectedShapeId(null);
     setEditRevision(editorQuery.data.editRevision);
@@ -1129,6 +1141,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     setSiteBoundary(restored.siteBoundary ?? null);
     setPamphlet(restored.pamphlet ?? null);
     setDraftPoints([]);
+    setBoundaryDraft([]);
+    setDraggingBoundaryVertex(null);
     setSelectedShapeId(null);
     // 되돌린 결과에 없는 부스를 가리키고 있을 수 있어 선택 상태는 비운다.
     setCheckedIds(new Set());
@@ -1209,12 +1223,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
 
   function addBoothAt(lat: number, lng: number) {
     const point = { lat, lng };
-    const placementError = newPinPlacementError(savedSiteBoundary, point);
+    const placementError = newPinPlacementError(siteBoundary, point);
     if (placementError) {
       toast.error(placementError, {
-        description: savedSiteBoundary
-          ? "저장된 경계 안쪽이나 경계선 위를 눌러 주세요."
-          : "경계를 그린 뒤 상단의 저장하기를 먼저 눌러 주세요.",
+        description: siteBoundary
+          ? "경계 안쪽이나 경계선 위를 눌러 주세요."
+          : "부지 경계를 먼저 그려 주세요.",
       });
       return;
     }
@@ -1311,15 +1325,29 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     Enter를 눌러도 "점이 부족하다"며 완료되지 않는다. draft를 의존성으로 묶어 둔다.
   */
   const finishBoundary = useCallback(() => {
-    const error = validateBoundary(boundaryDraft);
+    const completedBoundary = convexBoundary(boundaryDraft);
+    const error = validateBoundary(completedBoundary);
     if (error) {
       toast.error(error);
       return;
     }
-    setSiteBoundary(uniqueVertices(withoutClosingDuplicate(boundaryDraft)));
+    const adjusted = JSON.stringify(completedBoundary) !== JSON.stringify(boundaryDraft);
+    setSiteBoundary(completedBoundary);
     setBoundaryDraft([]);
+    setDraggingBoundaryVertex(null);
     setDrawTool("select");
+    if (adjusted) {
+      toast.success("경계를 자동으로 정리했습니다.", {
+        description: "교차하거나 안쪽으로 들어간 점을 정리해 겹치지 않는 볼록 경계로 만들었습니다.",
+      });
+    }
   }, [boundaryDraft]);
+
+  function cancelBoundaryEdit() {
+    setBoundaryDraft([]);
+    setDraggingBoundaryVertex(null);
+    setDrawTool("select");
+  }
 
   function loadOverlayFile(file: File) {
     const url = URL.createObjectURL(file);
@@ -1774,6 +1802,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     );
   }
 
+  /** 끌고 있는 경계 꼭짓점의 임시 위치를 지도에 즉시 보여 준다. */
+  function boundaryPointsOf() {
+    if (!draggingBoundaryVertex) return boundaryDraft;
+    return boundaryDraft.map((point, index) =>
+      index === draggingBoundaryVertex.index
+        ? { lat: draggingBoundaryVertex.lat, lng: draggingBoundaryVertex.lng }
+        : point,
+    );
+  }
+
   /** 끌고 있는 핀은 아직 booths에 반영되지 않았으므로 임시 위치를 대신 쓴다. */
   function pinPositionOf(booth: LocalBoothPin) {
     const position = { lat: booth.lat, lng: booth.lng };
@@ -1792,33 +1830,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         new window.kakao.maps.Point(clientX - bounds.left, clientY - bounds.top),
       );
     return { lat: coords.getLat(), lng: coords.getLng() };
-  }
-
-  /** 기존 부지 경계의 꼭짓점을 끌어 초안만 수정한다. 저장 전에는 원본 경계를 건드리지 않는다. */
-  function startBoundaryVertexDrag(index: number, event: React.PointerEvent<HTMLButtonElement>) {
-    if (editingLocked || drawTool !== "boundary" || event.button !== 0) return;
-    const map = kakaoMapRef.current;
-    if (!map) return;
-    event.preventDefault();
-    event.stopPropagation();
-    map.setDraggable(false);
-
-    const move = (pointerEvent: PointerEvent) => {
-      const point = coordsAtClient(pointerEvent.clientX, pointerEvent.clientY);
-      if (!point) return;
-      setBoundaryDraft((previous) =>
-        previous.map((vertex, vertexIndex) => (vertexIndex === index ? point : vertex)),
-      );
-    };
-    const finish = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
-      map.setDraggable(true);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", finish);
-    window.addEventListener("pointercancel", finish);
   }
 
   /** 지도 좌표를 지도 안 화면 좌표(px)로. 「커서가 이 도형을 짚었나」는 보이는 대로 판정한다. */
@@ -2220,6 +2231,73 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     window.addEventListener("pointercancel", handleUp);
   }
 
+  /** 경계 편집 중 꼭짓점을 끌어 위치를 바꾼다. 완료 전에는 저장 경계를 건드리지 않는다. */
+  function startBoundaryVertexDrag(index: number, event: React.PointerEvent) {
+    if (editingLocked || drawTool !== "boundary" || event.button !== 0) return;
+    const map = kakaoMapRef.current;
+    const wrapper = mapWrapperRef.current;
+    if (!map || !wrapper || !window.kakao?.maps) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    vertexDraggingRef.current = true;
+    map.setDraggable(false);
+    const bounds = wrapper.getBoundingClientRect();
+    const coordsAt = (clientX: number, clientY: number) =>
+      map
+        .getProjection()
+        .coordsFromContainerPoint(
+          new window.kakao.maps.Point(clientX - bounds.left, clientY - bounds.top),
+        );
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const coords = coordsAt(moveEvent.clientX, moveEvent.clientY);
+      setDraggingBoundaryVertex({ index, lat: coords.getLat(), lng: coords.getLng() });
+    };
+    const handleUp = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      vertexDraggingRef.current = false;
+      if (!vertexHoveredRef.current) map.setDraggable(true);
+      setDraggingBoundaryVertex(null);
+      if (upEvent.type === "pointercancel") return;
+      const coords = coordsAt(upEvent.clientX, upEvent.clientY);
+      setBoundaryDraft((points) =>
+        points.map((point, at) =>
+          at === index ? { lat: coords.getLat(), lng: coords.getLng() } : point,
+        ),
+      );
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  }
+
+  function insertBoundaryVertexAndDrag(afterIndex: number, event: React.PointerEvent) {
+    if (boundaryDraft.length >= MAX_BOUNDARY_VERTICES) {
+      toast.error(`경계 꼭짓점은 ${MAX_BOUNDARY_VERTICES}개를 넘을 수 없습니다.`);
+      return;
+    }
+    const next = boundaryDraft[(afterIndex + 1) % boundaryDraft.length];
+    const inserted = midpointOf(boundaryDraft[afterIndex], next);
+    setBoundaryDraft((points) => [
+      ...points.slice(0, afterIndex + 1),
+      inserted,
+      ...points.slice(afterIndex + 1),
+    ]);
+    startBoundaryVertexDrag(afterIndex + 1, event);
+  }
+
+  function removeBoundaryVertex(index: number) {
+    if (boundaryDraft.length <= 3) {
+      toast.error("부지 경계는 꼭짓점이 최소 3개 필요합니다.");
+      return;
+    }
+    setBoundaryDraft((points) => points.filter((_, at) => at !== index));
+  }
+
   /** 고른 모양으로 꼭짓점을 다시 만든다. 위치와 대략의 크기는 유지한다. */
   function applyShapePreset(shape: LocalMapShape, preset: PolygonPreset) {
     setShapes((prev) =>
@@ -2593,9 +2671,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       if (event.shiftKey) setShiftHeld(true);
       if (event.key === "Escape") {
         cancelDraftShape();
-        setBoundaryDraft([]);
+        cancelBoundaryEdit();
         setQueueDraft([]);
-        setDrawTool("select");
         return;
       }
       if (event.key === "Enter" && drawTool === "boundary") {
@@ -3055,7 +3132,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 zIndex={40}
               />
             ) : null}
-            {siteBoundary && siteBoundary.length >= 3 ? (
+            {drawTool !== "boundary" && siteBoundary && siteBoundary.length >= 3 ? (
               <Polygon
                 path={siteBoundary}
                 fillColor="#18181b"
@@ -3065,42 +3142,94 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                 strokeOpacity={0.9}
               />
             ) : null}
-            {boundaryDraft.length >= 2 ? (
-              <>
-                {boundaryDraft.length >= 3 ? (
-                  <Polygon
-                    path={boundaryDraft}
-                    fillColor="#18181b"
-                    fillOpacity={0.08}
-                    strokeColor="#18181b"
-                    strokeWeight={2}
-                    strokeStyle="shortdash"
-                  />
-                ) : (
-                  <Polyline
-                    path={boundaryDraft}
-                    strokeColor="#18181b"
-                    strokeWeight={2}
-                    strokeStyle="shortdash"
-                  />
-                )}
-                {drawTool === "boundary"
-                  ? boundaryDraft.map((point, index) => (
-                      <CustomOverlayMap key={`boundary-vertex-${index}`} position={point} clickable zIndex={30}>
-                        <button
-                          type="button"
-                          aria-label={`경계 꼭짓점 ${index + 1}`}
-                          title="끌어서 경계 수정"
-                          onPointerDown={(event) => startBoundaryVertexDrag(index, event)}
-                          className="flex size-7 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
-                        >
-                          <span className="block size-3.5 rounded-full border-2 border-zinc-950 bg-white shadow" />
-                        </button>
-                      </CustomOverlayMap>
-                    ))
-                  : null}
-              </>
+            {drawTool === "boundary" && boundaryDraft.length >= 2 ? (
+              boundaryDraft.length >= 3 ? (
+                <Polygon
+                  path={boundaryPointsOf()}
+                  fillColor="#18181b"
+                  fillOpacity={0.08}
+                  strokeColor="#18181b"
+                  strokeWeight={3}
+                  strokeStyle="shortdash"
+                />
+              ) : (
+                <Polyline
+                  path={boundaryPointsOf()}
+                  strokeColor="#18181b"
+                  strokeWeight={2}
+                  strokeStyle="shortdash"
+                />
+              )
             ) : null}
+            {drawTool === "boundary"
+              ? boundaryPointsOf().map((point, index) => (
+                  <CustomOverlayMap
+                    key={`boundary-vertex-${index}`}
+                    position={point}
+                    clickable
+                    zIndex={30}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`경계 꼭짓점 ${index + 1}`}
+                      title="끌어서 이동 · Alt를 누른 채 누르면 삭제"
+                      onPointerEnter={() => {
+                        vertexHoveredRef.current = true;
+                        kakaoMapRef.current?.setDraggable(false);
+                      }}
+                      onPointerLeave={() => {
+                        vertexHoveredRef.current = false;
+                        if (!vertexDraggingRef.current) kakaoMapRef.current?.setDraggable(true);
+                      }}
+                      onPointerDown={(event) => {
+                        if (event.altKey || event.shiftKey) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          removeBoundaryVertex(index);
+                          return;
+                        }
+                        startBoundaryVertexDrag(index, event);
+                      }}
+                      className="flex size-7 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+                    >
+                      <span className="block size-4 rounded-full border-2 border-zinc-950 bg-white shadow" />
+                    </button>
+                  </CustomOverlayMap>
+                ))
+              : null}
+            {drawTool === "boundary" && boundaryDraft.length >= 3 && !draggingBoundaryVertex
+              ? boundaryDraft.map((point, index) => {
+                  const next = boundaryDraft[(index + 1) % boundaryDraft.length];
+                  return (
+                    <CustomOverlayMap
+                      key={`boundary-mid-${index}`}
+                      position={midpointOf(point, next)}
+                      clickable
+                      zIndex={29}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`${index + 1}번과 ${((index + 1) % boundaryDraft.length) + 1}번 경계점 사이에 점 추가`}
+                        title="눌러서 꼭짓점 추가"
+                        onPointerEnter={() => {
+                          vertexHoveredRef.current = true;
+                          kakaoMapRef.current?.setDraggable(false);
+                        }}
+                        onPointerLeave={() => {
+                          vertexHoveredRef.current = false;
+                          if (!vertexDraggingRef.current) kakaoMapRef.current?.setDraggable(true);
+                        }}
+                        onPointerDown={(event) => insertBoundaryVertexAndDrag(index, event)}
+                        className="flex size-6 cursor-copy touch-none items-center justify-center"
+                      >
+                        <span className="flex size-3.5 items-center justify-center rounded-full border border-zinc-950 bg-white text-zinc-950 opacity-80 shadow-sm hover:opacity-100 [&_svg]:size-2.5">
+                          <PlusIcon />
+                        </span>
+                      </button>
+                    </CustomOverlayMap>
+                  );
+                })
+              : null}
             {pendingGroupMembers.length >= 2 ? (
               <>
                 <Polygon
@@ -3975,9 +4104,9 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               className={cn("text-zinc-950", drawTool === "boundary" && "ring-2 ring-primary")}
               onClick={() => {
                 if (drawTool === "boundary") {
-                  cancelDraftShape();
+                  cancelBoundaryEdit();
                 } else {
-                  setBoundaryDraft(siteBoundary ?? []);
+                  setBoundaryDraft(siteBoundary ? siteBoundary.map((point) => ({ ...point })) : []);
                   setDrawTool("boundary");
                 }
                 setPinTypeMenuOpen(false);
@@ -4004,8 +4133,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
           {pinTypeMenuOpen ? (
             <NodeTypeMenu
               className="absolute right-full bottom-20 mr-2"
-              disabled={!savedSiteBoundary || uniqueVertices(savedSiteBoundary).length < 3}
-              disabledReason="부지 경계를 그리고 저장한 뒤 추가할 수 있습니다."
+              disabled={!siteBoundary || uniqueVertices(siteBoundary).length < 3}
+              disabledReason="부지 경계를 그린 뒤 추가할 수 있습니다."
               onDismiss={() => setPinTypeMenuOpen(false)}
               onSelect={(nodeType) => {
                 setPendingPinType(nodeType);
@@ -4075,13 +4204,23 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
       ) : null}
 
       {drawTool === "boundary" ? (
-        <div className="pointer-events-auto absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md lg:bottom-10">
-          <Button type="button" variant="outline" className="w-28" onClick={cancelDraftShape}>
-            취소
-          </Button>
-          <Button type="button" variant="primary" className="w-28" onClick={finishBoundary}>
-            경계 저장
-          </Button>
+        <div className="pointer-events-auto absolute right-16 bottom-4 left-4 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-white p-2 shadow-md lg:right-28 lg:bottom-10 lg:left-[23rem]">
+          {siteBoundary ? (
+            <Button type="button" variant="destructive" onClick={() => setDeleteBoundaryOpen(true)}>
+              경계 삭제
+            </Button>
+          ) : null}
+          <p className="body-caption text-zinc-500">
+            꼭짓점을 끌어 수정하고, 변 사이의 +로 점을 추가하세요. 완료하면 볼록 경계로 정리됩니다.
+          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={cancelBoundaryEdit}>
+              취소
+            </Button>
+            <Button type="button" variant="primary" onClick={finishBoundary}>
+              경계 완료
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -4536,6 +4675,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         onConfirm={() => {
           setSiteBoundary(null);
           setBoundaryDraft([]);
+          setDraggingBoundaryVertex(null);
           setDrawTool("select");
           setPinTypeMenuOpen(false);
           setMarquee(null);

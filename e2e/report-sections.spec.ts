@@ -114,6 +114,7 @@ async function mockReport(
   page: Page,
   role: "FESTIVAL_OWNER" | "SUB_ADMIN" = "FESTIVAL_OWNER",
   progressStatus: "ONGOING" | "COMPLETED" = "COMPLETED",
+  generationStatus: "PENDING" | "PROCESSING" | "COMPLETED" = "COMPLETED",
 ) {
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -142,7 +143,7 @@ async function mockReport(
         festivalId,
         progressStatus,
         visitorInput: "COMPLETE",
-        generationStatus: "COMPLETED",
+        generationStatus,
         progressDayIndex: null,
         progressMessage: null,
         performanceAvailable: true,
@@ -196,7 +197,7 @@ test("운영리포트는 브레드크럼으로 축제성과·방문객평가를 
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("23%");
   await expect(page.getByText("구역별 혼잡도 랭킹")).toBeVisible();
-  await expect(page.getByText("주요 방문 시간대")).toBeVisible();
+  await expect(page.getByText("주요 혼잡 시간대")).toBeVisible();
   await expect(page.getByText("14:00")).toBeVisible();
   await expect(page.getByText("혼잡도 등급별 부스 비율")).toBeVisible();
   // 상위 5개만 노출되는지 (주차 구역은 6위라 빠져야 함)
@@ -233,6 +234,24 @@ test("운영자도 진행 중 축제의 운영리포트를 바로 연다", async
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("23%");
   await expect(page.locator(`a[href="${reportPath}"]`)).toHaveAttribute("aria-current", "page");
+});
+
+test("완료 축제는 분석 중에도 방문객 실지표 리포트를 표시한다", async ({ page }) => {
+  await mockReport(page, "FESTIVAL_OWNER", "COMPLETED", "PROCESSING");
+
+  await page.goto(reportPath);
+
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("23%");
+  await expect(page.getByText("총 관광객수")).toBeVisible();
+});
+
+test("완료 축제는 분석 대기 중에만 리포트를 숨긴다", async ({ page }) => {
+  await mockReport(page, "FESTIVAL_OWNER", "COMPLETED", "PENDING");
+
+  await page.goto(reportPath);
+
+  await expect(page.getByText("축제 결과를 분석하고 있어요")).toBeVisible();
+  await expect(page.getByText("총 관광객수")).toHaveCount(0);
 });
 
 test("진행 중 DAILY 저장 후 오늘까지의 누적 성과를 즉시 다시 읽는다", async ({ page }) => {

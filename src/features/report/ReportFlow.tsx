@@ -34,7 +34,8 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
   });
   const [reinputRequested, setReinputRequested] = useState(false);
   const generationStatus = statusQuery.data?.generationStatus;
-  const isGenerating = generationStatus === "PENDING" || generationStatus === "PROCESSING";
+  const isPending = generationStatus === "PENDING";
+  const canShowReport = generationStatus === "PROCESSING" || generationStatus === "COMPLETED";
   const progressStatus = statusQuery.data?.progressStatus;
   const isOngoing = progressStatus === "ONGOING";
   const isCompleted = progressStatus === "COMPLETED";
@@ -45,9 +46,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
   const showForm = isOngoing
     ? hasMissingElapsedDay || reinputRequested
     : isCompleted
-      ? !isGenerating &&
-        generationStatus !== "COMPLETED" &&
-        (!isGenerationBroken || reinputRequested)
+      ? !isPending && !canShowReport && (!isGenerationBroken || reinputRequested)
       : false;
   const closeForm = useCallback(() => {
     setReinputRequested(false);
@@ -55,9 +54,9 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
   }, [festivalId, router]);
 
   useEffect(() => {
-    setHideNav(showForm || isGenerating);
+    setHideNav(showForm || isPending);
     return () => setHideNav(false);
-  }, [isGenerating, setHideNav, showForm]);
+  }, [isPending, setHideNav, showForm]);
 
   const submitMutation = useMutation({
     // 집계 방식이 UNSET이면 축제 수정 API로 따로 저장하지 않는다 —
@@ -162,7 +161,7 @@ export function ReportFlow({ festivalId }: { festivalId: string }) {
     );
   }
 
-  if (isCompleted && isGenerating) {
+  if (isCompleted && isPending) {
     return (
       <div className="fixed inset-x-0 top-[var(--console-topbar-height,72px)] bottom-0 z-10 flex flex-col items-center justify-center gap-4 bg-white">
         <p className="body-regular text-zinc-950">
