@@ -149,6 +149,31 @@ interface LocalZone {
   boothIds: string[];
 }
 
+const ZONE_HIGHLIGHT_STYLES = [
+  {
+    soft: "size-5 border border-primary-300 bg-primary-300/20",
+    strong: "size-7 border-2 border-primary-600 bg-primary-300/45 ring-2 ring-white",
+  },
+  {
+    soft: "size-5 border border-point-300 bg-point-300/20",
+    strong: "size-7 border-2 border-point-600 bg-point-300/45 ring-2 ring-white",
+  },
+  {
+    soft: "size-5 border border-red-300 bg-red-300/20",
+    strong: "size-7 border-2 border-red-600 bg-red-300/45 ring-2 ring-white",
+  },
+  {
+    soft: "size-5 border border-zinc-400 bg-zinc-200/30",
+    strong: "size-7 border-2 border-zinc-700 bg-zinc-300/50 ring-2 ring-white",
+  },
+] as const;
+
+function zoneHighlightStyle(zoneId: string) {
+  let hash = 0;
+  for (const character of zoneId) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return ZONE_HIGHLIGHT_STYLES[hash % ZONE_HIGHLIGHT_STYLES.length];
+}
+
 function createZoneId() {
   return crypto.randomUUID();
 }
@@ -526,15 +551,16 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
     () => zones.filter((zone) => !zoneIdsDrawnAsShape.has(zone.id)),
     [zones, zoneIdsDrawnAsShape],
   );
-  const highlightedZoneBoothIds = useMemo(
-    () =>
-      new Set(
-        standaloneZones
-          .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
-          .flatMap((zone) => zone.boothIds),
-      ),
-    [standaloneZones, selectedZoneId],
-  );
+  const zoneHighlightByBoothId = useMemo(() => {
+    const highlights = new Map<string, (typeof ZONE_HIGHLIGHT_STYLES)[number]>();
+    standaloneZones
+      .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
+      .forEach((zone) => {
+        const style = zoneHighlightStyle(zone.id);
+        zone.boothIds.forEach((boothId) => highlights.set(boothId, style));
+      });
+    return highlights;
+  }, [standaloneZones, selectedZoneId]);
   const ungroupedBooths = useMemo(
     () =>
       booths.filter((booth) => !zoneIdByBoothId.has(booth.id) && !shapeIdByBoothId.has(booth.id)),
@@ -3393,7 +3419,10 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               const isSelected = booth.id === selectedId;
               // 여럿을 골랐을 때의 표시. 편집 중인 하나(isSelected)와 구분해 파란 테를 두른다.
               const isChecked = checkedIds.has(booth.id);
-              const isGrouped = highlightedZoneBoothIds.has(booth.id);
+              const zoneHighlight = zoneHighlightByBoothId.get(booth.id);
+              const highlightClassName = isChecked
+                ? (zoneHighlight ?? ZONE_HIGHLIGHT_STYLES[0]).strong
+                : zoneHighlight?.soft;
               return (
                 <CustomOverlayMap
                   key={booth.id}
@@ -3473,8 +3502,8 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       고른 것을 한눈에 알아야 여러 개를 함께 옮길 수 있다. 점 뒤에 파란 테를
                       한 겹 깔아, 편집 중인 하나(주황 후광)와 겹쳐 있어도 둘 다 보이게 한다.
                     */}
-                    {isChecked || isGrouped ? (
-                      <span className="absolute size-6 rounded-full border-2 border-primary bg-primary/15" />
+                    {highlightClassName ? (
+                      <span className={cn("absolute rounded-full", highlightClassName)} />
                     ) : null}
                     {booth.nodeType === "BOOTH" ? (
                       <>
