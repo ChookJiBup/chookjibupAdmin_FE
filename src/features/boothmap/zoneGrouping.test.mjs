@@ -55,7 +55,10 @@ describe("booth zone grouping", () => {
       pin("entrance", { nodeType: "ENTRANCE" }),
     ];
     assert.deepEqual(
-      selectGroupableBooths(booths, booths.map(({ id }) => id)).map(({ id }) => id),
+      selectGroupableBooths(
+        booths,
+        booths.map(({ id }) => id),
+      ).map(({ id }) => id),
       ["booth"],
     );
   });

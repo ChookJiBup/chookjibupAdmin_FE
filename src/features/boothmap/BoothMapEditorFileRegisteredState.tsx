@@ -3671,9 +3671,12 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                           setCheckedIds(new Set());
                           setGroupPopoverOpen(false);
                           setPendingGroupIds([]);
-                          toast.success(`${name} 구역으로 부스 ${memberIds.size}개를 그룹화했습니다.`, {
-                            description: "저장을 눌러야 서버에 반영됩니다.",
-                          });
+                          toast.success(
+                            `${name} 구역으로 부스 ${memberIds.size}개를 그룹화했습니다.`,
+                            {
+                              description: "저장을 눌러야 서버에 반영됩니다.",
+                            },
+                          );
                         }}
                         onCancel={() => {
                           setGroupPopoverOpen(false);

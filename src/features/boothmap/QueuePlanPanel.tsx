@@ -244,7 +244,8 @@ export function QueuePlanPanel({
           </p>
           <span className="mx-1 h-5 w-px shrink-0 bg-zinc-200" />
           <p className="body-small shrink-0 text-zinc-500">
-            총 길이 <span className="body-regular-bold ml-1 text-primary">{Math.round(draftLength)}m</span>
+            총 길이{" "}
+            <span className="body-regular-bold ml-1 text-primary">{Math.round(draftLength)}m</span>
           </p>
           <Button
             variant="outline"
@@ -299,7 +300,8 @@ export function QueuePlanPanel({
           </p>
           <span className="mx-1 h-5 w-px shrink-0 bg-zinc-200" />
           <p className="body-small shrink-0 text-zinc-500">
-            총 길이 <span className="body-regular-bold ml-1 text-primary">{Math.round(draftLength)}m</span>
+            총 길이{" "}
+            <span className="body-regular-bold ml-1 text-primary">{Math.round(draftLength)}m</span>
           </p>
           <Button
             variant="outline"
@@ -368,9 +370,7 @@ export function QueuePlanPanel({
       <div className="px-16">
         <div className="min-w-0">
           <p className="body-large-bold text-zinc-950">{boothName}</p>
-          <p className="body-small mt-1 whitespace-nowrap text-zinc-500">
-            {guideMessage}
-          </p>
+          <p className="body-small mt-1 whitespace-nowrap text-zinc-500">{guideMessage}</p>
         </div>
       </div>
       <div className="mx-auto grid w-[88%] grid-cols-3 divide-x divide-zinc-200 rounded-lg bg-primary/5 py-3">
