@@ -110,7 +110,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
         말할 수 있게 두고, 기본값은 지금까지와 같은 여백을 유지한다.
       */}
       <Toaster
-        position={pathname.endsWith("/dashboard") ? "top-center" : "top-right"}
+        position="top-right"
         offset={{
           top: `calc(var(--console-topbar-height, 72px) + ${toastBelowActionBar ? "112px" : "16px"})`,
           right: "32px",

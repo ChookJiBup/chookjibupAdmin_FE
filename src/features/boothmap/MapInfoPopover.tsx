@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { IconButton } from "@/components/ui/IconButton";
 import { MapOverlayCard } from "@/components/map/MapOverlayCard";
 import type { NodeType } from "./types";
-import { PIN_TYPE_OPTIONS } from "./nodeTypeIcons";
+import { NodeTypeMenu } from "./NodeTypeMenu";
 
 export type MapInfoPopoverMode = "group-create" | "zone-edit" | "booth-edit";
 
@@ -157,24 +157,14 @@ export function MapInfoPopover({
                 유형 변경하기
               </Button>
               {typeMenuOpen ? (
-                <div className="absolute top-full left-0 z-10 mt-1 w-21 rounded-md border border-zinc-200 bg-white p-2 shadow-md">
-                  {PIN_TYPE_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        onChangeNodeType(option.value);
-                        setTypeMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 border-b border-zinc-200 py-2 text-left last:border-b-0 hover:bg-zinc-100"
-                    >
-                      <span className="size-4 shrink-0 text-primary [&_svg]:size-4">
-                        {option.icon}
-                      </span>
-                      <span className="body-small text-zinc-950">{option.label}</span>
-                    </button>
-                  ))}
-                </div>
+                <NodeTypeMenu
+                  className="absolute top-full left-0 z-10 mt-1"
+                  onDismiss={() => setTypeMenuOpen(false)}
+                  onSelect={(nodeType) => {
+                    onChangeNodeType(nodeType);
+                    setTypeMenuOpen(false);
+                  }}
+                />
               ) : null}
             </div>
           ) : null}

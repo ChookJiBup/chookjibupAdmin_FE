@@ -204,9 +204,20 @@ async function openEditor(page: Page) {
 }
 
 async function save(page: Page) {
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "저장하기", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "저장", exact: true }).click();
 }
+
+test("왼쪽 목록에서 부스를 선택하면 그룹화 버튼이 활성화된다", async ({ page }) => {
+  await mockBoothMap(page);
+  await openEditor(page);
+
+  await page.getByRole("checkbox", { name: "김밥천국 선택" }).click();
+  await page.getByRole("checkbox", { name: "떡볶이존 선택" }).click();
+  await expect(page.getByText("2개 선택됨")).toBeVisible();
+
+  await expect(page.getByRole("button", { name: "그룹화", exact: true })).toBeEnabled();
+});
 
 test("Shift+드래그로 범위 안의 부스를 한꺼번에 고른다", async ({ page }) => {
   await mockBoothMap(page);

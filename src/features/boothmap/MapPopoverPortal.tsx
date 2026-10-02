@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useMap } from "react-kakao-maps-sdk";
 import type { LatLng } from "./latLng";
@@ -14,18 +14,22 @@ export function MapPopoverPortal({
   children: ReactNode;
 }) {
   const map = useMap();
-  const [screen, setScreen] = useState<{ x: number; y: number } | null>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const update = () => {
+      const portal = portalRef.current;
+      if (!portal) return;
       const point = map
         .getProjection()
         .containerPointFromCoords(new window.kakao.maps.LatLng(position.lat, position.lng));
       const bounds = map.getNode().getBoundingClientRect();
-      setScreen({
-        x: Math.max(144, Math.min(window.innerWidth - 144, bounds.left + point.x)),
-        y: bounds.top + point.y - 8,
-      });
+      const x = Math.max(144, Math.min(window.innerWidth - 144, bounds.left + point.x));
+      const y = bounds.top + point.y - 8;
+      // 지도가 이동하는 동안 React 렌더를 거치면 말풍선이 한 프레임씩 뒤따라온다.
+      // 포털 요소의 transform을 직접 갱신해 핀과 같은 프레임에 움직인다.
+      portal.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -100%)`;
+      portal.style.visibility = "visible";
     };
     update();
     window.kakao.maps.event.addListener(map, "center_changed", update);
@@ -38,12 +42,12 @@ export function MapPopoverPortal({
     };
   }, [map, position.lat, position.lng]);
 
-  if (!screen) return null;
+  if (typeof document === "undefined") return null;
   return createPortal(
     <div
+      ref={portalRef}
       data-map-tools
-      className="fixed z-[110] -translate-x-1/2 -translate-y-full"
-      style={{ left: screen.x, top: screen.y }}
+      className="fixed top-0 left-0 z-[110] invisible will-change-transform"
     >
       {children}
     </div>,

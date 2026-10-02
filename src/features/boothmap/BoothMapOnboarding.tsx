@@ -33,7 +33,7 @@ const GUIDE_STEPS: GuideStep[] = [
     title: "부스를 선택해 편집하기",
     description: [
       "하나는 수정·삭제·대기줄 설정을,",
-      "여러 개는 줄 세우기·구역 배정·그룹화를 사용할 수 있습니다.",
+      "여러 개는 줄 세우기·구역 배정·그룹화·AI 길찾기를 사용할 수 있습니다.",
     ],
     target: '[data-boothmap-guide="booth-editing"]',
   },
@@ -263,7 +263,7 @@ export function BoothMapOnboarding({ open, onOpenChange }: BoothMapOnboardingPro
                 { title: "하나 선택", actions: ["수정", "삭제", "대기줄"] },
                 {
                   title: "여러 개 선택",
-                  actions: ["줄 세우기", "구역에 넣기", "그룹화"],
+                  actions: ["줄 세우기", "구역에 넣기", "그룹화", "AI 길찾기"],
                 },
               ].map(({ title, actions }) => (
                 <div key={title} className="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5">

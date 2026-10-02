@@ -58,9 +58,9 @@ export function ZoneListItem({
         onDrop={(event) => event.preventDefault()}
         onDragEnd={reorder?.onDragEnd}
         className={cn(
-          // 고른 행의 배경은 부스 행과 같이 패널 좌우 여백까지 넓힌다.
-          "relative -mx-6 flex items-center gap-2 px-6 pt-4 pb-3 transition-[background-color,opacity] duration-150 after:pointer-events-none after:absolute after:right-6 after:bottom-0 after:left-6 after:border-b after:border-zinc-200",
-          selected && "bg-primary/10",
+          // 부스 행과 같은 크기·여백·둥근 모서리를 써서 트리 정렬을 맞춘다.
+          "mx-1 flex items-center gap-2 rounded-md py-2 pr-2 pl-2 transition-[background-color,opacity] duration-150 hover:bg-zinc-100",
+          selected && "bg-primary/10 hover:bg-primary/10",
           reorder?.dragging && "opacity-40",
         )}
       >
@@ -73,6 +73,7 @@ export function ZoneListItem({
           {expanded ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
         </button>
         <Checkbox
+          aria-label={`${name} 하위 부스 전체 선택`}
           checked={checked}
           onCheckedChange={(value) => onCheckedChange(value === true)}
           className="shrink-0 border-zinc-200"
