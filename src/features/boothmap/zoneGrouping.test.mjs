@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  boundaryContainsPoint,
-  groupBoundary,
-  moveBoothsToNewZone,
-  selectGroupableBooths,
-} from "./zoneGrouping.ts";
+import { moveBoothsToNewZone, selectGroupableBooths } from "./zoneGrouping.ts";
 
 function pin(id, overrides = {}) {
   return {
@@ -48,9 +43,10 @@ describe("booth zone grouping", () => {
     assert.equal(memberships.length, new Set(memberships).size);
   });
 
-  it("화장실·입구 등 비부스는 그룹 대상에서 제외한다", () => {
+  it("부스와 시설을 함께 선택해도 부스만 그룹 대상으로 남긴다", () => {
     const booths = [
-      pin("booth"),
+      pin("booth-a"),
+      pin("booth-b"),
       pin("restroom", { nodeType: "RESTROOM" }),
       pin("entrance", { nodeType: "ENTRANCE" }),
     ];
@@ -59,42 +55,7 @@ describe("booth zone grouping", () => {
         booths,
         booths.map(({ id }) => id),
       ).map(({ id }) => id),
-      ["booth"],
+      ["booth-a", "booth-b"],
     );
-  });
-
-  it("멀리 떨어진 부스를 포함해 선택한 모든 좌표가 그룹 경계 안에 든다", () => {
-    const members = [
-      pin("west", { lat: 37.41, lng: 126.72 }),
-      pin("north", { lat: 37.89, lng: 127.01 }),
-      pin("east", { lat: 37.52, lng: 127.63 }),
-      pin("south", { lat: 36.98, lng: 127.22 }),
-    ];
-    const boundary = groupBoundary(members);
-    assert.equal(boundary.length, 4);
-    members.forEach((member) => assert.equal(boundaryContainsPoint(boundary, member), true));
-  });
-
-  it("서로 다른 100개 좌표 배치에서도 모든 부스가 경계 안에 남는다", () => {
-    let seed = 20261002;
-    const random = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 2 ** 32;
-    };
-    for (let scenario = 0; scenario < 100; scenario += 1) {
-      const count = 2 + Math.floor(random() * 19);
-      const members = Array.from({ length: count }, (_, index) =>
-        pin(`${scenario}-${index}`, {
-          lat: 33 + random() * 6,
-          lng: 124 + random() * 8,
-        }),
-      );
-      const boundary = groupBoundary(members);
-      assert.equal(
-        members.every((member) => boundaryContainsPoint(boundary, member)),
-        true,
-        `scenario ${scenario}`,
-      );
-    }
   });
 });

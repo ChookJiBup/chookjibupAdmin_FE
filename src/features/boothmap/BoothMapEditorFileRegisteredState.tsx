@@ -130,7 +130,7 @@ import {
   consumeBoothMapGuide,
 } from "./boothMapGuidePreference";
 import { festivalMapKeys, invalidateFestivalMapQueries } from "./festivalMapQueries";
-import { groupBoundary, moveBoothsToNewZone, selectGroupableBooths } from "./zoneGrouping";
+import { moveBoothsToNewZone, selectGroupableBooths } from "./zoneGrouping";
 
 let cachedEmptyDragImage: HTMLImageElement | null = null;
 /** 드래그 고스트를 숨기는 데 쓰는 1x1 투명 GIF — data URI라 동기적으로 디코딩된다. */
@@ -151,11 +151,6 @@ interface LocalZone {
 
 function createZoneId() {
   return crypto.randomUUID();
-}
-
-/** 묶음 구역의 모든 부스를 확실히 포함하는 사각 경계를 만든다. */
-function zonePolygonPath(members: LocalBoothPin[]) {
-  return groupBoundary(members);
 }
 
 function centroidOf(members: LocalBoothPin[]) {
@@ -530,6 +525,15 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
   const standaloneZones = useMemo(
     () => zones.filter((zone) => !zoneIdsDrawnAsShape.has(zone.id)),
     [zones, zoneIdsDrawnAsShape],
+  );
+  const highlightedZoneBoothIds = useMemo(
+    () =>
+      new Set(
+        standaloneZones
+          .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
+          .flatMap((zone) => zone.boothIds),
+      ),
+    [standaloneZones, selectedZoneId],
   );
   const ungroupedBooths = useMemo(
     () =>
@@ -2021,12 +2025,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
         return shape.id;
       }
     }
-    for (const zone of standaloneZones) {
-      const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
-      if (members.length === 0) continue;
-      const pixels = toPixels(zonePolygonPath(members));
-      if (pixels && pointInPolygonPx(pixels, at)) return zone.id;
-    }
     return null;
   }
 
@@ -3230,48 +3228,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                   );
                 })
               : null}
-            {pendingGroupMembers.length >= 2 ? (
-              <>
-                <Polygon
-                  path={zonePolygonPath(pendingGroupMembers)}
-                  fillColor="#236cf6"
-                  fillOpacity={0.1}
-                  strokeColor="#236cf6"
-                  strokeWeight={2}
-                  strokeOpacity={0.8}
-                />
-                {zonePolygonPath(pendingGroupMembers).map((point, index) => (
-                  <CustomOverlayMap key={`pending-group-${index}`} position={point} zIndex={15}>
-                    <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
-                  </CustomOverlayMap>
-                ))}
-              </>
-            ) : null}
-            {standaloneZones
-              .filter((zone) => !selectedZoneId || zone.id === selectedZoneId)
-              .map((zone) => {
-                const members = booths.filter((booth) => zone.boothIds.includes(booth.id));
-                if (members.length === 0) return null;
-                const path = zonePolygonPath(members);
-                return (
-                  <Fragment key={zone.id}>
-                    <Polygon
-                      path={path}
-                      fillColor="#236cf6"
-                      fillOpacity={0.1}
-                      strokeColor="#236cf6"
-                      strokeWeight={2}
-                      strokeOpacity={0.8}
-                      onClick={() => selectZone(zone.id)}
-                    />
-                    {path.map((point, index) => (
-                      <CustomOverlayMap key={`${zone.id}-${index}`} position={point} zIndex={15}>
-                        <span className="block size-2.5 rounded-full border-2 border-primary bg-white shadow" />
-                      </CustomOverlayMap>
-                    ))}
-                  </Fragment>
-                );
-              })}
             {shapes.map((shape) => {
               const checked = checkedIds.has(shape.id);
               const selected = shape.id === selectedShapeId || checked;
@@ -3437,6 +3393,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               const isSelected = booth.id === selectedId;
               // 여럿을 골랐을 때의 표시. 편집 중인 하나(isSelected)와 구분해 파란 테를 두른다.
               const isChecked = checkedIds.has(booth.id);
+              const isGrouped = highlightedZoneBoothIds.has(booth.id);
               return (
                 <CustomOverlayMap
                   key={booth.id}
@@ -3516,7 +3473,7 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
                       고른 것을 한눈에 알아야 여러 개를 함께 옮길 수 있다. 점 뒤에 파란 테를
                       한 겹 깔아, 편집 중인 하나(주황 후광)와 겹쳐 있어도 둘 다 보이게 한다.
                     */}
-                    {isChecked ? (
+                    {isChecked || isGrouped ? (
                       <span className="absolute size-6 rounded-full border-2 border-primary bg-primary/15" />
                     ) : null}
                     {booth.nodeType === "BOOTH" ? (
@@ -3933,12 +3890,6 @@ export function BoothMapEditorFileRegisteredState({ festivalId }: { festivalId: 
               disabled={bulkAiMutation.isPending}
               onAiRoute={() => setBulkAiDialogOpen(true)}
               onGroup={() => {
-                if (groupableBooths.length !== checkedBooths.length) {
-                  toast.error("부스만 그룹화할 수 있습니다.", {
-                    description: "시설·입구·화장실 선택을 해제한 뒤 다시 시도해 주세요.",
-                  });
-                  return;
-                }
                 setPendingGroupIds(groupableBooths.map((booth) => booth.id));
                 setGroupPopoverOpen(true);
               }}
