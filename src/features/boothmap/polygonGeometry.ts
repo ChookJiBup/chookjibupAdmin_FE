@@ -163,6 +163,28 @@ export function containsPoint(polygon: LatLng[], point: LatLng): boolean {
   return inside;
 }
 
+/** 대기줄의 꼭짓점뿐 아니라 꼭짓점 사이 선분도 모두 부지 안에 있는지 확인한다. */
+export function polylineWithinPolygon(polygon: LatLng[], path: LatLng[]): boolean {
+  if (uniqueVertices(polygon).length < 3 || path.length === 0) return false;
+  if (!path.every((point) => containsPoint(polygon, point))) return false;
+  for (let index = 1; index < path.length; index += 1) {
+    const start = path[index - 1];
+    const end = path[index];
+    // 오목한 경계에서 양 끝은 안쪽이어도 중간 선분이 밖으로 나갈 수 있다.
+    for (let step = 1; step < 64; step += 1) {
+      const ratio = step / 64;
+      if (
+        !containsPoint(polygon, {
+          lat: start.lat + (end.lat - start.lat) * ratio,
+          lng: start.lng + (end.lng - start.lng) * ratio,
+        })
+      )
+        return false;
+    }
+  }
+  return true;
+}
+
 /** 신규 핀은 현재 편집 중인 부지 경계가 있고, 그 안에 찍을 때만 만들 수 있다. */
 export function newPinPlacementError(boundary: LatLng[] | null, point: LatLng): string | null {
   if (!boundary || uniqueVertices(boundary).length < 3) {

@@ -2,73 +2,167 @@
 
 import type { ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { CornersIcon, Cross2Icon, GroupIcon, RadiobuttonIcon } from "@radix-ui/react-icons";
+import {
+  ArchiveIcon,
+  CornersIcon,
+  Cross2Icon,
+  DownloadIcon,
+  EyeOpenIcon,
+  GroupIcon,
+  HamburgerMenuIcon,
+  InfoCircledIcon,
+  MagicWandIcon,
+  PersonIcon,
+  RadiobuttonIcon,
+  Share2Icon,
+} from "@radix-ui/react-icons";
 import { DIALOG_OVERLAY_CLASSES } from "@/components/ui/dialogOverlay";
 
-interface HelpItem {
+export interface HelpItem {
   icon?: ReactNode;
   name: string;
   description: string;
+  note?: string;
 }
 
-const DRAW_TOOLS: HelpItem[] = [
+export interface HelpCardProps {
+  step: string;
+  title: string;
+  location: string;
+  items: HelpItem[];
+  warning?: string;
+}
+
+const HELP_CARDS: HelpCardProps[] = [
   {
-    icon: <CornersIcon />,
-    name: "부지 경계",
-    description:
-      "축제장 테두리입니다. 저장된 경계는 꼭짓점을 끌어 수정하거나 아래 바에서 삭제할 수 있습니다.",
+    step: "01",
+    title: "지도 만들기",
+    location: "오른쪽 아래 도구",
+    items: [
+      {
+        icon: <CornersIcon />,
+        name: "부지 경계",
+        description: "축제 구역의 테두리를 먼저 그려요.",
+      },
+      {
+        icon: <RadiobuttonIcon />,
+        name: "핀 추가",
+        description: "부스·시설·입구·출구·화장실 위치를 찍어요.",
+      },
+      {
+        icon: <GroupIcon />,
+        name: "범위 선택",
+        description: "지도를 드래그해 여러 부스를 한 번에 선택해요.",
+      },
+    ],
   },
   {
-    icon: <RadiobuttonIcon />,
-    name: "핀 추가",
-    description: "시설·부스·입구·출구·화장실을 찍습니다.",
+    step: "02",
+    title: "여러 부스 정리하기",
+    location: "부스 2개 이상 선택",
+    items: [
+      {
+        icon: <GroupIcon />,
+        name: "그룹화",
+        description: "선택한 부스를 묶어 새 구역을 만들어요.",
+      },
+      {
+        icon: <DownloadIcon />,
+        name: "구역에 넣기",
+        description: "선택한 부스를 기존 구역에 넣어요.",
+      },
+      {
+        icon: <HamburgerMenuIcon />,
+        name: "줄 세우기",
+        description: "두 끝점 사이에 부스를 일렬로 배치해요.",
+      },
+    ],
   },
   {
-    icon: <GroupIcon />,
-    name: "범위 선택",
-    description: "지도를 끌어 안에 든 것을 한 번에 고릅니다.",
+    step: "03",
+    title: "대기줄 설정하기",
+    location: "부스 1개 선택",
+    items: [
+      {
+        icon: <Share2Icon />,
+        name: "사전 줄",
+        description: "대기줄이 생길 경로를 미리 그려요.",
+        note: "AI로 경로를 추천받을 수 있어요.",
+      },
+      {
+        icon: <PersonIcon />,
+        name: "현재 줄",
+        description: "지금 대기줄의 끝 위치를 기록해요.",
+      },
+    ],
+    warning: "사전 줄을 설정한 뒤 사용할 수 있어요.",
+  },
+  {
+    step: "04",
+    title: "저장하고 공개하기",
+    location: "화면 위쪽 버튼",
+    items: [
+      {
+        icon: <MagicWandIcon />,
+        name: "AI 분석",
+        description: "팜플렛을 올리면 부스 위치를 자동으로 표시해요.",
+      },
+      {
+        icon: <ArchiveIcon />,
+        name: "저장",
+        description: "변경한 내용을 저장해요.",
+        note: "변경 사항이 없을 때만 버튼이 꺼져요.",
+      },
+      {
+        icon: <EyeOpenIcon />,
+        name: "공개 / 비공개",
+        description: "방문객 앱에 부스 지도를 보여줄지 정해요.",
+      },
+    ],
   },
 ];
 
-const TOP_BUTTONS: HelpItem[] = [
-  { name: "AI 분석", description: "팜플렛 이미지를 올리면 부스 자리를 자동으로 찍습니다." },
-  { name: "저장", description: "고친 내용을 저장합니다. 바뀐 것이 없으면 꺼져 있습니다." },
-  { name: "공개/비공개", description: "방문객 앱 부스지도에 보일지 설정합니다." },
-];
-
-const SELECTION_ACTIONS: HelpItem[] = [
-  { name: "줄 세우기", description: "고른 부스를 양 끝 사이에 일직선으로 놓습니다." },
-  { name: "구역에 넣기", description: "고른 부스를 이미 있는 구역에 넣습니다." },
-  { name: "그룹화", description: "고른 부스로 새 구역을 만듭니다." },
-];
-
-const BOOTH_QUEUE_ACTIONS: HelpItem[] = [
-  { name: "사전 줄", description: "줄이 설 경로를 미리 그립니다. AI에게 추천받을 수 있습니다." },
-  {
-    name: "현재 줄",
-    description: "지금 줄이 어디까지 찼는지 기록합니다. 사전 줄을 정해야 열립니다.",
-  },
-];
-
-function HelpSection({ title, items }: { title: string; items: HelpItem[] }) {
+function HelpCard({ step, title, location, items, warning }: HelpCardProps) {
   return (
-    <section className="mt-6">
-      <h3 className="body-small-bold text-zinc-950">{title}</h3>
-      <dl className="mt-2 flex flex-col gap-3">
-        {items.map((item) => (
-          <div key={item.name} className="flex items-start gap-3">
+    <section className="flex flex-col rounded-lg border border-zinc-200 p-4">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] leading-none font-semibold text-primary">
+          {step}
+        </span>
+        <h3 className="body-small-bold min-w-0 truncate text-left text-zinc-950">{title}</h3>
+        <span className="flex shrink-0 items-center rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] leading-4 text-zinc-500">
+          {location}
+        </span>
+      </div>
+      <div className="mt-3">
+        {items.map((item, index) => (
+          <div
+            key={item.name}
+            className={`relative flex items-stretch gap-2 py-2 first:pt-0 last:pb-0 ${
+              item.icon ? "" : "pl-10"
+            } ${index < items.length - 1 ? "after:absolute after:right-2 after:bottom-0 after:left-0 after:border-b after:border-zinc-200" : ""}`}
+          >
             {item.icon ? (
-              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-950 [&_svg]:size-4">
+              <span className="flex size-8 shrink-0 items-center justify-center text-zinc-950 [&_svg]:size-4.5">
                 {item.icon}
               </span>
             ) : null}
-            <div className="min-w-0">
-              <dt className="body-small-bold text-zinc-950">{item.name}</dt>
-              <dd className="body-small text-zinc-500">{item.description}</dd>
+            <div className="mr-2 min-w-0 flex-1">
+              <p className="body-small-bold text-zinc-950">{item.name}</p>
+              <p className="body-caption mt-0.5 text-zinc-500">{item.description}</p>
+              {item.note ? <p className="body-caption mt-0.5 text-primary">{item.note}</p> : null}
             </div>
           </div>
         ))}
-      </dl>
+      </div>
+      {warning ? (
+        <div className="mt-2 pl-10">
+          <p className="body-caption inline-flex items-center gap-1.5 rounded-md bg-secondary-300/20 px-2 py-1 text-secondary-600">
+            <InfoCircledIcon className="size-3.5 shrink-0" />
+            {warning}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -84,14 +178,14 @@ export function BoothMapHelpDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className={DIALOG_OVERLAY_CLASSES} />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[70dvh] w-[480px] max-w-[calc(100vw-40px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-2xl bg-white p-6 sm:p-8">
-          <div className="relative text-center">
-            <div className="px-8">
-              <Dialog.Title className="heading-small text-zinc-950">부스 편집 도움말</Dialog.Title>
-              <Dialog.Description className="body-small mt-2 text-zinc-500">
-                버튼이 각각 무엇을 하는지 모았습니다.
-              </Dialog.Description>
-            </div>
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-[1001] flex max-h-[74dvh] w-[720px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-2xl bg-white p-6 shadow-xl">
+          <header className="relative shrink-0 text-center">
+            <Dialog.Title className="heading-regular text-zinc-950">
+              부스 지도 사용 가이드
+            </Dialog.Title>
+            <Dialog.Description className="body-small mt-1 text-zinc-500">
+              경계를 먼저 설정하고, 부스를 배치한 뒤 저장하세요.
+            </Dialog.Description>
             <Dialog.Close asChild>
               <button
                 type="button"
@@ -101,15 +195,19 @@ export function BoothMapHelpDialog({
                 <Cross2Icon className="size-5" />
               </button>
             </Dialog.Close>
+          </header>
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto md:grid-cols-2">
+            {HELP_CARDS.map((card) => (
+              <HelpCard key={card.step} {...card} />
+            ))}
           </div>
-          <HelpSection title="그리는 도구 (오른쪽 아래)" items={DRAW_TOOLS} />
-          <HelpSection title="위쪽 버튼" items={TOP_BUTTONS} />
-          <HelpSection title="부스를 여러 개 고르면" items={SELECTION_ACTIONS} />
-          <HelpSection title="부스를 하나 고르면" items={BOOTH_QUEUE_ACTIONS} />
-          <p className="body-caption mt-6 text-zinc-500">
-            경계의 큰 점은 이동, 변 사이의 +는 꼭짓점 추가입니다. 완료하면 교차된 선과 안쪽 점을
-            정리해 겹치지 않는 볼록 경계로 만듭니다.
-          </p>
+          <footer className="-mt-2 flex shrink-0 items-center justify-center gap-1.5">
+            <InfoCircledIcon className="size-3.5 shrink-0 text-zinc-500" />
+            <p className="body-caption text-zinc-500">
+              경계의 점을 끌어 수정하고, 하단의 취소·경계 완료 버튼으로 마무리해요.
+            </p>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -329,10 +329,12 @@ test("직접 설정은 지도에서 경로를 찍는 화면을 열고 좌표 입
   const actions = page.getByRole("region", { name: "김밥천국 줄 관리" });
   await expect(actions.getByRole("button", { name: "AI 추천" })).toBeVisible();
   await actions.getByRole("button", { name: "줄 직접 설정" }).click();
-  await expect(page.getByText("지도에서 줄이 꺾이는 지점을 순서대로 찍어 주세요.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "마지막 점 지우기" })).toBeDisabled();
-  await expect(page.getByText("찍은 지점 0개")).toBeVisible();
-  await expect(page.getByRole("button", { name: "대기줄 저장" })).toBeDisabled();
+  await expect(
+    page.getByText("지도를 클릭해 지점을 추가하고, 점을 끌어 위치를 수정하세요."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "마지막 점 취소" })).toBeVisible();
+  await expect(page.getByText("총 길이")).toBeVisible();
+  await expect(page.getByRole("button", { name: "대기줄 저장" })).toBeVisible();
   await expect(page.getByRole("button", { name: "좌표 직접 입력" })).toHaveCount(0);
   expect(calls.recommendations).toBe(0);
 });

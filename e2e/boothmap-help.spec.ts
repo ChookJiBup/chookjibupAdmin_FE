@@ -79,13 +79,13 @@ test("도움말은 도구 이름과 하는 일을 함께 보여 준다", async (
   await help.click();
 
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("부스 편집 도움말")).toBeVisible();
+  await expect(dialog.getByText("부스 지도 사용 가이드")).toBeVisible();
 
   /*
     아이콘만 보고는 알 수 없던 도구들이라, 이름과 설명이 함께 있어야 도움말 구실을 한다.
   */
   await expect(dialog.getByText("범위 선택", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("지도를 끌어 안에 든 것을 한 번에 고릅니다.")).toBeVisible();
+  await expect(dialog.getByText("지도를 드래그해 여러 부스를 한 번에 선택해요.")).toBeVisible();
   await expect(dialog.getByText("부지 경계", { exact: true })).toBeVisible();
   await expect(dialog.getByText("핀 추가", { exact: true })).toBeVisible();
   await expect(dialog.getByText("폴리곤 추가", { exact: true })).toHaveCount(0);
@@ -96,14 +96,14 @@ test("도움말은 도구 이름과 하는 일을 함께 보여 준다", async (
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("부지 경계가 없으면 핀 추가와 범위 선택을 비활성화한다", async ({ page }) => {
+test("부지 경계가 없으면 핀 추가만 비활성화한다", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockBoothMap(page);
   await page.goto(boothmapPath);
 
   await expect(page.getByRole("button", { name: "부지 경계", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "핀 추가", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "범위 선택", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "범위 선택", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "폴리곤 추가", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "라인 추가", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "줄끝 갱신", exact: true })).toHaveCount(0);

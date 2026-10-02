@@ -10,10 +10,11 @@ import {
 } from "@radix-ui/react-icons";
 
 // 이 프로젝트는 라이트 모드 전용이라 next-themes 없이 theme="light"로 고정한다.
-function Toaster(props: ToasterProps) {
+function Toaster({ position = "top-right", ...props }: ToasterProps) {
   return (
     <Sonner
       theme="light"
+      position={position}
       className="toaster group"
       closeButton
       icons={{
