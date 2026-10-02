@@ -151,20 +151,20 @@ interface LocalZone {
 
 const ZONE_HIGHLIGHT_STYLES = [
   {
-    soft: "size-5 border border-primary-300 bg-primary-300/20",
-    strong: "size-7 border-2 border-primary-600 bg-primary-300/45 ring-2 ring-white",
+    soft: "size-6 border border-primary-300 bg-primary-300/20",
+    strong: "size-6 border-4 border-primary-600 bg-primary-300/45",
   },
   {
-    soft: "size-5 border border-point-300 bg-point-300/20",
-    strong: "size-7 border-2 border-point-600 bg-point-300/45 ring-2 ring-white",
+    soft: "size-6 border border-point-300 bg-point-300/20",
+    strong: "size-6 border-4 border-point-600 bg-point-300/45",
   },
   {
-    soft: "size-5 border border-red-300 bg-red-300/20",
-    strong: "size-7 border-2 border-red-600 bg-red-300/45 ring-2 ring-white",
+    soft: "size-6 border border-red-300 bg-red-300/20",
+    strong: "size-6 border-4 border-red-600 bg-red-300/45",
   },
   {
-    soft: "size-5 border border-zinc-400 bg-zinc-200/30",
-    strong: "size-7 border-2 border-zinc-700 bg-zinc-300/50 ring-2 ring-white",
+    soft: "size-6 border border-zinc-400 bg-zinc-200/30",
+    strong: "size-6 border-4 border-zinc-700 bg-zinc-300/50",
   },
 ] as const;
 
